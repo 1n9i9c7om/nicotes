@@ -9,6 +9,9 @@ import type {
   Backlink,
   ConnectionCheck,
   Credentials,
+  DailyEntry,
+  DailyRequest,
+  GraphLinks,
   ImportPreview,
   ImportRequest,
   ModelInfo,
@@ -47,6 +50,8 @@ export const keys = {
   job: (id: string) => ['job', id] as const,
   jobs: (kind: JobKind) => ['jobs', kind] as const,
   batches: ['ai-batches'] as const,
+  graph: ['graph'] as const,
+  daily: (from: string, to: string) => ['daily', from, to] as const,
 };
 
 /**
@@ -455,5 +460,24 @@ export function useUndoBatch() {
   return useMutation({
     mutationFn: (id: string) => api.post(`/ai/batches/${id}/undo`),
     onSuccess: () => afterAiChange(qc),
+  });
+}
+
+// ---------- Graph & daily notes ----------
+
+export const useGraphLinks = () =>
+  useQuery({ queryKey: keys.graph, queryFn: () => api.get<GraphLinks>('/graph'), staleTime: 15_000 });
+
+export const useDailyRange = (from: string, to: string) =>
+  useQuery({ queryKey: keys.daily(from, to), queryFn: () => api.get<DailyEntry[]>(`/daily?from=${from}&to=${to}`) });
+
+export function useOpenDaily() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DailyRequest) => api.post<{ page: Page; created: boolean }>('/daily', input),
+    onSuccess: ({ created }) => {
+      if (!created) return;
+      for (const key of [keys.pages, keys.notebooks, keys.tags, ['daily'], keys.graph]) qc.invalidateQueries({ queryKey: key });
+    },
   });
 }

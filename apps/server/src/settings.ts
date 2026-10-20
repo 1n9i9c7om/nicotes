@@ -27,6 +27,8 @@ const KEYS = {
   researchModel: { key: 'ai.researchModel', secret: false },
   searxngUrl: { key: 'ai.searxngUrl', secret: false },
   aiCostLimit: { key: 'ai.costLimit', secret: false },
+  dailyNotebookId: { key: 'daily.notebookId', secret: false },
+  dailyTemplateId: { key: 'daily.templateId', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -47,7 +49,7 @@ export class SettingsStore {
   constructor(
     private db: Db,
     private box: SecretBox,
-    private env: Config['env'],
+    private env: Partial<Record<Name, string>>,
   ) {}
 
   private stored(userId: string): Partial<Record<Name, string>> {
@@ -80,6 +82,8 @@ export class SettingsStore {
       researchModel: pick('researchModel'),
       searxng: pick('searxngUrl'),
       costLimit: pick('aiCostLimit', String(DEFAULT_AI_COST_LIMIT)),
+      dailyNotebook: pick('dailyNotebookId'),
+      dailyTemplate: pick('dailyTemplateId'),
     };
   }
 
@@ -107,6 +111,7 @@ export class SettingsStore {
         costLimit: Number(r.costLimit.value),
         costLimitSource: r.costLimit.source,
       },
+      daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
     };
   }
 

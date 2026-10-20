@@ -32,6 +32,12 @@ export interface Settings {
     costLimit: number;
     costLimitSource: SettingSource;
   };
+  daily: {
+    /** Notebook for daily notes; a "Journal" notebook is created on first use. */
+    notebookId: string | null;
+    /** Template page for new daily notes. */
+    templateId: string | null;
+  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
@@ -52,6 +58,8 @@ export const settingsUpdateSchema = z.object({
   researchModel: z.string().trim().max(200).nullable().optional(),
   searxngUrl: optionalUrl,
   aiCostLimit: z.number().min(0.01).max(50).nullable().optional(),
+  dailyNotebookId: z.string().max(64).nullable().optional(),
+  dailyTemplateId: z.string().max(64).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

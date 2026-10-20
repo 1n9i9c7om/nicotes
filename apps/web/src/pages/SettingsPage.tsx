@@ -1,5 +1,7 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { TEMPLATE_TAG } from '@nicotes/shared';
+import { displayTitle } from '../lib/tree';
 import { timeAgo } from '../lib/format';
 import { DEFAULT_OPENROUTER_MODEL, type ConnectionCheck, type SettingSource, type SettingsUpdate } from '@nicotes/shared';
 import {
@@ -8,6 +10,8 @@ import {
   useBatches,
   useCheckConnection,
   useModels,
+  useNotebooks,
+  usePages,
   useSettings,
   useSignOut,
   useUndoBatch,
@@ -108,6 +112,9 @@ export function SettingsPage() {
   const checkCrawl4ai = useCheckConnection();
   const checkSearxng = useCheckConnection();
   const batches = useBatches();
+  const notebooks = useNotebooks();
+  const allPages = usePages();
+  const templates = (allPages.data ?? []).filter((p) => p.tags.includes(TEMPLATE_TAG));
   const undo = useUndoBatch();
   const [loadModels, setLoadModels] = useState(false);
   const models = useModels(loadModels);
@@ -115,7 +122,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, crawl4ai, ai } = settings.data;
+  const { openrouter, crawl4ai, ai, daily } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -279,6 +286,40 @@ export function SettingsPage() {
       </section>
 
       {update.error && <p className="error">{update.error.message}</p>}
+
+      <section className="settings-card" id="daily">
+        <h2>
+          <CalendarDays size={18} /> Daily notes
+        </h2>
+        <p className="muted">
+          “Today” opens the note for the current day, filed as notebook › year › month. Templates are pages tagged
+          #template; they can use {'{{date}}'}, {'{{weekday}}'}, {'{{time}}'} and {'{{title}}'}.
+        </p>
+        <div className="import-target">
+          <label className="field">
+            <span>Notebook</span>
+            <select value={daily.notebookId ?? ''} onChange={(e) => save({ dailyNotebookId: e.target.value || null })}>
+              <option value="">“Journal” (created automatically)</option>
+              {notebooks.data?.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Template</span>
+            <select value={daily.templateId ?? ''} onChange={(e) => save({ dailyTemplateId: e.target.value || null })}>
+              <option value="">Default (Notes + Tasks)</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {displayTitle(t.title)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
       <section className="settings-card">
         <h2>

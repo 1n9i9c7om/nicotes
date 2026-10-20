@@ -7,6 +7,8 @@ import './styles/linking.css';
 import './styles/import.css';
 import './styles/history.css';
 import './styles/ai.css';
+import './styles/graph.css';
+import './styles/journal.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';

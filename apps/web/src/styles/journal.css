@@ -1,0 +1,144 @@
+/* Journal, templates, inherited tags */
+
+.nav-button {
+  width: 100%;
+  text-align: left;
+}
+
+/* ---------- Journal calendar ---------- */
+
+.journal {
+  max-width: 820px;
+}
+
+.journal h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calendar {
+  padding: 18px 20px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.calendar-head h2 {
+  min-width: 170px;
+  text-align: center;
+  font-size: 17px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-weekday {
+  padding-bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.calendar-day {
+  position: relative;
+  aspect-ratio: 1.25;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-day:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+.calendar-day.future {
+  color: var(--text-faint);
+}
+
+.calendar-day.has-note {
+  background: var(--accent-softer);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.calendar-day.today {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.calendar-dot {
+  position: absolute;
+  bottom: 18%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.calendar-count {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+/* ---------- Inherited tags ---------- */
+
+.tag-chip.inherited {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+
+.tag-chip.inherited .tag-chip-link {
+  padding-right: 9px;
+}
+
+.tag-chip.inherited:hover {
+  color: var(--accent-strong);
+}
+
+.tag-inherit {
+  margin: -20px 0 20px;
+}
+
+.tag-inherit svg {
+  color: var(--text-faint);
+}
+
+/* ---------- Template picker ---------- */
+
+.pick-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+@media (max-width: 800px) {
+  .calendar {
+    padding: 14px 10px 10px;
+  }
+
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    aspect-ratio: 1;
+  }
+}

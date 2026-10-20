@@ -102,6 +102,8 @@ export const tags = sqliteTable(
     name: text('name').notNull(),
     description: text('description').notNull().default(''),
     color: text('color'),
+    /** When set, subpages of a tagged page count as tagged too (search, hubs, graph). */
+    inherit: integer('inherit', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('tags_user_name_idx').on(t.userId, t.name)],
@@ -204,3 +206,19 @@ export const aiBatches = sqliteTable('ai_batches', {
   createdAt: integer('created_at').notNull(),
   undoneAt: integer('undone_at'),
 });
+
+/** Which page is the daily note for a date (survives renames and moves). */
+export const dailyNotes = sqliteTable(
+  'daily_notes',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Local date, YYYY-MM-DD. */
+    date: text('date').notNull(),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.date] })],
+);

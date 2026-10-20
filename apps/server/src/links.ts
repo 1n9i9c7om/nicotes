@@ -63,7 +63,7 @@ export function loadLinkContext(db: Conn, userId: string): LinkContext {
 }
 
 /** All live link rows of a user together with their source page's notebook. */
-function liveLinks(db: Conn, userId: string, keys?: string[]) {
+export function liveLinks(db: Conn, userId: string, keys?: string[]) {
   return db
     .select({
       sourceId: pageLinks.sourceId,

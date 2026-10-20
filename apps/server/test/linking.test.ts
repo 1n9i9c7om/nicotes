@@ -74,7 +74,7 @@ describe('links, tags, search and attachments', () => {
     await api.call('PATCH', '/api/tags/gaming', { description: 'All my games' });
     await api.call('PUT', `/api/pages/${elden.id}/tags`, { tags: [] });
     expect((await api.call<Tag[]>('GET', '/api/tags')).body).toEqual([
-      { name: 'gaming', description: 'All my games', color: null, count: 0 },
+      { name: 'gaming', description: 'All my games', color: null, inherit: false, count: 0 },
     ]);
 
     await api.call('PUT', `/api/pages/${elden.id}/tags`, { tags: ['gaming'] });

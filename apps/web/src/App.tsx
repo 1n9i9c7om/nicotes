@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router';
 import { AppShell } from './components/AppShell';
@@ -10,11 +10,15 @@ import { NotebookView } from './pages/NotebookView';
 import { NotFound } from './pages/NotFound';
 import { PageView } from './pages/PageView';
 import { ImportPage } from './pages/ImportPage';
+import { JournalPage } from './pages/JournalPage';
 import { OrganizePage } from './pages/OrganizePage';
 import { ResearchPage } from './pages/ResearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SharePage } from './pages/SharePage';
 import { TagView } from './pages/TagView';
+
+// force-graph is large; the graph page loads on demand.
+const GraphPage = lazy(() => import('./pages/GraphPage').then((m) => ({ default: m.GraphPage })));
 import { TrashPage } from './pages/TrashPage';
 
 export function App() {
@@ -47,6 +51,15 @@ export function App() {
         <Route path="share" element={<SharePage />} />
         <Route path="research" element={<ResearchPage />} />
         <Route path="organize" element={<OrganizePage />} />
+        <Route path="journal" element={<JournalPage />} />
+        <Route
+          path="graph"
+          element={
+            <Suspense fallback={null}>
+              <GraphPage />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

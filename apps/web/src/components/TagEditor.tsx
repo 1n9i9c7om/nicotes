@@ -5,9 +5,9 @@ import { normalizeTag } from '@nicotes/shared';
 import { useSetPageTags, useTags } from '../lib/queries';
 
 /** Tag chips under the page title, saved to the page right away. */
-export function TagEditor({ pageId, tags }: { pageId: string; tags: string[] }) {
+export function TagEditor({ pageId, tags, inherited = [] }: { pageId: string; tags: string[]; inherited?: { name: string; from: string }[] }) {
   const setTags = useSetPageTags();
-  return <TagChips tags={tags} onChange={(next) => setTags.mutate({ id: pageId, tags: next })} />;
+  return <TagChips tags={tags} inherited={inherited} onChange={(next) => setTags.mutate({ id: pageId, tags: next })} />;
 }
 
 /** Controlled tag chips with an inline input; `linked` makes chips open the tag hub. */
@@ -15,10 +15,13 @@ export function TagChips({
   tags,
   onChange,
   linked = true,
+  inherited = [],
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
   linked?: boolean;
+  /** Tags inherited from an ancestor: shown dimmed, removable only there. */
+  inherited?: { name: string; from: string }[];
 }) {
   const allTags = useTags();
   const [adding, setAdding] = useState(false);
@@ -67,6 +70,19 @@ export function TagChips({
             <X size={12} />
           </button>
         </span>
+      ))}
+      {inherited.map((tag) => (
+        <Link
+          key={tag.name}
+          to={`/t/${encodeURIComponent(tag.name)}`}
+          className="tag-chip inherited"
+          title={`Inherited from “${tag.from}”`}
+        >
+          <span className="tag-chip-link">
+            <Hash size={12} />
+            {tag.name}
+          </span>
+        </Link>
       ))}
       {adding ? (
         <>

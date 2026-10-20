@@ -1,7 +1,10 @@
 import { createContext, useContext, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import {
+  CalendarCheck,
+  CalendarDays,
   ChevronRight,
+  LayoutTemplate,
   Download,
   FileDown,
   FilePlus,
@@ -17,6 +20,7 @@ import {
   Settings,
   Telescope,
   Trash2,
+  Waypoints,
   Wand2,
   X,
 } from 'lucide-react';
@@ -36,7 +40,9 @@ import {
   exportUrl,
 } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
+import { useOpenDailyNote } from '../lib/daily';
 import { buildTree, childrenOf, displayTitle, isDescendant, rootKey, type PageTree } from '../lib/tree';
+import { TemplateDialog } from './TemplateDialog';
 import { Menu } from './Menu';
 import { ConfirmDialog } from './Modal';
 import { MoveDialog } from './MoveDialog';
@@ -61,6 +67,7 @@ interface TreeState {
   moveNotebook: (target: Notebook, position: DropPosition) => void;
   confirm: (dialog: ConfirmState) => void;
   startMove: (page: PageSummary) => void;
+  startFromTemplate: (notebookId: string, parentId: string | null) => void;
 }
 
 interface ConfirmState {
@@ -103,6 +110,8 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
   const [creatingNotebook, setCreatingNotebook] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [moving, setMoving] = useState<PageSummary | null>(null);
+  const [fromTemplate, setFromTemplate] = useState<{ notebookId: string; parentId: string | null } | null>(null);
+  const openDaily = useOpenDailyNote();
   const tags = useTags();
   const [tagsOpen, setTagsOpen] = useLocalState('nicotes.tagsOpen', true);
 
@@ -120,6 +129,7 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
     setRenamingId,
     confirm: setConfirmState,
     startMove: setMoving,
+    startFromTemplate: (notebookId, parentId) => setFromTemplate({ notebookId, parentId }),
     addPage: async (notebookId, parentId) => {
       const page = await createPage.mutateAsync({ notebookId, parentId });
       setExpandedMap((prev) => ({ ...prev, [parentId ?? notebookId]: true }));
@@ -175,8 +185,17 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/" end className="nav-item">
             <House size={16} /> Home
           </NavLink>
+          <button className="nav-item nav-button" onClick={() => void openDaily()}>
+            <CalendarCheck size={16} /> Today
+          </button>
+          <NavLink to="/journal" className="nav-item">
+            <CalendarDays size={16} /> Journal
+          </NavLink>
           <NavLink to="/import" className="nav-item">
             <Download size={16} /> Import
+          </NavLink>
+          <NavLink to="/graph" className="nav-item">
+            <Waypoints size={16} /> Graph
           </NavLink>
           <NavLink to="/research" className="nav-item">
             <Telescope size={16} /> Research
@@ -240,6 +259,7 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
         />
       )}
       {moving && <MoveDialog page={moving} onClose={() => setMoving(null)} />}
+      {fromTemplate && <TemplateDialog {...fromTemplate} onClose={() => setFromTemplate(null)} />}
       {confirmState && (
         <ConfirmDialog {...confirmState} danger onClose={() => setConfirmState(null)} />
       )}
@@ -305,6 +325,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
           <Menu
             items={[
               { label: 'New page', icon: <FilePlus size={15} />, onSelect: () => s.addPage(notebook.id, null) },
+              { label: 'New page from template…', icon: <LayoutTemplate size={15} />, onSelect: () => s.startFromTemplate(notebook.id, null) },
               { label: 'Edit notebook', icon: <Palette size={15} />, onSelect: () => setEditing(true) },
               {
                 label: 'Organize with AI',
@@ -423,6 +444,11 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
           <Menu
             items={[
               { label: 'New subpage', icon: <FilePlus size={15} />, onSelect: () => s.addPage(page.notebookId, page.id) },
+              {
+                label: 'Subpage from template…',
+                icon: <LayoutTemplate size={15} />,
+                onSelect: () => s.startFromTemplate(page.notebookId, page.id),
+              },
               { label: 'Rename', icon: <Pencil size={15} />, onSelect: () => s.setRenamingId(page.id) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => s.startMove(page) },
               {

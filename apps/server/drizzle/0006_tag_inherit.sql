@@ -1,0 +1,1 @@
+ALTER TABLE `tags` ADD `inherit` integer DEFAULT false NOT NULL;

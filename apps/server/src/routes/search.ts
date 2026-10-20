@@ -29,12 +29,22 @@ export function searchRoutes(db: Db) {
     const limit = Math.min(Number(c.req.query('limit')) || 20, 50);
     if (!match && tagFilters.length === 0) return c.json([]);
 
+    // Pages carrying the tag; for inheriting tags also all their (live) subpages.
     const tagSql = tagFilters
       .map(
-        () => `AND p.id IN (SELECT pt.page_id FROM page_tags pt JOIN tags t ON t.id = pt.tag_id
-                            WHERE t.user_id = @userId AND t.name = ?)`,
+        (_tag, i) => `AND p.id IN (
+          WITH RECURSIVE tagged(id) AS (
+            SELECT pt.page_id FROM page_tags pt JOIN tags t ON t.id = pt.tag_id
+            WHERE t.user_id = @userId AND t.name = @tag${i}
+            UNION
+            SELECT c.id FROM pages c JOIN tagged ON c.parent_id = tagged.id
+            WHERE c.deleted_at IS NULL
+              AND EXISTS (SELECT 1 FROM tags t WHERE t.user_id = @userId AND t.name = @tag${i} AND t.inherit = 1)
+          )
+          SELECT id FROM tagged)`,
       )
       .join('\n');
+    const tagParams = Object.fromEntries(tagFilters.map((tag, i) => [`tag${i}`, tag]));
     const sql = match
       ? `SELECT p.id, p.notebook_id AS notebookId, p.title,
                 snippet(pages_fts, 2, char(1), char(2), '…', 16) AS excerpt
@@ -52,7 +62,7 @@ export function searchRoutes(db: Db) {
 
     const rows = db.$client
       .prepare(sql)
-      .all(...tagFilters, { match, userId: c.var.user.id, limit }) as SearchResult[];
+      .all({ ...tagParams, ...(match ? { match } : {}), userId: c.var.user.id, limit }) as SearchResult[];
     return c.json(rows);
   });
 }

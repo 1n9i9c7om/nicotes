@@ -136,6 +136,7 @@ export const tagUpdateSchema = z.object({
   name: tagName.optional(),
   description: z.string().max(20_000).optional(),
   color: colorSchema.optional(),
+  inherit: z.boolean().optional(),
 });
 export type TagUpdate = z.infer<typeof tagUpdateSchema>;
 
@@ -143,7 +144,9 @@ export interface Tag {
   name: string;
   description: string;
   color: string | null;
-  /** Number of live pages carrying the tag. */
+  /** Subpages of tagged pages count as tagged too. */
+  inherit: boolean;
+  /** Number of live pages carrying the tag directly. */
   count: number;
 }
 

@@ -48,8 +48,8 @@ Notebook "Games"
 Each game is a page tagged `#gaming`, with sub-articles as child pages. The `#gaming`
 tag view lists every game (with its sub-article count) and can carry its own
 description, so it acts as the hub. Links like `[[Elden Ring/Builds]]` connect
-articles across games or notebooks. (Not built yet: optional tag inheritance, so that
-`#gaming` also matches sub-articles in search.)
+articles across games or notebooks. Switching on "applies to subpages" for `#gaming`
+makes the sub-articles count as tagged too (search, graph filter, organize).
 
 ## Architecture
 
@@ -204,6 +204,26 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   synthesis with `[n]` markers, turned into links, plus a generated sources list. Saved
   as a page tagged `#research`. Depths: quick 4, standard 8, deep 14 sources.
 
+### Graph, templates and daily notes
+
+- **Graph:** `GET /api/graph` returns resolved page→page links and unresolved targets;
+  the client (`lib/graph.ts`) adds subpage edges, tag nodes and missing-page nodes,
+  applies notebook/tag filters (inherited tags included) and the focus neighbourhood
+  (1–3 hops, crossing notebooks). Rendering uses force-graph on canvas (lazy-loaded) with
+  a centre pull and collision force; nodes are coloured by notebook and sized by degree,
+  hovering/selecting highlights the neighbourhood. The page view shows a local graph
+  (1–2 hops) below the backlinks; the full view lives at `/graph?focus=<id>&depth=n`.
+- **Tag inheritance:** a per-tag `inherit` flag. Search's `#tag` filter uses a recursive
+  CTE over subpages; the client derives inherited tags from the tree for chips, hubs and
+  the graph; organize sees inherited tags so it does not re-suggest them.
+- **Templates:** pages tagged `#template`; `applyTemplate` (shared) fills `{{date}}`,
+  `{{time}}`, `{{datetime}}`, `{{weekday}}`, `{{title}}` on the client (local time). New
+  pages copy the template's tags except `template`.
+- **Daily notes:** `daily_notes` maps a local date to a page; `POST /api/daily` finds or
+  creates it as notebook › year › month › `YYYY-MM-DD` (sorted by number), in the
+  configured notebook or an auto-created "Journal". The client fills in the configured
+  template. `/journal` shows a month calendar.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -241,5 +261,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    - **LLM grouping & tagging** — for one page or a whole notebook/subtree, suggest
      tags, parent pages or new groups. Default is suggestions to accept/reject; an
      optional auto-apply mode records every change in version history.
-6. **Later** — local graph, daily notes, templates, tag inheritance, multi-user,
-   GitLab CI → registry.
+6. ✅ **Graph & daily work** — graph view (global + local), tag inheritance, templates,
+   daily notes with a journal calendar.
+7. **Later** — multi-user, GitLab CI → registry.

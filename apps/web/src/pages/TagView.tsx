@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { FileText, Hash, Pencil, Trash2 } from 'lucide-react';
+import { FileText, GitFork, Hash, Pencil, Trash2 } from 'lucide-react';
 import { normalizeTag } from '@nicotes/shared';
 import { Menu } from '../components/Menu';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { timeAgo } from '../lib/format';
 import { useDeleteTag, useNotebooks, usePages, useTags, useUpdateTag } from '../lib/queries';
+import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 import { NotFound } from './NotFound';
 
@@ -29,6 +30,11 @@ export function TagView() {
     .filter((p) => p.tags.includes(tagName))
     .sort((a, b) => a.title.localeCompare(b.title));
   const notebookById = new Map(notebooks.data?.map((n) => [n.id, n]));
+  const inheritedCount = useMemo(() => {
+    let n = 0;
+    for (const list of inheritedTagMap(pages.data ?? [], tags.data ?? []).values()) if (list.some((t) => t.name === tagName)) n++;
+    return n;
+  }, [pages.data, tags.data, tagName]);
 
   if (tags.isPending || pages.isPending) return null;
   if (!tag) return <NotFound what="Tag" />;
@@ -55,6 +61,16 @@ export function TagView() {
           />
         </div>
       </header>
+
+      <label className="check-row tag-inherit" title="Search, the graph and the tag filter then include all subpages of tagged pages">
+        <input
+          type="checkbox"
+          checked={tag.inherit}
+          onChange={(e) => updateTag.mutate({ tag: tag.name, update: { inherit: e.target.checked } })}
+        />
+        <GitFork size={14} /> Also applies to subpages of tagged pages
+        {tag.inherit && inheritedCount > 0 && <span className="muted">· {inheritedCount} more pages</span>}
+      </label>
 
       <Description
         key={tag.name}

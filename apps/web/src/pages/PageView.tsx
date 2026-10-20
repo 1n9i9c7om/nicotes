@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, Wand2, Waypoints, X } from 'lucide-react';
 import type { Page } from '@nicotes/shared';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
 import { Backlinks } from '../components/Backlinks';
+import { LocalGraph } from '../components/graph/LocalGraph';
 import { HistoryDialog } from '../components/HistoryDialog';
 import { Menu } from '../components/Menu';
 import { MoveDialog } from '../components/MoveDialog';
@@ -12,7 +13,8 @@ import { TagEditor } from '../components/TagEditor';
 import { ApiError, uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
 import { useLocalState } from '../lib/storage';
-import { useNotebooks, usePage, usePages, useRenamePage } from '../lib/queries';
+import { useNotebooks, usePage, usePages, useRenamePage, useTags } from '../lib/queries';
+import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 import { NotFound } from './NotFound';
 
@@ -56,6 +58,15 @@ function PageEditor({ page }: { page: Page }) {
 
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
   const summary = tree.byId.get(page.id);
+  const tagList = useTags();
+  const inherited = useMemo(
+    () =>
+      (inheritedTagMap(pages.data ?? [], tagList.data ?? []).get(page.id) ?? []).map((t) => ({
+        name: t.name,
+        from: displayTitle(tree.byId.get(t.fromId)?.title),
+      })),
+    [pages.data, tagList.data, page.id, tree],
+  );
   const notebook = notebooks.data?.find((n) => n.id === page.notebookId);
   const trail = ancestors(tree, page.id);
 
@@ -124,6 +135,7 @@ function PageEditor({ page }: { page: Page }) {
             label="Page actions"
             items={[
               { label: 'Version history', icon: <History size={15} />, onSelect: () => setHistoryOpen(true) },
+              { label: 'Show in graph', icon: <Waypoints size={15} />, onSelect: () => navigate(`/graph?focus=${page.id}&depth=2`) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
               {
                 label: 'Organize with AI',
@@ -184,7 +196,7 @@ function PageEditor({ page }: { page: Page }) {
             }
           }}
         />
-        <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} />
+        <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
         {mode === 'visual' ? (
           <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
         ) : (
@@ -193,6 +205,7 @@ function PageEditor({ page }: { page: Page }) {
           </Suspense>
         )}
         <Backlinks pageId={page.id} />
+        <LocalGraph pageId={page.id} notebookId={page.notebookId} />
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}

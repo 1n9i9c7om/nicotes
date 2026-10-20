@@ -15,6 +15,14 @@ docker compose up -d --build
 Open http://localhost:3000. Data lives in the `nicotes-data` volume (SQLite database,
 attachments and the key that encrypts stored API keys).
 
+### Graph, journal and templates
+
+The **Graph** shows how pages connect through `[[links]]`, subpages and tags, filterable
+by notebook or tag, with a focus mode around any page; every page also has a small local
+graph. **Today** opens the daily note (filed as Journal › year › month, see **Journal** for
+the calendar). Any page tagged `#template` can be used for new pages and daily notes, with
+`{{date}}`, `{{time}}`, `{{weekday}}` and `{{title}}` placeholders.
+
 ### Research & organize (optional)
 
 With an OpenRouter key, **Research** answers a question by searching the web, reading the

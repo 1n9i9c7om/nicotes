@@ -91,7 +91,13 @@ function listTags(db: Conn, userId: string): Tag[] {
     .where(eq(tags.userId, userId))
     .orderBy(asc(tags.name))
     .all()
-    .map((t) => ({ name: t.name, description: t.description, color: t.color, count: counts.get(t.id) ?? 0 }));
+    .map((t) => ({
+      name: t.name,
+      description: t.description,
+      color: t.color,
+      inherit: t.inherit,
+      count: counts.get(t.id) ?? 0,
+    }));
 }
 
 export function tagRoutes(db: Db) {
@@ -118,4 +124,36 @@ export function tagRoutes(db: Db) {
       db.delete(tags).where(eq(tags.id, tag.id)).run();
       return c.body(null, 204);
     });
+}
+
+/** Tags a page gets from ancestors via inheriting tags (excluding its own), per page id. */
+export function inheritedTags(db: Conn, userId: string): Map<string, string[]> {
+  const inheriting = new Set(
+    db
+      .select({ name: tags.name })
+      .from(tags)
+      .where(and(eq(tags.userId, userId), eq(tags.inherit, true)))
+      .all()
+      .map((t) => t.name),
+  );
+  const result = new Map<string, string[]>();
+  if (!inheriting.size) return result;
+  const own = tagsByPage(db, userId);
+  const parents = new Map(
+    db
+      .select({ id: pages.id, parentId: pages.parentId })
+      .from(pages)
+      .where(and(eq(pages.userId, userId), isNull(pages.deletedAt)))
+      .all()
+      .map((p) => [p.id, p.parentId]),
+  );
+  for (const id of parents.keys()) {
+    const found = new Set<string>();
+    for (let cur = parents.get(id); cur; cur = parents.get(cur)) {
+      for (const tag of own.get(cur) ?? []) if (inheriting.has(tag)) found.add(tag);
+    }
+    for (const tag of own.get(id) ?? []) found.delete(tag);
+    if (found.size) result.set(id, [...found].sort());
+  }
+  return result;
 }

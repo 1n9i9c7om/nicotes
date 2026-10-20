@@ -19,7 +19,7 @@ import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
 import { propagateRenames, type Tx } from '../links.js';
 import { applyMove, descendantIds, siblingIndex } from '../routes/pages.js';
-import { setPageTags, tagsByPage } from '../routes/tags.js';
+import { inheritedTags, setPageTags, tagsByPage } from '../routes/tags.js';
 import { deletionTime } from '../routes/trash.js';
 import { completeJson } from './llm.js';
 import type { JobContext, JobRunner } from './jobs.js';
@@ -148,6 +148,7 @@ export function organizeJob(db: Db) {
     const { notebookId, scopeTitle, all, inScope } = loadScope(db, userId, input.scope);
     const byId = new Map(all.map((p) => [p.id, p]));
     const tagMap = tagsByPage(db, userId);
+    const inherited = inheritedTags(db, userId);
     const vocabulary = new Map<string, number>();
     for (const list of tagMap.values()) for (const t of list) vocabulary.set(t, (vocabulary.get(t) ?? 0) + 1);
 
@@ -174,7 +175,8 @@ export function organizeJob(db: Db) {
       ctx.step(chunks.length > 1 ? `Analysing pages (part ${i + 1} of ${chunks.length})…` : 'Analysing pages…', i, chunks.length);
       const list = chunk
         .map((p) => {
-          const tags = tagMap.get(p.id)?.join(', ') || '-';
+          const via = inherited.get(p.id);
+          const tags = [...(tagMap.get(p.id) ?? []), ...(via ?? []).map((t) => `${t} (inherited)`)].join(', ') || '-';
           return `${short.get(p.id)} | ${pathOf(byId, p)} | tags: ${tags} | ${plainExcerpt(p.content) || '(empty)'}`;
         })
         .join('\n');
@@ -234,7 +236,7 @@ export function organizeJob(db: Db) {
         for (const t of reply.data.tags) {
           const id = long.get(t.page);
           if (!id || !chunkIds.has(id)) continue;
-          const have = new Set(tagMap.get(id) ?? []);
+          const have = new Set([...(tagMap.get(id) ?? []), ...(inherited.get(id) ?? [])]);
           const add = [...new Set(t.add.map(normalizeTag).filter((tag) => tag && !have.has(tag)))].slice(0, 3);
           if (!add.length) continue;
           suggestions.push({

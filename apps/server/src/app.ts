@@ -14,7 +14,9 @@ import type { Db } from './db/index.js';
 import { importRoutes } from './import/routes.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
+import { dailyRoutes } from './routes/daily.js';
 import { exportRoutes } from './routes/export.js';
+import { graphRoutes } from './routes/graph.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
@@ -94,7 +96,7 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -107,6 +109,8 @@ export function createApp({
   app.route('/api/trash', trashRoutes(db));
   app.route('/api/export', exportRoutes(db, dataDir));
   app.route('/api/jobs', jobRoutes(jobs));
+  app.route('/api/graph', graphRoutes(db));
+  app.route('/api/daily', dailyRoutes(db, settings));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
