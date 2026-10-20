@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router';
 import {
   ChevronRight,
   Download,
+  FileDown,
   FilePlus,
   FileText,
   FolderInput,
@@ -30,6 +31,7 @@ import {
   useRenamePage,
   useSignOut,
   useTags,
+  exportUrl,
 } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
 import { buildTree, childrenOf, displayTitle, isDescendant, rootKey, type PageTree } from '../lib/tree';
@@ -214,6 +216,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
             {user.username.slice(0, 1).toUpperCase()}
           </span>
           <span className="sidebar-user">{user.username}</span>
+          <NavLink to="/trash" className="icon-btn" aria-label="Trash" title="Trash">
+            <Trash2 size={16} />
+          </NavLink>
           <NavLink to="/settings" className="icon-btn" aria-label="Settings" title="Settings">
             <Settings size={16} />
           </NavLink>
@@ -296,6 +301,11 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
             items={[
               { label: 'New page', icon: <FilePlus size={15} />, onSelect: () => s.addPage(notebook.id, null) },
               { label: 'Edit notebook', icon: <Palette size={15} />, onSelect: () => setEditing(true) },
+              {
+                label: 'Export as Markdown',
+                icon: <FileDown size={15} />,
+                onSelect: () => (window.location.href = exportUrl(notebook.id)),
+              },
               {
                 label: 'Delete notebook',
                 icon: <Trash2 size={15} />,

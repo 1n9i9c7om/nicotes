@@ -5,6 +5,7 @@ import './styles/app.css';
 import './styles/editor.css';
 import './styles/linking.css';
 import './styles/import.css';
+import './styles/history.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
@@ -12,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from './App';
 import { ApiError } from './lib/api';
+import './lib/install';
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -148,3 +148,23 @@ export const settings = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );
+
+/** Snapshots of a page's earlier states (see versions.ts for when they are taken). */
+export const pageVersions = sqliteTable(
+  'page_versions',
+  {
+    id: text('id').primaryKey(),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    /** Why the snapshot was taken: 'edit' | 'relink' | 'restore'. */
+    reason: text('reason').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('page_versions_page_idx').on(t.pageId, t.createdAt)],
+);

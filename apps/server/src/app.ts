@@ -11,10 +11,12 @@ import type { Db } from './db/index.js';
 import { importRoutes } from './import/routes.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
+import { exportRoutes } from './routes/export.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
 import { tagRoutes } from './routes/tags.js';
+import { trashRoutes } from './routes/trash.js';
 import { SecretBox } from './secrets.js';
 import { settingsRoutes, SettingsStore } from './settings.js';
 
@@ -86,7 +88,7 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -96,6 +98,8 @@ export function createApp({
   app.route('/api/search', searchRoutes(db));
   app.route('/api/attachments', attachmentRoutes(db, dataDir));
   app.route('/api/settings', settingsRoutes(settings));
+  app.route('/api/trash', trashRoutes(db));
+  app.route('/api/export', exportRoutes(db, dataDir));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
@@ -108,7 +112,18 @@ export function createApp({
         onFound: (_path, c) => c.header('Cache-Control', 'public, max-age=31536000, immutable'),
       }),
     );
-    app.use('*', serveStatic({ root: webDir }));
+    // Everything outside /assets (index.html, sw.js, manifest) must revalidate, so app updates
+    // and new service workers are picked up.
+    app.use(
+      '*',
+      serveStatic({
+        root: webDir,
+        onFound: (path, c) => {
+          c.header('Cache-Control', 'no-cache');
+          if (path.endsWith('.webmanifest')) c.header('Content-Type', 'application/manifest+json');
+        },
+      }),
+    );
     // SPA fallback: client-side routes all render index.html.
     app.get('*', (c) => {
       c.header('Cache-Control', 'no-cache');

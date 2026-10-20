@@ -1,4 +1,5 @@
-const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+// English like the rest of the UI (the browser locale would mix languages).
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],

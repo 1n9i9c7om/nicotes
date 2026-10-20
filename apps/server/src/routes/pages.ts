@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
@@ -9,16 +9,21 @@ import {
   type ApiError,
   type Page,
   type PageSummary,
+  type PageVersion,
+  type PageVersionSummary,
   type RenameResult,
+  type VersionReason,
 } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
-import { pages } from '../db/schema.js';
+import { pages, pageVersions } from '../db/schema.js';
 import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
 import { findBacklinks, indexPageLinks, propagateRenames, type Tx } from '../links.js';
 import { getNotebook } from './notebooks.js';
+import { snapshotPage } from '../versions.js';
 import { setPageTags, tagsByPage } from './tags.js';
+import { deletionTime } from './trash.js';
 
 const summaryColumns = {
   id: pages.id,
@@ -71,6 +76,23 @@ function descendantIds(db: Db | Tx, userId: string, rootId: string): string[] {
     }
   }
   return result;
+}
+
+function findVersion(db: Db, pageId: string, versionId: string): PageVersion {
+  const row = db
+    .select()
+    .from(pageVersions)
+    .where(and(eq(pageVersions.id, versionId), eq(pageVersions.pageId, pageId)))
+    .get();
+  if (!row) throw notFound('Version');
+  return {
+    id: row.id,
+    title: row.title,
+    reason: row.reason as VersionReason,
+    createdAt: row.createdAt,
+    size: row.content.length,
+    content: row.content,
+  };
 }
 
 const siblingsOf = (notebookId: string, parentId: string | null) =>
@@ -134,6 +156,7 @@ export function pageRoutes(db: Db) {
       }
       const titleChanged = changes.title !== undefined && changes.title !== current.title;
       const relinked = db.transaction((tx) => {
+        if (contentChanged) snapshotPage(tx, { ...current, userId }, 'edit');
         const apply = () => {
           tx.update(pages)
             .set({
@@ -150,6 +173,41 @@ export function pageRoutes(db: Db) {
       });
       const result: Page & RenameResult = { ...findPage(db, userId, current.id), relinked };
       return c.json(result);
+    })
+    .get('/:id/versions', (c) => {
+      const page = findPage(db, c.var.user.id, c.req.param('id'));
+      const rows = db
+        .select({
+          id: pageVersions.id,
+          title: pageVersions.title,
+          reason: pageVersions.reason,
+          createdAt: pageVersions.createdAt,
+          size: sql<number>`length(${pageVersions.content})`,
+        })
+        .from(pageVersions)
+        .where(eq(pageVersions.pageId, page.id))
+        .orderBy(desc(pageVersions.createdAt))
+        .all();
+      return c.json(rows as PageVersionSummary[]);
+    })
+    .get('/:id/versions/:versionId', (c) => {
+      const page = findPage(db, c.var.user.id, c.req.param('id'));
+      return c.json(findVersion(db, page.id, c.req.param('versionId')));
+    })
+    .post('/:id/versions/:versionId/restore', (c) => {
+      const userId = c.var.user.id;
+      const page = findPage(db, userId, c.req.param('id'));
+      const version = findVersion(db, page.id, c.req.param('versionId'));
+      // Only the content is restored; the title stays, so links to the page keep working.
+      db.transaction((tx) => {
+        snapshotPage(tx, { ...page, userId }, 'restore', true);
+        tx.update(pages)
+          .set({ content: version.content, version: page.version + 1, updatedAt: Date.now() })
+          .where(eq(pages.id, page.id))
+          .run();
+        indexPageLinks(tx, userId, page.id, version.content);
+      });
+      return c.json(findPage(db, userId, page.id));
     })
     .get('/:id/backlinks', (c) => {
       const page = findPage(db, c.var.user.id, c.req.param('id'));
@@ -207,7 +265,7 @@ export function pageRoutes(db: Db) {
       const page = findPage(db, userId, c.req.param('id'));
       const ids = [page.id, ...descendantIds(db, userId, page.id)];
       // Same timestamp for the whole subtree so it can be restored as one unit later.
-      db.update(pages).set({ deletedAt: Date.now() }).where(inArray(pages.id, ids)).run();
+      db.update(pages).set({ deletedAt: deletionTime(db, userId) }).where(inArray(pages.id, ids)).run();
       return c.body(null, 204);
     });
 }

@@ -13,6 +13,7 @@ import { notebooks, pages } from '../db/schema.js';
 import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
 import { propagateRenames } from '../links.js';
+import { deletionTime } from './trash.js';
 
 const columns = {
   id: notebooks.id,
@@ -108,8 +109,8 @@ export function notebookRoutes(db: Db) {
     .delete('/:id', (c) => {
       const { id } = c.req.param();
       getNotebook(db, c.var.user.id, id);
-      const now = Date.now();
       db.transaction((tx) => {
+        const now = deletionTime(tx, c.var.user.id);
         tx.update(notebooks).set({ deletedAt: now }).where(eq(notebooks.id, id)).run();
         tx.update(pages)
           .set({ deletedAt: now })

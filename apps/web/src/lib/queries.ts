@@ -14,12 +14,15 @@ import type {
   PageCreate,
   PageMove,
   PageSummary,
+  PageVersion,
+  PageVersionSummary,
   RenameResult,
   SearchResult,
   Settings,
   SettingsUpdate,
   Tag,
   TagUpdate,
+  TrashItem,
   User,
 } from '@nicotes/shared';
 import { api } from './api';
@@ -33,6 +36,9 @@ export const keys = {
   tags: ['tags'] as const,
   settings: ['settings'] as const,
   models: ['models'] as const,
+  versions: (id: string) => ['versions', id] as const,
+  version: (pageId: string, id: string) => ['version', pageId, id] as const,
+  trash: ['trash'] as const,
 };
 
 /**
@@ -128,6 +134,7 @@ export function useDeleteNotebook() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.notebooks });
       qc.invalidateQueries({ queryKey: keys.pages });
+      qc.invalidateQueries({ queryKey: keys.trash });
     },
   });
 }
@@ -224,6 +231,7 @@ export function useDeletePage() {
       qc.invalidateQueries({ queryKey: keys.pages });
       qc.invalidateQueries({ queryKey: keys.tags });
       qc.invalidateQueries({ queryKey: ['backlinks'] });
+      qc.invalidateQueries({ queryKey: keys.trash });
     },
   });
 }
@@ -303,3 +311,62 @@ export const useModels = (enabled: boolean) =>
 
 export const useImportPreview = () =>
   useMutation({ mutationFn: (input: ImportRequest) => api.post<ImportPreview>('/import/preview', input) });
+
+// ---------- History, trash & export ----------
+
+export const useVersions = (pageId: string) =>
+  useQuery({
+    queryKey: keys.versions(pageId),
+    queryFn: () => api.get<PageVersionSummary[]>(`/pages/${pageId}/versions`),
+  });
+
+export const useVersion = (pageId: string, versionId: string | null) =>
+  useQuery({
+    queryKey: keys.version(pageId, versionId ?? ''),
+    queryFn: () => api.get<PageVersion>(`/pages/${pageId}/versions/${versionId}`),
+    enabled: !!versionId,
+    staleTime: Infinity,
+  });
+
+export function useRestoreVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pageId, versionId }: { pageId: string; versionId: string }) =>
+      api.post<Page>(`/pages/${pageId}/versions/${versionId}/restore`),
+    onSuccess: (page) => {
+      // The open editor adopts the newer server copy (see useAutosave).
+      qc.setQueryData(keys.page(page.id), page);
+      qc.invalidateQueries({ queryKey: keys.versions(page.id) });
+      qc.invalidateQueries({ queryKey: ['backlinks'] });
+    },
+  });
+}
+
+export const useTrash = () => useQuery({ queryKey: keys.trash, queryFn: () => api.get<TrashItem[]>('/trash') });
+
+function afterTrashChange(qc: QueryClient) {
+  for (const key of [keys.trash, keys.pages, keys.notebooks, keys.tags, ['backlinks']]) {
+    qc.invalidateQueries({ queryKey: key });
+  }
+}
+
+export function useRestoreTrash() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Pick<TrashItem, 'kind' | 'id'>) => api.post('/trash/restore', item),
+    onSuccess: () => afterTrashChange(qc),
+  });
+}
+
+export function useDeleteForever() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Pick<TrashItem, 'kind' | 'id'> | 'all') =>
+      api.delete(item === 'all' ? '/trash' : `/trash/${item.kind}/${item.id}`),
+    onSuccess: () => afterTrashChange(qc),
+  });
+}
+
+/** Download URL for a Markdown zip of everything or one notebook. */
+export const exportUrl = (notebookId?: string) =>
+  `/api/export${notebookId ? `?notebookId=${encodeURIComponent(notebookId)}` : ''}`;

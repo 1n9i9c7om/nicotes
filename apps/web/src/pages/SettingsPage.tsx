@@ -1,7 +1,16 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, ExternalLink, LogOut, PlugZap, XCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, Smartphone, XCircle } from 'lucide-react';
 import { DEFAULT_OPENROUTER_MODEL, type ConnectionCheck, type SettingSource, type SettingsUpdate } from '@nicotes/shared';
-import { useAuthStatus, useCheckConnection, useModels, useSettings, useSignOut, useUpdateSettings } from '../lib/queries';
+import {
+  exportUrl,
+  useAuthStatus,
+  useCheckConnection,
+  useModels,
+  useSettings,
+  useSignOut,
+  useUpdateSettings,
+} from '../lib/queries';
+import { useInstallPrompt } from '../lib/install';
 
 const SOURCE_LABEL: Record<Exclude<SettingSource, null>, string> = {
   settings: 'Saved here',
@@ -97,6 +106,7 @@ export function SettingsPage() {
   const [loadModels, setLoadModels] = useState(false);
   const models = useModels(loadModels);
   const modelList = useId();
+  const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
   const { openrouter, crawl4ai } = settings.data;
@@ -195,6 +205,46 @@ export function SettingsPage() {
       </section>
 
       {update.error && <p className="error">{update.error.message}</p>}
+
+      <section className="settings-card">
+        <h2>
+          <FileDown size={18} /> Export
+        </h2>
+        <p className="muted">
+          A zip of Markdown files, one folder per notebook, with tags and dates in each file's header and attachments
+          included. It opens as an Obsidian vault. Single notebooks can be exported from their ⋯ menu.
+        </p>
+        <div className="setting-actions">
+          <a className="btn" href={exportUrl()} download>
+            <FileDown size={15} /> Download everything
+          </a>
+        </div>
+      </section>
+
+      <section className="settings-card">
+        <h2>
+          <Smartphone size={18} /> App
+        </h2>
+        <p className="muted">
+          Install Nicotes on your home screen or desktop. On Android, installed Nicotes appears in the share menu: sharing a
+          link opens the importer. Installing needs HTTPS (or localhost).
+        </p>
+        <div className="setting-actions">
+          {installPrompt.installed ? (
+            <span className="check ok">
+              <CheckCircle2 size={15} /> Running as an installed app
+            </span>
+          ) : installPrompt.available ? (
+            <button className="btn btn-primary" onClick={() => void installPrompt.install()}>
+              <Smartphone size={15} /> Install app
+            </button>
+          ) : (
+            <span className="muted">
+              Use your browser's menu (“Install app” / “Add to Home Screen”) to install. On iOS: Share → Add to Home Screen.
+            </span>
+          )}
+        </div>
+      </section>
 
       <section className="settings-card">
         <h2>Account</h2>

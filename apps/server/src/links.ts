@@ -13,6 +13,7 @@ import {
 } from '@nicotes/shared';
 import type { Db } from './db/index.js';
 import { notebooks, pageLinks, pages } from './db/schema.js';
+import { snapshotPage } from './versions.js';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 type Conn = Db | Tx;
@@ -149,12 +150,14 @@ export function propagateRenames(tx: Tx, userId: string, mutate: () => void): st
   if (rewrites.size === 0) return [];
 
   const sources = tx
-    .select({ id: pages.id, content: pages.content, version: pages.version })
+    .select({ id: pages.id, title: pages.title, content: pages.content, version: pages.version })
     .from(pages)
     .where(inArray(pages.id, [...rewrites.keys()]))
     .all();
   for (const source of sources) {
     const map = rewrites.get(source.id)!;
+    // Content changes the user did not type themselves are always undoable.
+    snapshotPage(tx, { ...source, userId }, 'relink', true);
     const content = mapWikilinks(source.content, (ref) => map.get(ref.target) ?? null);
     tx.update(pages).set({ content, version: source.version + 1 }).where(eq(pages.id, source.id)).run();
     indexPageLinks(tx, userId, source.id, content);

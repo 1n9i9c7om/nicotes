@@ -161,6 +161,26 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   generated in the data directory, and never returned to the browser.
 - The import page is a route (`/import?url=…`) so the PWA share target can use it.
 
+### History, trash, export and PWA
+
+- **Version history:** `page_versions` snapshots. While editing, the pre-change state is
+  saved when the last snapshot is older than 10 minutes; link rewrites and restores
+  always snapshot first. Retention: everything from the last 24 h, then the newest per day
+  for 90 days, max 200 per page. Restoring replaces the content (not the title, so links
+  stay valid) and keeps the replaced text as a version.
+- **Trash:** soft-deleted subtrees share one `deleted_at` and appear as one item; pages of a
+  deleted notebook come back with it. Restored pages go back under their old parent if it
+  still exists, else to the top level. Items are purged after 30 days (hourly job);
+  permanent deletion cascades to versions, links and tags.
+- **Export:** `GET /api/export[?notebookId]` → zip with one folder per notebook,
+  `Page.md` + `Page/` for pages with subpages, YAML frontmatter (id, title, tags,
+  created, updated), attachments under `attachments/` with relative links. Opens as an
+  Obsidian vault; `[[links]]` stay as written.
+- **PWA:** vite-plugin-pwa (Workbox). Precaches only the app shell; other assets are cached
+  on first use; `/api` is never served from the cache, so no offline data. The manifest's
+  `share_target` points at `/share`, which extracts a URL from `url`, `text` or `title` and
+  opens the importer. Installing requires HTTPS (or localhost).
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -183,7 +203,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    touch-friendly "Move to…" dialog (native drag & drop does not work on phones).
 3. ✅ **Smart Import** — JSON-LD, crawl4ai / Readability, OpenRouter, profiles, preview.
    Builds the shared LLM + fetching layer that phase 5 reuses.
-4. **Safety nets & mobile** — version history (with restore), trash UI, `.md` zip export
+4. ✅ **Safety nets & mobile** — version history (with restore), trash UI, `.md` zip export
    (Obsidian-compatible folders + frontmatter), PWA install + Android share target
    (shares a URL straight into Smart Import). Comes before phase 5 so any change an
    LLM makes to existing pages can be reviewed and undone.

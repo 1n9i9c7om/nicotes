@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, X } from 'lucide-react';
 import type { Page } from '@nicotes/shared';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
 import { Backlinks } from '../components/Backlinks';
+import { HistoryDialog } from '../components/HistoryDialog';
 import { Menu } from '../components/Menu';
 import { MoveDialog } from '../components/MoveDialog';
 import { TagEditor } from '../components/TagEditor';
@@ -47,6 +48,7 @@ function PageEditor({ page }: { page: Page }) {
   const titleInput = useRef<HTMLTextAreaElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const bridge = useLinkBridge(page.notebookId);
   const upload = useCallback((file: File) => uploadFile(file, page.id), [page.id]);
   const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
@@ -120,7 +122,10 @@ function PageEditor({ page }: { page: Page }) {
           <SaveIndicator status={status} />
           <Menu
             label="Page actions"
-            items={[{ label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) }]}
+            items={[
+              { label: 'Version history', icon: <History size={15} />, onSelect: () => setHistoryOpen(true) },
+              { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
+            ]}
           />
           <div className="segmented" role="group" aria-label="Editor mode">
             <button className={mode === 'visual' ? 'active' : ''} aria-pressed={mode === 'visual'} onClick={() => setMode('visual')}>
@@ -185,6 +190,14 @@ function PageEditor({ page }: { page: Page }) {
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
+      {historyOpen && (
+        <HistoryDialog
+          pageId={page.id}
+          currentContent={content}
+          beforeRestore={flush}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }

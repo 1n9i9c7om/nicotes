@@ -15,6 +15,18 @@ docker compose up -d --build
 Open http://localhost:3000. Data lives in the `nicotes-data` volume (SQLite database,
 attachments and the key that encrypts stored API keys).
 
+### Phone app
+
+Nicotes is a PWA: open it in your phone's browser and choose "Install app" / "Add to Home
+Screen" (needs HTTPS, so run it behind a reverse proxy and set
+`NICOTES_SECURE_COOKIES=true`). On Android it then appears in the share menu, and shared
+links open the importer.
+
+### Backups
+
+Settings → Export downloads all notes as Markdown (an Obsidian-compatible vault, including
+attachments). For full backups, copy the `nicotes-data` volume.
+
 ### Import (optional)
 
 Import turns web pages into notes. It works out of the box for pages with embedded recipe

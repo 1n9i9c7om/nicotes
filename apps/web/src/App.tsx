@@ -11,7 +11,9 @@ import { NotFound } from './pages/NotFound';
 import { PageView } from './pages/PageView';
 import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SharePage } from './pages/SharePage';
 import { TagView } from './pages/TagView';
+import { TrashPage } from './pages/TrashPage';
 
 export function App() {
   const { data, isPending, isError, refetch } = useAuthStatus();
@@ -39,6 +41,8 @@ export function App() {
         <Route path="t/:tagName" element={<TagView />} />
         <Route path="import" element={<ImportPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="trash" element={<TrashPage />} />
+        <Route path="share" element={<SharePage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
