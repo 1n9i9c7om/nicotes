@@ -30,9 +30,9 @@ User ─┬─ Notebook ── Page ── Page (children, any depth)
 |------------|-------|
 | Notebook   | Top-level grouping. Title, icon, accent colour, sort order. |
 | Page       | Belongs to a notebook, optional `parent_id` for nesting. Markdown `content`, `version` for optimistic concurrency, soft delete via `deleted_at`. |
-| Tag        | (Phase 2) Many-to-many with pages. A tag can have a description, turning its tag view into a hub. |
-| Link       | (Phase 2) Derived from `[[wikilinks]]` on save. Stored by target page id; rendered by title. |
-| Attachment | (Phase 2) Files stored under `/data/attachments`, referenced from Markdown. |
+| Tag        | Many-to-many with pages, normalised names (`Open World` → `open-world`). A tag with a description acts as a hub; unused tags without one are removed automatically. |
+| Link       | Index of `[[wikilinks]]` per page, rebuilt on save (and on startup). Stored as written, resolved at read time. |
+| Attachment | Files under `/data/attachments/<id>`, embedded in Markdown as `/api/attachments/<id>/<name>`. |
 
 ### Example: a games knowledge base
 
@@ -48,8 +48,8 @@ Notebook "Games"
 Each game is a page tagged `#gaming`, with sub-articles as child pages. The `#gaming`
 tag view lists every game (with its sub-article count) and can carry its own
 description, so it acts as the hub. Links like `[[Elden Ring/Builds]]` connect
-articles across games or notebooks. Tags can optionally be inherited by descendants so
-that searching `#gaming` also finds sub-articles.
+articles across games or notebooks. (Not built yet: optional tag inheritance, so that
+`#gaming` also matches sub-articles in search.)
 
 ## Architecture
 
@@ -88,8 +88,9 @@ and tsup respectively).
 - **SQLite** via `better-sqlite3` + **Drizzle ORM**. Migrations are generated with
   drizzle-kit, committed, and applied on startup.
 - **Auth:** username + password (scrypt), opaque session token in an `HttpOnly`,
-  `SameSite=Lax` cookie; only a hash of the token is stored. Origin-checked CSRF
-  protection on mutating requests. On first start an account is created from
+  `SameSite=Lax` cookie; only a hash of the token is stored. CSRF protection: mutating
+  API requests must be JSON (or bodiless); multipart uploads must carry
+  `X-Requested-With: nicotes`. Neither is possible cross-site without a CORS preflight. On first start an account is created from
   `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD`, or — if those are unset — the UI
   offers a one-time setup screen while no user exists.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
@@ -109,6 +110,26 @@ and tsup respectively).
 - **Autosave** with debounce and a visible status (saved / saving / conflict / offline).
 - **Theme:** dark, blue/cyan accents, defined as CSS custom properties.
 - **Responsive:** sidebar collapses into a drawer on narrow screens.
+
+### Links, tags and search
+
+- **Link targets** are page titles, optionally qualified with ancestor and/or notebook
+  titles: `[[Builds]]`, `[[Elden Ring/Builds]]`, `[[Games/Elden Ring/Builds]]`,
+  `[[Target|label]]`. Matching is case-insensitive; an exact title wins over a path
+  reading. With several candidates, the linking page's notebook wins, then the oldest
+  page. Links inside code are ignored. The resolver lives in `packages/shared`, so server
+  (backlinks) and web (navigation, autocomplete) always agree.
+- **Autocomplete** inserts the shortest unambiguous target. Clicking an unresolved
+  (dashed) link creates the page — under the qualifying parent/notebook if given.
+- **Rename propagation:** renaming or moving a page, or renaming a notebook, rewrites
+  every link whose target's path changed, keeping its qualification depth. Rewritten
+  pages get a new version; an open editor without unsaved edits adopts the new text,
+  otherwise the usual conflict banner appears.
+- **Full-text search** uses an FTS5 table (title weighted 8×) kept in sync by triggers,
+  keyed by page id. Every word becomes a quoted prefix term, so user input cannot inject
+  FTS syntax; `#tag` words filter by tag.
+- **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
+  and plain text display inline; everything else downloads.
 
 ### Smart Import (Phase 3)
 
@@ -147,12 +168,24 @@ token cap per import. Android PWA share target posts URLs straight into the impo
 
 ## Roadmap
 
-1. **Foundation** — monorepo, auth, notebooks + nested page tree (drag & drop), dual
+1. ✅ **Foundation** — monorepo, auth, notebooks + nested page tree (drag & drop), dual
    editor, autosave, dark theme, Docker image + compose.
-2. **Linking** — `[[wikilinks]]` with autocomplete and rename propagation, backlinks,
+2. ✅ **Linking** — `[[wikilinks]]` with autocomplete and rename propagation, backlinks,
    tags + tag hubs, Ctrl+K quick switcher, full-text search, attachments, and a
    touch-friendly "Move to…" dialog (native drag & drop does not work on phones).
 3. **Smart Import** — JSON-LD, crawl4ai / Readability, OpenRouter, profiles, preview.
-4. **Polish** — PWA install + share target, `.md` zip export (Obsidian-compatible
-   folders + frontmatter), trash UI, version history.
-5. **Later** — local graph, daily notes, templates, multi-user, GitLab CI → registry.
+   Builds the shared LLM + fetching layer that phase 5 reuses.
+4. **Safety nets & mobile** — version history (with restore), trash UI, `.md` zip export
+   (Obsidian-compatible folders + frontmatter), PWA install + Android share target
+   (shares a URL straight into Smart Import). Comes before phase 5 so any change an
+   LLM makes to existing pages can be reviewed and undone.
+5. **AI assistants** (on top of phase 3's LLM layer):
+   - **Research mode** — the user describes a topic; an LLM searches the web, reads
+     sources (crawl4ai / Readability) and compiles a note with citations. Needs a web
+     search source (e.g. OpenRouter's web-search plugin or a self-hosted SearXNG);
+     runs as a background job with progress, the result lands as a draft page.
+   - **LLM grouping & tagging** — for one page or a whole notebook/subtree, suggest
+     tags, parent pages or new groups. Default is suggestions to accept/reject; an
+     optional auto-apply mode records every change in version history.
+6. **Later** — local graph, daily notes, templates, tag inheritance, multi-user,
+   GitLab CI → registry.

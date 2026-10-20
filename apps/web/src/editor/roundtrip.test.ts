@@ -22,6 +22,7 @@ const samples: Record<string, string> = {
   // Tables are normalised to padded columns; the padded form must be stable.
   table: '| Item | Qty |\n| ---- | --- |\n| Egg  | 2   |',
   wikilink: 'Links to [[Elden Ring]] and [[Games/Builds|builds]].',
+  image: '![map shot](/api/attachments/abc/map%20shot.png)',
 };
 
 describe('markdown round-trip', () => {

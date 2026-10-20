@@ -7,18 +7,23 @@ import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
 import { requireAuth } from './auth.js';
 import type { Db } from './db/index.js';
+import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
+import { searchRoutes } from './routes/search.js';
+import { tagRoutes } from './routes/tags.js';
 
 export interface AppOptions {
   db: Db;
   secureCookies: boolean;
+  /** Where attachments are stored (under `<dataDir>/attachments`). */
+  dataDir: string;
   /** Directory with the built web app; omitted in tests. */
   webDir?: string;
 }
 
-export function createApp({ db, secureCookies, webDir }: AppOptions) {
+export function createApp({ db, secureCookies, dataDir, webDir }: AppOptions) {
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -27,44 +32,50 @@ export function createApp({ db, secureCookies, webDir }: AppOptions) {
     return c.json({ error: 'Internal server error' }, 500);
   });
 
-  app.use(
-    '*',
-    secureHeaders({
-      contentSecurityPolicy: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        // CodeMirror and TipTap inject inline styles.
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-        fontSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        frameAncestors: ["'none'"],
-      },
-    }),
-  );
+  const headers = secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      // CodeMirror and TipTap inject inline styles.
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  });
+  // Attachment downloads set their own, stricter sandbox policy.
+  app.use('*', (c, next) => (c.req.path.startsWith('/api/attachments/') ? next() : headers(c, next)));
 
   // CSRF defence: state-changing API calls must be JSON (or bodiless). Cross-site forms
   // cannot send application/json without a CORS preflight, which this server never allows.
+  // Uploads are multipart, so they must carry a custom header instead (also preflighted).
   app.use('/api/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-      const type = c.req.header('content-type');
-      if (type && !type.toLowerCase().startsWith('application/json')) {
-        throw new HTTPException(415, { message: 'Expected application/json' });
-      }
+      const type = c.req.header('content-type')?.toLowerCase();
+      const json = !type || type.startsWith('application/json');
+      const upload = type?.startsWith('multipart/form-data') && c.req.header('x-requested-with') === 'nicotes';
+      if (!json && !upload) throw new HTTPException(415, { message: 'Expected application/json' });
     }
     await next();
   });
-  app.use('/api/*', bodyLimit({ maxSize: 10 * 1024 * 1024 }));
+  const jsonLimit = bodyLimit({ maxSize: 10 * 1024 * 1024 });
+  app.use('/api/*', (c, next) => (c.req.path.startsWith('/api/attachments') ? next() : jsonLimit(c, next)));
 
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  app.use('/api/notebooks/*', auth);
-  app.use('/api/pages/*', auth);
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments']) {
+    app.use(`/api/${area}`, auth);
+    app.use(`/api/${area}/*`, auth);
+  }
   app.route('/api/notebooks', notebookRoutes(db));
   app.route('/api/pages', pageRoutes(db));
+  app.route('/api/tags', tagRoutes(db));
+  app.route('/api/search', searchRoutes(db));
+  app.route('/api/attachments', attachmentRoutes(db, dataDir));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
   if (webDir && existsSync(join(webDir, 'index.html'))) {

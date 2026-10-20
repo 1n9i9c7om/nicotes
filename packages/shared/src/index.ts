@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { normalizeTag } from './tags';
+
+export * from './tags';
+export * from './wikilinks';
 
 // ---------- Auth ----------
 
@@ -90,14 +94,82 @@ export interface PageSummary {
   parentId: string | null;
   title: string;
   sortOrder: number;
+  /** Normalised tag names, sorted. */
+  tags: string[];
+  createdAt: number;
   updatedAt: number;
 }
 
 export interface Page extends PageSummary {
   content: string;
   version: number;
-  createdAt: number;
 }
+
+/** Response of PATCH /pages/:id and PATCH /notebooks/:id. */
+export interface RenameResult {
+  /** Pages whose content was rewritten because links to a renamed page/notebook changed. */
+  relinked: string[];
+}
+
+export interface Backlink {
+  id: string;
+  notebookId: string;
+  title: string;
+  /** The line containing the link. */
+  excerpt: string;
+}
+
+// ---------- Tags ----------
+
+const tagName = z
+  .string()
+  .transform(normalizeTag)
+  .pipe(z.string().min(1, 'Tag name is empty'));
+
+export const pageTagsSchema = z.object({ tags: z.array(tagName).max(50) });
+export type PageTags = z.infer<typeof pageTagsSchema>;
+
+export const tagUpdateSchema = z.object({
+  name: tagName.optional(),
+  description: z.string().max(20_000).optional(),
+  color: colorSchema.optional(),
+});
+export type TagUpdate = z.infer<typeof tagUpdateSchema>;
+
+export interface Tag {
+  name: string;
+  description: string;
+  color: string | null;
+  /** Number of live pages carrying the tag. */
+  count: number;
+}
+
+// ---------- Search ----------
+
+/** Marks around matched terms in search excerpts (control characters, never in user text). */
+export const MATCH_START = String.fromCharCode(1);
+export const MATCH_END = String.fromCharCode(2);
+
+export interface SearchResult {
+  id: string;
+  notebookId: string;
+  title: string;
+  /** Excerpt with matches wrapped in MATCH_START / MATCH_END. */
+  excerpt: string;
+}
+
+// ---------- Attachments ----------
+
+export interface Attachment {
+  id: string;
+  /** Same-origin URL to embed in Markdown. */
+  url: string;
+  filename: string;
+  mime: string;
+  size: number;
+}
+
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 // ---------- Errors ----------
 

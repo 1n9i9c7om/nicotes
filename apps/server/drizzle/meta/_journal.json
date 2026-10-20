@@ -8,6 +8,20 @@
       "when": 1792478505771,
       "tag": "0000_natural_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792480977810,
+      "tag": "0001_links_tags_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792480979167,
+      "tag": "0002_fulltext_search",
+      "breakpoints": true
     }
   ]
 }

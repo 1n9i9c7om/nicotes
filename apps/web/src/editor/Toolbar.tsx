@@ -1,5 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
+import type { Uploader } from './uploads';
+import { isImage } from './uploads';
 import {
   Bold,
   Code,
@@ -12,6 +14,7 @@ import {
   ListChecks,
   ListOrdered,
   Minus,
+  Paperclip,
   Quote,
   Redo2,
   SquareCode,
@@ -50,9 +53,32 @@ function ToolButton({
   );
 }
 
-export function Toolbar({ editor }: { editor: Editor }) {
+interface ToolbarProps {
+  editor: Editor;
+  upload?: Uploader;
+  onUploadError?: (error: Error) => void;
+}
+
+export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [href, setHref] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const attachFiles = async (files: FileList | null) => {
+    if (!upload || !files) return;
+    for (const file of files) {
+      try {
+        const att = await upload(file);
+        const content = isImage(att.mime)
+          ? { type: 'image', attrs: { src: att.url, alt: att.filename } }
+          : { type: 'text', text: att.filename, marks: [{ type: 'link', attrs: { href: att.url } }] };
+        editor.chain().focus().insertContent(content).run();
+      } catch (error) {
+        onUploadError?.(error as Error);
+      }
+    }
+    if (fileInput.current) fileInput.current.value = '';
+  };
 
   const state = useEditorState({
     editor,
@@ -157,6 +183,12 @@ export function Toolbar({ editor }: { editor: Editor }) {
         <ToolButton label="Divider" onClick={() => chain().setHorizontalRule().run()}>
           <Minus size={16} />
         </ToolButton>
+        {upload && (
+          <ToolButton label="Attach image or file" onClick={() => fileInput.current?.click()}>
+            <Paperclip size={16} />
+          </ToolButton>
+        )}
+        <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attachFiles(e.target.files)} />
       </div>
 
       {state.table && (

@@ -4,11 +4,14 @@ import {
   ChevronRight,
   FilePlus,
   FileText,
+  FolderInput,
+  Hash,
   House,
   LogOut,
   Palette,
   Pencil,
   Plus,
+  Search,
   Trash2,
   X,
 } from 'lucide-react';
@@ -24,11 +27,13 @@ import {
   usePages,
   useRenamePage,
   useSignOut,
+  useTags,
 } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
 import { buildTree, childrenOf, displayTitle, isDescendant, rootKey, type PageTree } from '../lib/tree';
 import { Menu } from './Menu';
 import { ConfirmDialog } from './Modal';
+import { MoveDialog } from './MoveDialog';
 import { NotebookDialog } from './NotebookDialog';
 
 type DropPosition = 'before' | 'after' | 'inside';
@@ -49,6 +54,7 @@ interface TreeState {
   movePage: (target: PageSummary | Notebook, position: DropPosition) => void;
   moveNotebook: (target: Notebook, position: DropPosition) => void;
   confirm: (dialog: ConfirmState) => void;
+  startMove: (page: PageSummary) => void;
 }
 
 interface ConfirmState {
@@ -69,7 +75,13 @@ function dropPosition(e: DragEvent, allowInside: boolean): DropPosition {
   return y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
 }
 
-export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) {
+interface SidebarProps {
+  user: User;
+  onClose: () => void;
+  onSearch: () => void;
+}
+
+export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
   const navigate = useNavigate();
   const notebooks = useNotebooks();
   const pages = usePages();
@@ -84,6 +96,9 @@ export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [creatingNotebook, setCreatingNotebook] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [moving, setMoving] = useState<PageSummary | null>(null);
+  const tags = useTags();
+  const [tagsOpen, setTagsOpen] = useLocalState('nicotes.tagsOpen', true);
 
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
 
@@ -98,6 +113,7 @@ export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) 
     renamingId,
     setRenamingId,
     confirm: setConfirmState,
+    startMove: setMoving,
     addPage: async (notebookId, parentId) => {
       const page = await createPage.mutateAsync({ notebookId, parentId });
       setExpandedMap((prev) => ({ ...prev, [parentId ?? notebookId]: true }));
@@ -146,6 +162,10 @@ export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) 
         </div>
 
         <nav className="sidebar-scroll" onDragEnd={() => (setDrag(null), setDropTarget(null))}>
+          <button className="nav-item search-item" onClick={onSearch}>
+            <Search size={16} /> Search
+            <kbd>Ctrl K</kbd>
+          </button>
           <NavLink to="/" end className="nav-item">
             <House size={16} /> Home
           </NavLink>
@@ -162,6 +182,25 @@ export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) 
             <button className="sidebar-empty" onClick={() => setCreatingNotebook(true)}>
               <Plus size={14} /> Create your first notebook
             </button>
+          )}
+
+          {!!tags.data?.length && (
+            <>
+              <div className="sidebar-section">
+                <button className="section-toggle" aria-expanded={tagsOpen} onClick={() => setTagsOpen(!tagsOpen)}>
+                  Tags
+                  <ChevronRight size={12} className={tagsOpen ? 'tree-toggle open' : 'tree-toggle'} />
+                </button>
+              </div>
+              {tagsOpen &&
+                tags.data.map((tag) => (
+                  <NavLink key={tag.name} to={`/t/${encodeURIComponent(tag.name)}`} className="nav-item tag-item">
+                    <Hash size={14} />
+                    <span className="tree-title">{tag.name}</span>
+                    <span className="tag-count">{tag.count}</span>
+                  </NavLink>
+                ))}
+            </>
           )}
         </nav>
 
@@ -182,6 +221,7 @@ export function Sidebar({ user, onClose }: { user: User; onClose: () => void }) 
           onCreated={(nb) => navigate(`/n/${nb.id}`)}
         />
       )}
+      {moving && <MoveDialog page={moving} onClose={() => setMoving(null)} />}
       {confirmState && (
         <ConfirmDialog {...confirmState} danger onClose={() => setConfirmState(null)} />
       )}
@@ -356,6 +396,7 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
             items={[
               { label: 'New subpage', icon: <FilePlus size={15} />, onSelect: () => s.addPage(page.notebookId, page.id) },
               { label: 'Rename', icon: <Pencil size={15} />, onSelect: () => s.setRenamingId(page.id) },
+              { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => s.startMove(page) },
               {
                 label: 'Delete',
                 icon: <Trash2 size={15} />,

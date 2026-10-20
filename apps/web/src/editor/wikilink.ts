@@ -1,4 +1,6 @@
 import { InputRule, Node, mergeAttributes, nodePasteRule } from '@tiptap/core';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import type { LinkBridge } from '../lib/links';
 
 const WIKILINK = /^\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/;
 const WIKILINK_INPUT = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]$/;
@@ -10,16 +12,25 @@ export interface WikilinkAttrs {
   label: string | null;
 }
 
+export interface WikilinkOptions {
+  /** Resolves and opens links; absent in tests, where links just render. */
+  bridge: LinkBridge | null;
+}
+
 /**
  * Inline `[[wikilink]]` node. Kept atomic so the Markdown serializer writes it back verbatim
- * instead of escaping the brackets. Resolution to page ids happens server-side (phase 2).
+ * instead of escaping the brackets. Clicking opens the target (or creates it).
  */
-export const Wikilink = Node.create({
+export const Wikilink = Node.create<WikilinkOptions>({
   name: 'wikilink',
   group: 'inline',
   inline: true,
   atom: true,
   selectable: true,
+
+  addOptions() {
+    return { bridge: null };
+  },
 
   addAttributes() {
     // Rendered explicitly in renderHTML as data attributes.
@@ -52,6 +63,40 @@ export const Wikilink = Node.create({
       }),
       label || target,
     ];
+  },
+
+  addNodeView() {
+    const bridge = this.options.bridge;
+    return ({ node: initial }) => {
+      let node: PMNode = initial;
+      const dom = document.createElement('span');
+      dom.contentEditable = 'false';
+      const render = () => {
+        const { target, label } = node.attrs as WikilinkAttrs;
+        const resolved = bridge?.resolve(target) ?? null;
+        dom.className = resolved || !bridge ? 'wikilink' : 'wikilink unresolved';
+        dom.dataset.wikilink = target;
+        dom.textContent = label || target;
+        dom.title = resolved ? resolved.path : bridge ? `Create page “${target}”` : target;
+      };
+      render();
+      const unsubscribe = bridge?.subscribe(render);
+      dom.addEventListener('click', (event) => {
+        if (!bridge) return;
+        event.preventDefault();
+        bridge.open((node.attrs as WikilinkAttrs).target);
+      });
+      return {
+        dom,
+        update: (next) => {
+          if (next.type !== node.type) return false;
+          node = next;
+          render();
+          return true;
+        },
+        destroy: () => unsubscribe?.(),
+      };
+    };
   },
 
   renderText({ node }) {

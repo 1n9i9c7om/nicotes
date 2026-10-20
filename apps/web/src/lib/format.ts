@@ -16,3 +16,14 @@ export function timeAgo(timestamp: number): string {
   }
   return 'just now';
 }
+
+/** Drops Markdown syntax from an excerpt so it reads like plain text. */
+export function plainExcerpt(text: string): string {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target: string, label?: string) => label ?? target)
+    .replace(/(^|\s)#{1,6}\s/g, '$1')
+    .replace(/(^|\s)[-*+] \[[ xX]\] /g, '$1')
+    .replace(/\*\*|__|~~|`/g, '')
+    .replace(/\s+/g, ' ');
+}

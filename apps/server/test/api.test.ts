@@ -1,33 +1,8 @@
-import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Notebook, Page, PageSummary } from '@nicotes/shared';
 import { createApp } from '../src/app.js';
 import { openDb } from '../src/db/index.js';
-
-const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
-
-function setup() {
-  const db = openDb(':memory:', migrationsFolder);
-  const app = createApp({ db, secureCookies: false });
-  let cookie = '';
-
-  async function call<T = unknown>(method: string, path: string, body?: unknown) {
-    const res = await app.request(path, {
-      method,
-      headers: {
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        ...(cookie ? { cookie } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    const setCookie = res.headers.get('set-cookie');
-    if (setCookie) cookie = setCookie.split(';')[0]!;
-    const text = await res.text();
-    return { status: res.status, body: (text ? JSON.parse(text) : null) as T };
-  }
-
-  return { call, logout: () => (cookie = '') };
-}
+import { dataDir, migrationsFolder, setup } from './helpers.js';
 
 describe('auth', () => {
   it('requires setup, then signs in and out', async () => {
@@ -53,7 +28,7 @@ describe('auth', () => {
   });
 
   it('rejects non-JSON mutations (CSRF guard)', async () => {
-    const app = createApp({ db: openDb(':memory:', migrationsFolder), secureCookies: false });
+    const app = createApp({ db: openDb(':memory:', migrationsFolder), secureCookies: false, dataDir });
     const res = await app.request('/api/auth/setup', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },

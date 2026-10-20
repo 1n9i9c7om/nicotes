@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AuthStatus,
+  Backlink,
   Credentials,
   Notebook,
   NotebookCreate,
@@ -9,6 +10,10 @@ import type {
   PageCreate,
   PageMove,
   PageSummary,
+  RenameResult,
+  SearchResult,
+  Tag,
+  TagUpdate,
   User,
 } from '@nicotes/shared';
 import { api } from './api';
@@ -18,7 +23,18 @@ export const keys = {
   notebooks: ['notebooks'] as const,
   pages: ['pages'] as const,
   page: (id: string) => ['page', id] as const,
+  backlinks: (id: string) => ['backlinks', id] as const,
+  tags: ['tags'] as const,
 };
+
+/**
+ * After a rename or move the server may rewrite `[[links]]` in other pages. Refetch the ones
+ * that are open (the editor adopts them if it has no unsaved edits) and refresh backlinks.
+ */
+function afterRelink(qc: QueryClient, result: RenameResult) {
+  for (const id of result.relinked) qc.refetchQueries({ queryKey: keys.page(id), type: 'active' });
+  qc.invalidateQueries({ queryKey: ['backlinks'] });
+}
 
 // ---------- Auth ----------
 
@@ -69,8 +85,11 @@ export function useUpdateNotebook() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: NotebookUpdate & { id: string }) =>
-      api.patch<Notebook>(`/notebooks/${id}`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notebooks }),
+      api.patch<Notebook & RenameResult>(`/notebooks/${id}`, input),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: keys.notebooks });
+      afterRelink(qc, result);
+    },
   });
 }
 
@@ -135,22 +154,26 @@ export function useCreatePage() {
 export function useRenamePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) => api.patch<Page>(`/pages/${id}`, { title }),
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api.patch<Page & RenameResult>(`/pages/${id}`, { title }),
     onMutate: ({ id, title }) => {
       qc.setQueryData<PageSummary[]>(keys.pages, (list) => list?.map((p) => (p.id === id ? { ...p, title } : p)));
       qc.setQueryData<Page>(keys.page(id), (page) => (page ? { ...page, title } : page));
     },
+    onSuccess: (result) => afterRelink(qc, result),
   });
 }
 
 export function useMovePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...target }: PageMove & { id: string }) => api.post<Page>(`/pages/${id}/move`, target),
+    mutationFn: ({ id, ...target }: PageMove & { id: string }) =>
+      api.post<Page & RenameResult>(`/pages/${id}/move`, target),
     onMutate: async (move) => {
       await qc.cancelQueries({ queryKey: keys.pages });
       qc.setQueryData<PageSummary[]>(keys.pages, (list) => list && applyPageMove(list, move));
     },
+    onSuccess: (result) => afterRelink(qc, result),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.pages }),
   });
 }
@@ -191,6 +214,55 @@ export function useDeletePage() {
     onSuccess: (_data, id) => {
       qc.removeQueries({ queryKey: keys.page(id) });
       qc.invalidateQueries({ queryKey: keys.pages });
+      qc.invalidateQueries({ queryKey: keys.tags });
+      qc.invalidateQueries({ queryKey: ['backlinks'] });
     },
   });
 }
+
+export const useBacklinks = (id: string) =>
+  useQuery({ queryKey: keys.backlinks(id), queryFn: () => api.get<Backlink[]>(`/pages/${id}/backlinks`) });
+
+// ---------- Tags ----------
+
+export const useTags = () => useQuery({ queryKey: keys.tags, queryFn: () => api.get<Tag[]>('/tags') });
+
+export function useSetPageTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) => api.put<Page>(`/pages/${id}/tags`, { tags }),
+    onSuccess: (page) => {
+      qc.setQueryData<PageSummary[]>(keys.pages, (list) =>
+        list?.map((p) => (p.id === page.id ? { ...p, tags: page.tags } : p)),
+      );
+      qc.invalidateQueries({ queryKey: keys.tags });
+    },
+  });
+}
+
+export function useUpdateTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tag, update }: { tag: string; update: TagUpdate }) =>
+      api.patch<Tag>(`/tags/${encodeURIComponent(tag)}`, update),
+    onSuccess: (_tag, { update }) => {
+      qc.invalidateQueries({ queryKey: keys.tags });
+      if (update.name) qc.invalidateQueries({ queryKey: keys.pages });
+    },
+  });
+}
+
+export function useDeleteTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.delete(`/tags/${encodeURIComponent(name)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.tags });
+      qc.invalidateQueries({ queryKey: keys.pages });
+    },
+  });
+}
+
+// ---------- Search ----------
+
+export const searchPages = (q: string) => api.get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`);

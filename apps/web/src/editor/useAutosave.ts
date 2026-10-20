@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { hashKey, useQueryClient } from '@tanstack/react-query';
 import type { Page, PageSummary } from '@nicotes/shared';
 import { api, ApiError } from '../lib/api';
 import { keys } from '../lib/queries';
@@ -93,6 +93,23 @@ export function useAutosave(page: Page) {
       }
     },
     [conflict, save],
+  );
+
+  // A newer server copy (e.g. links rewritten after a rename) replaces the text silently when
+  // nothing is unsaved; with local edits the next save runs into the conflict banner instead.
+  useEffect(
+    () =>
+      qc.getQueryCache().subscribe((event) => {
+        if (event.type !== 'updated' || event.query.queryHash !== hashKey(keys.page(page.id))) return;
+        const remote = event.query.state.data as Page | undefined;
+        if (!remote || remote.version <= version.current) return;
+        if (inFlight.current || blocked.current || latest.current !== saved.current) return;
+        version.current = remote.version;
+        latest.current = saved.current = remote.content;
+        setContentState(remote.content);
+        setRevision((r) => r + 1);
+      }),
+    [page.id, qc],
   );
 
   // Flush on page switch/unmount, and warn before closing the tab with unsaved changes.

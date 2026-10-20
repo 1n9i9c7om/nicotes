@@ -9,6 +9,7 @@ import { Login } from './pages/Login';
 import { NotebookView } from './pages/NotebookView';
 import { NotFound } from './pages/NotFound';
 import { PageView } from './pages/PageView';
+import { TagView } from './pages/TagView';
 
 export function App() {
   const { data, isPending, isError, refetch } = useAuthStatus();
@@ -33,6 +34,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="n/:notebookId" element={<NotebookView />} />
         <Route path="p/:pageId" element={<PageView />} />
+        <Route path="t/:tagName" element={<TagView />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

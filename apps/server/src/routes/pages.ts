@@ -4,19 +4,21 @@ import { HTTPException } from 'hono/http-exception';
 import {
   pageCreateSchema,
   pageMoveSchema,
+  pageTagsSchema,
   pageUpdateSchema,
   type ApiError,
   type Page,
   type PageSummary,
+  type RenameResult,
 } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { pages } from '../db/schema.js';
 import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
+import { findBacklinks, indexPageLinks, propagateRenames, type Tx } from '../links.js';
 import { getNotebook } from './notebooks.js';
-
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+import { setPageTags, tagsByPage } from './tags.js';
 
 const summaryColumns = {
   id: pages.id,
@@ -24,6 +26,7 @@ const summaryColumns = {
   parentId: pages.parentId,
   title: pages.title,
   sortOrder: pages.sortOrder,
+  createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
 };
 
@@ -31,7 +34,6 @@ const pageColumns = {
   ...summaryColumns,
   content: pages.content,
   version: pages.version,
-  createdAt: pages.createdAt,
 };
 
 const live = (userId: string) => and(eq(pages.userId, userId), isNull(pages.deletedAt));
@@ -43,7 +45,7 @@ function findPage(db: Db | Tx, userId: string, id: string): Page {
     .where(and(eq(pages.id, id), live(userId)))
     .get();
   if (!row) throw notFound('Page');
-  return row;
+  return { ...row, tags: tagsByPage(db, userId, [id]).get(id) ?? [] };
 }
 
 /** Ids of all live descendants of `rootId` (excluding the root itself). */
@@ -84,7 +86,8 @@ export function pageRoutes(db: Db) {
         .where(and(live(c.var.user.id), notebookId ? eq(pages.notebookId, notebookId) : undefined))
         .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
         .all();
-      return c.json(rows satisfies PageSummary[]);
+      const tags = tagsByPage(db, c.var.user.id);
+      return c.json(rows.map((row) => ({ ...row, tags: tags.get(row.id) ?? [] })) satisfies PageSummary[]);
     })
     .post('/', async (c) => {
       const input = await readJson(c, pageCreateSchema);
@@ -114,6 +117,7 @@ export function pageRoutes(db: Db) {
           updatedAt: now,
         })
         .run();
+      if (input.content) indexPageLinks(db, userId, id, input.content);
       return c.json(findPage(db, userId, id), 201);
     })
     .get('/:id', (c) => c.json(findPage(db, c.var.user.id, c.req.param('id'))))
@@ -128,52 +132,75 @@ export function pageRoutes(db: Db) {
       if (contentChanged && current.version !== baseVersion) {
         return c.json({ error: 'The page was changed elsewhere', current } satisfies ApiError, 409);
       }
-      db.update(pages)
-        .set({
-          ...changes,
-          version: contentChanged ? current.version + 1 : current.version,
-          updatedAt: Date.now(),
-        })
-        .where(eq(pages.id, current.id))
-        .run();
-      return c.json(findPage(db, userId, current.id));
+      const titleChanged = changes.title !== undefined && changes.title !== current.title;
+      const relinked = db.transaction((tx) => {
+        const apply = () => {
+          tx.update(pages)
+            .set({
+              ...changes,
+              version: contentChanged ? current.version + 1 : current.version,
+              updatedAt: Date.now(),
+            })
+            .where(eq(pages.id, current.id))
+            .run();
+          if (contentChanged) indexPageLinks(tx, userId, current.id, changes.content!);
+        };
+        if (!titleChanged) return (apply(), []);
+        return propagateRenames(tx, userId, apply).filter((id) => id !== current.id);
+      });
+      const result: Page & RenameResult = { ...findPage(db, userId, current.id), relinked };
+      return c.json(result);
+    })
+    .get('/:id/backlinks', (c) => {
+      const page = findPage(db, c.var.user.id, c.req.param('id'));
+      return c.json(findBacklinks(db, c.var.user.id, page.id));
+    })
+    .put('/:id/tags', async (c) => {
+      const { tags } = await readJson(c, pageTagsSchema);
+      const userId = c.var.user.id;
+      const page = findPage(db, userId, c.req.param('id'));
+      db.transaction((tx) => setPageTags(tx, userId, page.id, tags));
+      return c.json(findPage(db, userId, page.id));
     })
     .post('/:id/move', async (c) => {
       const target = await readJson(c, pageMoveSchema);
       const userId = c.var.user.id;
       const id = c.req.param('id');
-      db.transaction((tx) => {
-        const page = findPage(tx, userId, id);
-        getNotebook(db, userId, target.notebookId);
-        const descendants = descendantIds(tx, userId, id);
-        if (target.parentId) {
-          if (target.parentId === id || descendants.includes(target.parentId)) {
-            throw new HTTPException(400, { message: 'A page cannot be moved into itself' });
+      const relinked = db.transaction((tx) =>
+        propagateRenames(tx, userId, () => {
+          const page = findPage(tx, userId, id);
+          getNotebook(db, userId, target.notebookId);
+          const descendants = descendantIds(tx, userId, id);
+          if (target.parentId) {
+            if (target.parentId === id || descendants.includes(target.parentId)) {
+              throw new HTTPException(400, { message: 'A page cannot be moved into itself' });
+            }
+            if (findPage(tx, userId, target.parentId).notebookId !== target.notebookId) {
+              throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
+            }
           }
-          if (findPage(tx, userId, target.parentId).notebookId !== target.notebookId) {
-            throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
+          if (page.notebookId !== target.notebookId && descendants.length) {
+            tx.update(pages).set({ notebookId: target.notebookId }).where(inArray(pages.id, descendants)).run();
           }
-        }
-        if (page.notebookId !== target.notebookId && descendants.length) {
-          tx.update(pages).set({ notebookId: target.notebookId }).where(inArray(pages.id, descendants)).run();
-        }
-        const siblings = tx
-          .select({ id: pages.id })
-          .from(pages)
-          .where(and(live(userId), siblingsOf(target.notebookId, target.parentId), ne(pages.id, id)))
-          .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
-          .all()
-          .map((r) => r.id);
-        siblings.splice(Math.min(target.index, siblings.length), 0, id);
-        tx.update(pages)
-          .set({ notebookId: target.notebookId, parentId: target.parentId })
-          .where(eq(pages.id, id))
-          .run();
-        siblings.forEach((siblingId, i) =>
-          tx.update(pages).set({ sortOrder: i }).where(eq(pages.id, siblingId)).run(),
-        );
-      });
-      return c.json(findPage(db, userId, id));
+          const siblings = tx
+            .select({ id: pages.id })
+            .from(pages)
+            .where(and(live(userId), siblingsOf(target.notebookId, target.parentId), ne(pages.id, id)))
+            .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
+            .all()
+            .map((r) => r.id);
+          siblings.splice(Math.min(target.index, siblings.length), 0, id);
+          tx.update(pages)
+            .set({ notebookId: target.notebookId, parentId: target.parentId })
+            .where(eq(pages.id, id))
+            .run();
+          siblings.forEach((siblingId, i) =>
+            tx.update(pages).set({ sortOrder: i }).where(eq(pages.id, siblingId)).run(),
+          );
+        }),
+      );
+      const result: Page & RenameResult = { ...findPage(db, userId, id), relinked };
+      return c.json(result);
     })
     .delete('/:id', (c) => {
       const userId = c.var.user.id;

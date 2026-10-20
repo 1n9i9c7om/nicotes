@@ -1,10 +1,15 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, Loader2, X } from 'lucide-react';
 import type { Page } from '@nicotes/shared';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
-import { ApiError } from '../lib/api';
+import { Backlinks } from '../components/Backlinks';
+import { Menu } from '../components/Menu';
+import { MoveDialog } from '../components/MoveDialog';
+import { TagEditor } from '../components/TagEditor';
+import { ApiError, uploadFile } from '../lib/api';
+import { useLinkBridge } from '../lib/links';
 import { useLocalState } from '../lib/storage';
 import { useNotebooks, usePage, usePages, useRenamePage } from '../lib/queries';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
@@ -40,8 +45,15 @@ function PageEditor({ page }: { page: Page }) {
   const [title, setTitle] = useState(page.title);
   const editor = useRef<EditorHandle>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const bridge = useLinkBridge(page.notebookId);
+  const upload = useCallback((file: File) => uploadFile(file, page.id), [page.id]);
+  const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
+  const env = { bridge, upload, onUploadError };
 
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
+  const summary = tree.byId.get(page.id);
   const notebook = notebooks.data?.find((n) => n.id === page.notebookId);
   const trail = ancestors(tree, page.id);
 
@@ -106,6 +118,10 @@ function PageEditor({ page }: { page: Page }) {
         </nav>
         <div className="page-bar-actions">
           <SaveIndicator status={status} />
+          <Menu
+            label="Page actions"
+            items={[{ label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) }]}
+          />
           <div className="segmented" role="group" aria-label="Editor mode">
             <button className={mode === 'visual' ? 'active' : ''} aria-pressed={mode === 'visual'} onClick={() => setMode('visual')}>
               <Eye size={15} /> <span>Visual</span>
@@ -116,6 +132,16 @@ function PageEditor({ page }: { page: Page }) {
           </div>
         </div>
       </div>
+
+      {uploadError && (
+        <div className="banner banner-warning" role="alert">
+          <AlertTriangle size={18} />
+          <span>Upload failed: {uploadError}</span>
+          <button className="icon-btn" aria-label="Dismiss" onClick={() => setUploadError(null)}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {conflict && (
         <div className="banner banner-warning" role="alert">
@@ -147,14 +173,18 @@ function PageEditor({ page }: { page: Page }) {
             }
           }}
         />
+        <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} />
         {mode === 'visual' ? (
-          <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} />
+          <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
         ) : (
           <Suspense fallback={null}>
-            <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} />
+            <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} {...env} />
           </Suspense>
         )}
+        <Backlinks pageId={page.id} />
       </div>
+
+      {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
     </div>
   );
 }

@@ -5,12 +5,14 @@ import {
   notebookMoveSchema,
   notebookUpdateSchema,
   type Notebook,
+  type RenameResult,
 } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { notebooks, pages } from '../db/schema.js';
 import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
+import { propagateRenames } from '../links.js';
 
 const columns = {
   id: notebooks.id,
@@ -68,12 +70,20 @@ export function notebookRoutes(db: Db) {
     .patch('/:id', async (c) => {
       const input = await readJson(c, notebookUpdateSchema);
       const { id } = c.req.param();
-      getNotebook(db, c.var.user.id, id);
-      db.update(notebooks)
-        .set({ ...input, updatedAt: Date.now() })
-        .where(eq(notebooks.id, id))
-        .run();
-      return c.json(getNotebook(db, c.var.user.id, id));
+      const userId = c.var.user.id;
+      const current = getNotebook(db, userId, id);
+      const relinked = db.transaction((tx) => {
+        const apply = () =>
+          tx.update(notebooks)
+            .set({ ...input, updatedAt: Date.now() })
+            .where(eq(notebooks.id, id))
+            .run();
+        // Qualified links like [[Games/Elden Ring]] contain the notebook title.
+        if (input.title === undefined || input.title === current.title) return (apply(), []);
+        return propagateRenames(tx, userId, apply);
+      });
+      const result: Notebook & RenameResult = { ...getNotebook(db, userId, id), relinked };
+      return c.json(result);
     })
     .post('/:id/move', async (c) => {
       const { index } = await readJson(c, notebookMoveSchema);
