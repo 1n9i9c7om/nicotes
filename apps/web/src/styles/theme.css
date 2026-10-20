@@ -1,0 +1,147 @@
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: deep navy, lifting slightly with elevation */
+  --bg: #0a0e16;
+  --bg-sidebar: #0d121c;
+  --bg-elev: #111826;
+  --bg-elev-2: #172031;
+  --bg-hover: #1a2436;
+  --bg-active: #1d2b42;
+
+  --border: #1c2638;
+  --border-strong: #2a3852;
+
+  /* Text */
+  --text-strong: #f1f5fb;
+  --text: #d6deeb;
+  --text-muted: #8a99b3;
+  --text-faint: #56647d;
+
+  /* Accents */
+  --accent: #22d3ee;
+  --accent-2: #3b82f6;
+  --accent-strong: #67e8f9;
+  --accent-soft: rgb(34 211 238 / 0.12);
+  --accent-softer: rgb(34 211 238 / 0.06);
+  --gradient: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
+  --selection: rgb(59 130 246 / 0.35);
+  --focus-ring: 0 0 0 2px rgb(34 211 238 / 0.45);
+
+  --code: #7dd3fc;
+  --code-bg: #0f1726;
+
+  --danger: #f87171;
+  --danger-soft: rgb(248 113 113 / 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgb(251 191 36 / 0.1);
+  --success: #4ade80;
+
+  /* Type */
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', monospace;
+
+  /* Shape & layout */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --sidebar-width: 280px;
+  --tree-indent: 14px;
+  --content-width: 780px;
+  --shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 0 0 1px var(--border);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text-strong);
+  margin: 0;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}

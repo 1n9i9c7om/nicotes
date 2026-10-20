@@ -1,0 +1,21 @@
+services:
+  nicotes:
+    # Later: registry image, e.g. git.nico.software:<port>/1n9i9c7om/nicotes:latest
+    image: ${NICOTES_IMAGE:-nicotes:latest}
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${NICOTES_HTTP_PORT:-3000}:3000"
+    environment:
+      NICOTES_ADMIN_USER: ${NICOTES_ADMIN_USER:-}
+      NICOTES_ADMIN_PASSWORD: ${NICOTES_ADMIN_PASSWORD:-}
+      NICOTES_SECURE_COOKIES: ${NICOTES_SECURE_COOKIES:-false}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      CRAWL4AI_URL: ${CRAWL4AI_URL:-}
+      CRAWL4AI_TOKEN: ${CRAWL4AI_TOKEN:-}
+    volumes:
+      - nicotes-data:/data
+
+volumes:
+  nicotes-data:
