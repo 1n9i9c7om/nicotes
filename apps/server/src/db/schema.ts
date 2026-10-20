@@ -2,6 +2,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -168,3 +169,38 @@ export const pageVersions = sqliteTable(
   },
   (t) => [index('page_versions_page_idx').on(t.pageId, t.createdAt)],
 );
+
+/** Long-running AI work (research, organize) with progress, run in-process. */
+export const jobs = sqliteTable(
+  'jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    /** queued | running | done | failed | cancelled */
+    status: text('status').notNull(),
+    input: text('input').notNull(),
+    progress: text('progress').notNull().default('{}'),
+    result: text('result'),
+    error: text('error'),
+    cost: real('cost').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('jobs_user_idx').on(t.userId, t.createdAt)],
+);
+
+/** Applied AI suggestions, with the inverse operations needed to undo them. */
+export const aiBatches = sqliteTable('ai_batches', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').references(() => jobs.id, { onDelete: 'set null' }),
+  summary: text('summary').notNull(),
+  undo: text('undo').notNull(),
+  createdAt: integer('created_at').notNull(),
+  undoneAt: integer('undone_at'),
+});

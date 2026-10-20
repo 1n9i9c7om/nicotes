@@ -14,7 +14,7 @@ import { readJson } from '../http.js';
 import { storeAttachment } from '../routes/attachments.js';
 import type { ImportConfig, SettingsStore } from '../settings.js';
 import { extractText, extractUrl, type ExtractedPage } from './extract.js';
-import { completeJson, LlmError } from './llm.js';
+import { addUsage, completeJson, emptyUsage, LlmError } from '../ai/llm.js';
 import { FetchError, safeFetch } from './net.js';
 import { descriptions, renderMarkdown, schemas, shapes, suggestedTags, type ProfileData } from './profiles.js';
 import { findStructured, jsonLdImage, recipeFromJsonLd } from './structured.js';
@@ -50,7 +50,7 @@ async function classify(cfg: ImportConfig, page: ExtractedPage) {
     system: SYSTEM,
     user: `Which kind of page is this? Options:\n${options}\n\nReply as {"profile": "<option>"}.\n\n${pageContext(excerpt)}`,
     schema: z.object({ profile: z.enum(IMPORT_PROFILES) }),
-    maxTokens: 50,
+    maxTokens: 300,
   });
 }
 
@@ -104,13 +104,11 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
     // 2. Otherwise let the model classify (if needed) and extract.
     if (!data && cfg.openrouterApiKey) {
       try {
-        let promptTokens = 0;
-        let completionTokens = 0;
+        let spent = emptyUsage();
         if (!profile) {
           const guess = await classify(cfg, page);
           profile = guess.data.profile;
-          promptTokens += guess.usage.promptTokens;
-          completionTokens += guess.usage.completionTokens;
+          spent = guess.usage;
         }
         const hint = structured?.profile === profile ? structured.node : undefined;
         const result = await completeJson({
@@ -121,11 +119,7 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
           schema: schemas[profile] as z.ZodType<ProfileData[ImportProfile]>,
         });
         data = result.data;
-        usage = {
-          model: cfg.model,
-          promptTokens: promptTokens + result.usage.promptTokens,
-          completionTokens: completionTokens + result.usage.completionTokens,
-        };
+        usage = { model: cfg.model, ...addUsage(spent, result.usage) };
       } catch (error) {
         if (!(error instanceof LlmError)) throw error;
         warnings.push(`${error.message}. Imported the page text instead.`);

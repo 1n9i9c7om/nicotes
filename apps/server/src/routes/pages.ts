@@ -8,6 +8,7 @@ import {
   pageUpdateSchema,
   type ApiError,
   type Page,
+  type PageMove,
   type PageSummary,
   type PageVersion,
   type PageVersionSummary,
@@ -43,7 +44,7 @@ const pageColumns = {
 
 const live = (userId: string) => and(eq(pages.userId, userId), isNull(pages.deletedAt));
 
-function findPage(db: Db | Tx, userId: string, id: string): Page {
+export function findPage(db: Db | Tx, userId: string, id: string): Page {
   const row = db
     .select(pageColumns)
     .from(pages)
@@ -54,7 +55,7 @@ function findPage(db: Db | Tx, userId: string, id: string): Page {
 }
 
 /** Ids of all live descendants of `rootId` (excluding the root itself). */
-function descendantIds(db: Db | Tx, userId: string, rootId: string): string[] {
+export function descendantIds(db: Db | Tx, userId: string, rootId: string): string[] {
   const rows = db
     .select({ id: pages.id, parentId: pages.parentId })
     .from(pages)
@@ -97,6 +98,55 @@ function findVersion(db: Db, pageId: string, versionId: string): PageVersion {
 
 const siblingsOf = (notebookId: string, parentId: string | null) =>
   and(eq(pages.notebookId, notebookId), parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId));
+
+
+/**
+ * Moves a page (with its subtree) to a new parent/notebook position and renumbers the
+ * destination siblings. Validates against cycles. Callers wrap this in propagateRenames.
+ */
+export function applyMove(tx: Tx, userId: string, id: string, target: PageMove) {
+  const page = findPage(tx, userId, id);
+  getNotebook(tx, userId, target.notebookId);
+  const descendants = descendantIds(tx, userId, id);
+  if (target.parentId) {
+    if (target.parentId === id || descendants.includes(target.parentId)) {
+      throw new HTTPException(400, { message: 'A page cannot be moved into itself' });
+    }
+    if (findPage(tx, userId, target.parentId).notebookId !== target.notebookId) {
+      throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
+    }
+  }
+  if (page.notebookId !== target.notebookId && descendants.length) {
+    tx.update(pages).set({ notebookId: target.notebookId }).where(inArray(pages.id, descendants)).run();
+  }
+  const siblings = tx
+    .select({ id: pages.id })
+    .from(pages)
+    .where(and(live(userId), siblingsOf(target.notebookId, target.parentId), ne(pages.id, id)))
+    .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
+    .all()
+    .map((r) => r.id);
+  siblings.splice(Math.min(target.index, siblings.length), 0, id);
+  tx.update(pages)
+    .set({ notebookId: target.notebookId, parentId: target.parentId })
+    .where(eq(pages.id, id))
+    .run();
+  siblings.forEach((siblingId, i) =>
+    tx.update(pages).set({ sortOrder: i }).where(eq(pages.id, siblingId)).run(),
+  );
+}
+
+/** Index of a page among its siblings (for restoring its position later). */
+export function siblingIndex(db: Db | Tx, userId: string, page: { id: string; notebookId: string; parentId: string | null }) {
+  const ids = db
+    .select({ id: pages.id })
+    .from(pages)
+    .where(and(live(userId), siblingsOf(page.notebookId, page.parentId)))
+    .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
+    .all()
+    .map((r) => r.id);
+  return Math.max(0, ids.indexOf(page.id));
+}
 
 export function pageRoutes(db: Db) {
   return new Hono<AppEnv>()
@@ -225,37 +275,7 @@ export function pageRoutes(db: Db) {
       const userId = c.var.user.id;
       const id = c.req.param('id');
       const relinked = db.transaction((tx) =>
-        propagateRenames(tx, userId, () => {
-          const page = findPage(tx, userId, id);
-          getNotebook(db, userId, target.notebookId);
-          const descendants = descendantIds(tx, userId, id);
-          if (target.parentId) {
-            if (target.parentId === id || descendants.includes(target.parentId)) {
-              throw new HTTPException(400, { message: 'A page cannot be moved into itself' });
-            }
-            if (findPage(tx, userId, target.parentId).notebookId !== target.notebookId) {
-              throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
-            }
-          }
-          if (page.notebookId !== target.notebookId && descendants.length) {
-            tx.update(pages).set({ notebookId: target.notebookId }).where(inArray(pages.id, descendants)).run();
-          }
-          const siblings = tx
-            .select({ id: pages.id })
-            .from(pages)
-            .where(and(live(userId), siblingsOf(target.notebookId, target.parentId), ne(pages.id, id)))
-            .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
-            .all()
-            .map((r) => r.id);
-          siblings.splice(Math.min(target.index, siblings.length), 0, id);
-          tx.update(pages)
-            .set({ notebookId: target.notebookId, parentId: target.parentId })
-            .where(eq(pages.id, id))
-            .run();
-          siblings.forEach((siblingId, i) =>
-            tx.update(pages).set({ sortOrder: i }).where(eq(pages.id, siblingId)).run(),
-          );
-        }),
+        propagateRenames(tx, userId, () => applyMove(tx, userId, id, target)),
       );
       const result: Page & RenameResult = { ...findPage(db, userId, id), relinked };
       return c.json(result);

@@ -12,7 +12,7 @@ import type { Db } from '../db/index.js';
 import { notebooks, pages } from '../db/schema.js';
 import { notFound, readJson } from '../http.js';
 import { newId } from '../ids.js';
-import { propagateRenames } from '../links.js';
+import { propagateRenames, type Tx } from '../links.js';
 import { deletionTime } from './trash.js';
 
 const columns = {
@@ -25,7 +25,7 @@ const columns = {
   updatedAt: notebooks.updatedAt,
 };
 
-export function getNotebook(db: Db, userId: string, id: string): Notebook {
+export function getNotebook(db: Db | Tx, userId: string, id: string): Notebook {
   const row = db
     .select(columns)
     .from(notebooks)

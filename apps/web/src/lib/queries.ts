@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  AiBatch,
   AuthStatus,
+  Job,
+  JobKind,
+  OrganizeRequest,
+  ResearchRequest,
   Backlink,
   ConnectionCheck,
   Credentials,
@@ -39,6 +44,9 @@ export const keys = {
   versions: (id: string) => ['versions', id] as const,
   version: (pageId: string, id: string) => ['version', pageId, id] as const,
   trash: ['trash'] as const,
+  job: (id: string) => ['job', id] as const,
+  jobs: (kind: JobKind) => ['jobs', kind] as const,
+  batches: ['ai-batches'] as const,
 };
 
 /**
@@ -297,7 +305,7 @@ export function useUpdateSettings() {
 
 export const useCheckConnection = () =>
   useMutation({
-    mutationFn: (target: 'openrouter' | 'crawl4ai') => api.post<ConnectionCheck>('/settings/check', { target }),
+    mutationFn: (target: 'openrouter' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
   });
 
 /** OpenRouter's model list for the picker; loaded on demand. */
@@ -370,3 +378,82 @@ export function useDeleteForever() {
 /** Download URL for a Markdown zip of everything or one notebook. */
 export const exportUrl = (notebookId?: string) =>
   `/api/export${notebookId ? `?notebookId=${encodeURIComponent(notebookId)}` : ''}`;
+
+// ---------- AI jobs ----------
+
+const isActive = (job?: Job) => job?.status === 'queued' || job?.status === 'running';
+
+/** A job, polled while it runs. When it finishes, the affected lists are refreshed. */
+export function useJob<R = unknown>(id: string | null) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: keys.job(id ?? ''),
+    enabled: !!id,
+    queryFn: async () => {
+      const job = await api.get<Job<unknown, R>>(`/jobs/${id}`);
+      if (!isActive(job as Job)) {
+        qc.invalidateQueries({ queryKey: keys.pages });
+        qc.invalidateQueries({ queryKey: keys.tags });
+        qc.invalidateQueries({ queryKey: keys.jobs(job.kind) });
+      }
+      return job;
+    },
+    refetchInterval: (q) => (isActive(q.state.data as Job | undefined) ? 1200 : false),
+  });
+}
+
+export const useJobs = (kind: JobKind) =>
+  useQuery({ queryKey: keys.jobs(kind), queryFn: () => api.get<Job[]>(`/jobs?kind=${kind}`) });
+
+export function useStartResearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ResearchRequest) => api.post<Job>('/ai/research', input),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.job(job.id), job);
+      qc.invalidateQueries({ queryKey: keys.jobs('research') });
+    },
+  });
+}
+
+export function useStartOrganize() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: OrganizeRequest) => api.post<Job>('/ai/organize', input),
+    onSuccess: (job) => qc.setQueryData(keys.job(job.id), job),
+  });
+}
+
+export function useCancelJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<Job>(`/jobs/${id}/cancel`),
+    onSuccess: (job) => qc.setQueryData(keys.job(job.id), job),
+  });
+}
+
+function afterAiChange(qc: QueryClient) {
+  for (const key of [keys.pages, keys.tags, keys.batches, ['backlinks']]) qc.invalidateQueries({ queryKey: key });
+}
+
+export function useApplyOrganize() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, ids }: { jobId: string; ids: string[] }) =>
+      api.post<{ batchId: string; applied: number }>(`/ai/organize/${jobId}/apply`, { ids }),
+    onSuccess: (_r, { jobId }) => {
+      afterAiChange(qc);
+      qc.invalidateQueries({ queryKey: keys.job(jobId) });
+    },
+  });
+}
+
+export const useBatches = () => useQuery({ queryKey: keys.batches, queryFn: () => api.get<AiBatch[]>('/ai/batches') });
+
+export function useUndoBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/ai/batches/${id}/undo`),
+    onSuccess: () => afterAiChange(qc),
+  });
+}

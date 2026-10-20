@@ -25,6 +25,9 @@ export const config = {
     openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
     crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
     crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
+    researchModel: process.env.OPENROUTER_RESEARCH_MODEL?.trim() || undefined,
+    searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
+    aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
   },
 };
 

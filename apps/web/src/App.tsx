@@ -10,6 +10,8 @@ import { NotebookView } from './pages/NotebookView';
 import { NotFound } from './pages/NotFound';
 import { PageView } from './pages/PageView';
 import { ImportPage } from './pages/ImportPage';
+import { OrganizePage } from './pages/OrganizePage';
+import { ResearchPage } from './pages/ResearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SharePage } from './pages/SharePage';
 import { TagView } from './pages/TagView';
@@ -43,6 +45,8 @@ export function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="trash" element={<TrashPage />} />
         <Route path="share" element={<SharePage />} />
+        <Route path="research" element={<ResearchPage />} />
+        <Route path="organize" element={<OrganizePage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

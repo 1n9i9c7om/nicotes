@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, Wand2, X } from 'lucide-react';
 import type { Page } from '@nicotes/shared';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
@@ -125,6 +125,12 @@ function PageEditor({ page }: { page: Page }) {
             items={[
               { label: 'Version history', icon: <History size={15} />, onSelect: () => setHistoryOpen(true) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
+              {
+                label: 'Organize with AI',
+                icon: <Wand2 size={15} />,
+                onSelect: () =>
+                  navigate(`/organize?scope=${tree.children.get(page.id)?.length ? 'subtree' : 'page'}&id=${page.id}`),
+              },
             ]}
           />
           <div className="segmented" role="group" aria-label="Editor mode">

@@ -1,13 +1,16 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, Smartphone, XCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { timeAgo } from '../lib/format';
 import { DEFAULT_OPENROUTER_MODEL, type ConnectionCheck, type SettingSource, type SettingsUpdate } from '@nicotes/shared';
 import {
   exportUrl,
   useAuthStatus,
+  useBatches,
   useCheckConnection,
   useModels,
   useSettings,
   useSignOut,
+  useUndoBatch,
   useUpdateSettings,
 } from '../lib/queries';
 import { useInstallPrompt } from '../lib/install';
@@ -103,13 +106,16 @@ export function SettingsPage() {
   const signOut = useSignOut();
   const checkOpenRouter = useCheckConnection();
   const checkCrawl4ai = useCheckConnection();
+  const checkSearxng = useCheckConnection();
+  const batches = useBatches();
+  const undo = useUndoBatch();
   const [loadModels, setLoadModels] = useState(false);
   const models = useModels(loadModels);
   const modelList = useId();
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, crawl4ai } = settings.data;
+  const { openrouter, crawl4ai, ai } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -202,6 +208,74 @@ export function SettingsPage() {
           </button>
           <CheckResult result={checkCrawl4ai.data} />
         </div>
+      </section>
+
+      <section className="settings-card">
+        <h2>
+          <Telescope size={18} /> Research &amp; AI
+        </h2>
+        <p className="muted">
+          Research searches the web via SearXNG when configured, otherwise via OpenRouter's web search (about $0.01 per
+          search). Every AI run stops once it reaches the cost limit.
+        </p>
+        <SettingField
+          key={`rmodel-${ai.researchModel}`}
+          label="Research model"
+          source={ai.researchModelSource}
+          current={ai.researchModel}
+          placeholder={openrouter.model}
+          listId={modelList}
+          pending={update.isPending}
+          onSave={(v) => save({ researchModel: v })}
+          hint="Leave empty to use the import model. A stronger model writes better notes but costs more."
+        />
+        <SettingField
+          key={`sx-${ai.searxngUrl}`}
+          label="SearXNG URL"
+          source={ai.searxngUrlSource}
+          current={ai.searxngUrl}
+          placeholder="http://nas.local:8888"
+          pending={update.isPending}
+          onSave={(v) => save({ searxngUrl: v })}
+          hint="Optional. The instance must allow the JSON format (search.formats: [html, json])."
+        />
+        <SettingField
+          key={`cost-${ai.costLimit}`}
+          label="Cost limit per run (USD)"
+          source={ai.costLimitSource}
+          current={String(ai.costLimit)}
+          pending={update.isPending}
+          onSave={(v) => save({ aiCostLimit: v === null ? null : Number(v.replace(',', '.')) })}
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkSearxng.isPending} onClick={() => checkSearxng.mutate('searxng')}>
+            {checkSearxng.isPending ? 'Testing…' : 'Test SearXNG'}
+          </button>
+          <CheckResult result={checkSearxng.data} />
+        </div>
+        {!!batches.data?.length && (
+          <div className="setting">
+            <span className="setting-label">Recent AI changes</span>
+            <ul className="trash-list">
+              {batches.data.slice(0, 8).map((b) => (
+                <li key={b.id} className="trash-item">
+                  <div className="trash-info">
+                    <span className="trash-title">{b.summary}</span>
+                    <span className="trash-meta">
+                      {timeAgo(b.createdAt)}
+                      {b.undoneAt && ` · undone ${timeAgo(b.undoneAt)}`}
+                    </span>
+                  </div>
+                  {!b.undoneAt && (
+                    <button className="btn btn-sm" disabled={undo.isPending} onClick={() => undo.mutate(b.id)}>
+                      <RotateCcw size={14} /> Undo
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {update.error && <p className="error">{update.error.message}</p>}

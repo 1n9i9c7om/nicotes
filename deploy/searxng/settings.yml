@@ -1,0 +1,17 @@
+# Minimal SearXNG config for Nicotes research mode (dev / self-hosting example).
+# Everything not listed here uses SearXNG's defaults.
+use_default_settings: true
+
+server:
+  # Overridden by SEARXNG_SECRET from the environment.
+  secret_key: "change-me"
+  # Nicotes calls the API directly; the bot limiter would block it.
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  # Research mode needs the JSON API.
+  formats:
+    - html
+    - json

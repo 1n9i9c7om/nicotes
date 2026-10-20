@@ -15,7 +15,9 @@ import {
   Plus,
   Search,
   Settings,
+  Telescope,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react';
 import type { Notebook, PageSummary, User } from '@nicotes/shared';
@@ -176,6 +178,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/import" className="nav-item">
             <Download size={16} /> Import
           </NavLink>
+          <NavLink to="/research" className="nav-item">
+            <Telescope size={16} /> Research
+          </NavLink>
 
           <div className="sidebar-section">
             <span>Notebooks</span>
@@ -302,6 +307,11 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
               { label: 'New page', icon: <FilePlus size={15} />, onSelect: () => s.addPage(notebook.id, null) },
               { label: 'Edit notebook', icon: <Palette size={15} />, onSelect: () => setEditing(true) },
               {
+                label: 'Organize with AI',
+                icon: <Wand2 size={15} />,
+                onSelect: () => navigate(`/organize?scope=notebook&id=${notebook.id}`),
+              },
+              {
                 label: 'Export as Markdown',
                 icon: <FileDown size={15} />,
                 onSelect: () => (window.location.href = exportUrl(notebook.id)),
@@ -415,6 +425,11 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
               { label: 'New subpage', icon: <FilePlus size={15} />, onSelect: () => s.addPage(page.notebookId, page.id) },
               { label: 'Rename', icon: <Pencil size={15} />, onSelect: () => s.setRenamingId(page.id) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => s.startMove(page) },
+              {
+                label: 'Organize with AI',
+                icon: <Wand2 size={15} />,
+                onSelect: () => navigate(`/organize?scope=${kids.length ? 'subtree' : 'page'}&id=${page.id}`),
+              },
               {
                 label: 'Delete',
                 icon: <Trash2 size={15} />,

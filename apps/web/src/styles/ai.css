@@ -1,0 +1,227 @@
+/* Phase 5: AI jobs, research, organize */
+
+.research,
+.organize {
+  max-width: 860px;
+}
+
+.research h1,
+.organize h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- Job progress ---------- */
+
+.job {
+  display: grid;
+  gap: 10px;
+}
+
+.job-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent-strong);
+}
+
+.job-done .job-head {
+  color: var(--success);
+}
+
+.job-failed .job-head {
+  color: var(--danger);
+}
+
+.job-cancelled .job-head {
+  color: var(--text-muted);
+}
+
+.job-message {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.job-cost {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.job-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-elev-2);
+  overflow: hidden;
+}
+
+.job-bar span {
+  display: block;
+  height: 100%;
+  background: var(--gradient);
+  transition: width 0.4s ease;
+}
+
+.job-bar span.indeterminate {
+  width: 30%;
+  animation: job-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes job-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.job-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.job-log-toggle .tree-toggle {
+  width: 14px;
+  height: 14px;
+}
+
+.job-log {
+  margin: 0;
+  padding: 10px 14px 10px 34px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* ---------- Research ---------- */
+
+.research-question {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.research-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.research-meta a {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+
+.research-item {
+  width: 100%;
+  text-align: left;
+}
+
+/* ---------- Organize ---------- */
+
+.organize-result {
+  display: grid;
+  gap: 18px;
+}
+
+.suggestion-group .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.suggestion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.suggestion-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  background: var(--bg-hover);
+}
+
+.suggestion.done {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.suggestion input {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.suggestion-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.suggestion-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+.suggestion-text strong {
+  color: var(--text-strong);
+}
+
+.suggest-tag {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.suggest-tag.new {
+  background: rgb(251 191 36 / 0.12);
+  color: var(--warning);
+}
+
+.suggest-tag em {
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.suggestion-reason {
+  font-size: 13px;
+  color: var(--text-faint);
+}

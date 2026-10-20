@@ -5,6 +5,9 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
+import { jobRoutes, JobRunner } from './ai/jobs.js';
+import { aiRoutes, organizeJob } from './ai/organize.js';
+import { researchJob } from './ai/research.js';
 import { requireAuth } from './auth.js';
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
@@ -46,6 +49,9 @@ export function createApp({
 }: AppOptions) {
   const app = new Hono();
   const settings = new SettingsStore(db, SecretBox.load(dataDir, secret), settingsEnv);
+  const jobs = new JobRunner(db, settings);
+  jobs.register('organize', organizeJob(db));
+  jobs.register('research', researchJob(db, importAllowPrivate));
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
@@ -88,7 +94,7 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -100,6 +106,8 @@ export function createApp({
   app.route('/api/settings', settingsRoutes(settings));
   app.route('/api/trash', trashRoutes(db));
   app.route('/api/export', exportRoutes(db, dataDir));
+  app.route('/api/jobs', jobRoutes(jobs));
+  app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
@@ -131,5 +139,5 @@ export function createApp({
     });
   }
 
-  return app;
+  return Object.assign(app, { jobs });
 }

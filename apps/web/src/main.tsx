@@ -6,6 +6,7 @@ import './styles/editor.css';
 import './styles/linking.css';
 import './styles/import.css';
 import './styles/history.css';
+import './styles/ai.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';

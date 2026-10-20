@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeTag } from './tags';
 
+export * from './ai';
 export * from './tags';
 export * from './history';
 export * from './importing';

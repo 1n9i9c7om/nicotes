@@ -181,6 +181,29 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   `share_target` points at `/share`, which extracts a URL from `url`, `text` or `title` and
   opens the importer. Installing requires HTTPS (or localhost).
 
+### AI assistants
+
+- **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
+  time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
+  a restart are marked failed. Every OpenRouter call reports its cost (`usage.include`);
+  a run stops once it exceeds the per-run limit.
+- **Reasoning:** GLM 5.3 FlashX cannot turn reasoning off and reasoning tokens count
+  against `max_tokens`, so calls use `reasoning.effort = "minimal"` (retrying without
+  the setting for models that reject it); the final research write-up uses "low".
+- **Organize:** pages are sent in chunks of 30 with short ids (`p1`…), path, tags and
+  the first 600 characters, plus the tag vocabulary and possible parents. Replies are
+  validated (ids exist, no cycles, no no-op moves, tags normalised, max 3 per page) before
+  they become suggestions. Applying runs in one transaction inside `propagateRenames` and
+  stores inverse operations in `ai_batches`; Undo replays them in reverse (moves back to
+  the old position, tags removed, AI-created group pages trashed if empty).
+- **Research:** plan (title, language, queries, localised labels) → search (SearXNG JSON
+  API, or the OpenRouter `web` plugin whose `url_citation` annotations carry page text)
+  → pick sources (deduplicated, max 2 per site, no video sites) → read via the import
+  extractor (crawl4ai / Readability, SSRF-guarded; falls back to the search snippet) →
+  per-source notes (skipping irrelevant ones, replacing failures with spare candidates) →
+  synthesis with `[n]` markers, turned into links, plus a generated sources list. Saved
+  as a page tagged `#research`. Depths: quick 4, standard 8, deep 14 sources.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -193,6 +216,9 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | Import LLM (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
+| `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
+| `OPENROUTER_RESEARCH_MODEL` | import model | Model for research runs |
+| `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 
 ## Roadmap
 
@@ -207,7 +233,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    (Obsidian-compatible folders + frontmatter), PWA install + Android share target
    (shares a URL straight into Smart Import). Comes before phase 5 so any change an
    LLM makes to existing pages can be reviewed and undone.
-5. **AI assistants** (on top of phase 3's LLM layer):
+5. ✅ **AI assistants** (on top of phase 3's LLM layer):
    - **Research mode** — the user describes a topic; an LLM searches the web, reads
      sources (crawl4ai / Readability) and compiles a note with citations. Needs a web
      search source (e.g. OpenRouter's web-search plugin or a self-hosted SearXNG);

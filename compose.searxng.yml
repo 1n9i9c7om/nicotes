@@ -1,0 +1,16 @@
+# Optional: a local SearXNG for research mode (any SearXNG with the JSON format enabled works).
+#
+#   docker compose -f compose.searxng.yml up -d
+#
+# Then set SEARXNG_URL (or Settings → Research) to http://localhost:8888 for `npm run dev`,
+# or http://searxng:8080 when Nicotes runs in the same compose project.
+services:
+  searxng:
+    image: searxng/searxng:2026.10.17-1c10abe2d
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8888:8080"
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env}
+    volumes:
+      - ./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro

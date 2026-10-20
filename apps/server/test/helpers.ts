@@ -39,5 +39,5 @@ export function setup(options: Partial<AppOptions> = {}) {
 
   const raw = (path: string) => app.request(path, { headers: { cookie } });
 
-  return { db, call, upload, raw, logout: () => (cookie = '') };
+  return { db, jobs: app.jobs, call, upload, raw, logout: () => (cookie = '') };
 }

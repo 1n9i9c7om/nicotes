@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { z } from 'zod';
 import type { ImportPreview, Settings } from '@nicotes/shared';
 import { cleanTitle } from '../src/import/extract.js';
-import { completeJson, parseJsonReply } from '../src/import/llm.js';
+import { completeJson, parseJsonReply } from '../src/ai/llm.js';
 import { isPrivateAddress, safeFetch } from '../src/import/net.js';
 import { findStructured, isoDuration, recipeFromJsonLd } from '../src/import/structured.js';
 import { SecretBox } from '../src/secrets.js';
@@ -119,9 +119,14 @@ describe('LLM client', () => {
     );
     const result = await completeJson({ apiKey: 'k', model: 'm', system: 's', user: 'u', schema: z.object({ title: z.string() }) });
     expect(result.data).toEqual({ title: 'Fixed' });
-    expect(result.usage).toEqual({ promptTokens: 20, completionTokens: 10 });
+    expect(result.usage).toEqual({ promptTokens: 20, completionTokens: 10, cost: 0 });
     expect((bodies[1] as { messages: unknown[] }).messages).toHaveLength(4);
-    expect(bodies[0]).toMatchObject({ model: 'm', response_format: { type: 'json_object' } });
+    expect(bodies[0]).toMatchObject({
+      model: 'm',
+      response_format: { type: 'json_object' },
+      reasoning: { effort: 'minimal' },
+      usage: { include: true },
+    });
   });
 });
 

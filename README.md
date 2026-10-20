@@ -15,6 +15,22 @@ docker compose up -d --build
 Open http://localhost:3000. Data lives in the `nicotes-data` volume (SQLite database,
 attachments and the key that encrypts stored API keys).
 
+### Research & organize (optional)
+
+With an OpenRouter key, **Research** answers a question by searching the web, reading the
+best sources and writing a note with numbered citations; **Organize with AI** (notebook or
+page menu) suggests tags, better parent pages and new groups, which you review before
+anything changes, and every applied batch can be undone. Each run shows its cost and stops
+at a configurable limit (default $0.50).
+
+Research searches via [SearXNG](https://docs.searxng.org) if `SEARXNG_URL` is set (the JSON
+format must be enabled), otherwise via OpenRouter's web search. For a local instance, set
+`SEARXNG_SECRET` in `.env` and run:
+
+```bash
+docker compose -f compose.searxng.yml up -d
+```
+
 ### Phone app
 
 Nicotes is a PWA: open it in your phone's browser and choose "Install app" / "Add to Home

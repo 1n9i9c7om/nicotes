@@ -3,6 +3,8 @@ import { z } from 'zod';
 // ---------- Settings ----------
 
 export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-5.3-flashx';
+/** Default spending limit per AI job (research run, organize run), in USD. */
+export const DEFAULT_AI_COST_LIMIT = 0.5;
 
 /** Where an effective setting comes from: the user's settings, an environment variable, or nowhere. */
 export type SettingSource = 'settings' | 'env' | 'default' | null;
@@ -21,22 +23,35 @@ export interface Settings {
     tokenSet: boolean;
     tokenSource: SettingSource;
   };
+  ai: {
+    /** Model for research; falls back to the import model. */
+    researchModel: string;
+    researchModelSource: SettingSource;
+    searxngUrl: string | null;
+    searxngUrlSource: SettingSource;
+    costLimit: number;
+    costLimitSource: SettingSource;
+  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
+const optionalUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((v) => v === '' || /^https?:\/\/[^\s]+$/i.test(v), 'Must be an http(s) URL')
+  .nullable()
+  .optional();
 
 /** `null` clears a stored value (falling back to the environment), `undefined` leaves it. */
 export const settingsUpdateSchema = z.object({
   openrouterApiKey: optionalSecret,
   openrouterModel: z.string().trim().max(200).nullable().optional(),
-  crawl4aiUrl: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((v) => /^https?:\/\/[^\s]+$/i.test(v), 'Must be an http(s) URL')
-    .nullable()
-    .optional(),
+  crawl4aiUrl: optionalUrl,
   crawl4aiToken: optionalSecret,
+  researchModel: z.string().trim().max(200).nullable().optional(),
+  searxngUrl: optionalUrl,
+  aiCostLimit: z.number().min(0.01).max(50).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
@@ -88,5 +103,5 @@ export interface ImportPreview {
   method: 'structured-data' | 'llm' | 'clip';
   extractor: 'crawl4ai' | 'readability' | 'text';
   warnings: string[];
-  usage: { model: string; promptTokens: number; completionTokens: number } | null;
+  usage: { model: string; promptTokens: number; completionTokens: number; cost: number } | null;
 }
