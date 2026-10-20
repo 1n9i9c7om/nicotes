@@ -266,6 +266,30 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   meaning, or most recent, plus pages it names) and returns phrases to link; each phrase
   must be found in the text outside code and links before it is offered.
 
+### Backups
+
+- **Archive:** `nicotes-<UTC time>.tar.gz` with `manifest.json` (format version, time,
+  whether the key came from `NICOTES_SECRET`), `nicotes.db`, `secret.key` (if the key file
+  is used) and `attachments/`. The database copy comes from SQLite's online backup API
+  (`better-sqlite3` `db.backup()`), so it is consistent while the app keeps writing.
+  tar.gz instead of zip because fflate has no ZIP64 (archives would break at 4 GB) and the
+  archive is streamed to disk instead of built in memory. Work files are hidden
+  `.….partial` files, renamed into place only when complete.
+- **Schedule:** every 10 minutes the server checks whether the newest backup is older than
+  `NICOTES_BACKUP_INTERVAL_HOURS` (so restarts and sleep don't skip backups; a manual
+  backup resets the clock). After a failure it waits an hour; the error shows in Settings.
+- **Retention:** always the newest backup and everything from the last 24 h, then the
+  newest per day for `KEEP_DAILY` days and per week for `KEEP_WEEKLY` weeks, counting only
+  days/weeks that have backups (a server that was off doesn't lose its old backups).
+- **Restore:** offline CLI (`dist/restore.js`): refuses while the server answers on its
+  port, unpacks into a staging folder in `DATA_DIR`, checks the manifest and
+  `PRAGMA integrity_check`, then moves the current database (with WAL files), attachments
+  and key file to `pre-restore-<time>/` and the restored ones into place. Migrations run on
+  the next start. No in-app restore: replacing the open database under a running server is
+  not worth the risk.
+- Backups are instance-wide; any signed-in account can create and download them, which is
+  fine while there is one account (multi-user needs an admin role).
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -283,6 +307,10 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
+| `NICOTES_BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where backups are written |
+| `NICOTES_BACKUP_PATH` | `nicotes-backups` volume | Docker Compose only: host folder mounted at `/backups` |
+| `NICOTES_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups; `0` turns them off |
+| `NICOTES_BACKUP_KEEP_DAILY` / `NICOTES_BACKUP_KEEP_WEEKLY` | `7` / `4` | Retention: newest backup per day / per week |
 
 ## Roadmap
 
@@ -310,4 +338,4 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 7. ✅ **Connections & insight** — connections panel (backlinks, unlinked mentions, related
    pages, AI link suggestions), tasks across pages with due dates, semantic index with
    search by meaning, "Ask your notes" with citations, page summaries.
-8. **Later** — automatic backups, end-to-end tests, GitLab CI → registry, multi-user.
+8. **Later** — ✅ automatic backups, end-to-end tests, GitLab CI → registry, multi-user.

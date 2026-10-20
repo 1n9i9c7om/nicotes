@@ -6,6 +6,16 @@ const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 
 const dataDir = resolve(process.env.DATA_DIR ?? resolve(packageRoot, '../../data'));
 
+/** A non-negative whole number from the environment, or the default when unset or invalid. */
+function count(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (Number.isFinite(value) && value >= 0) return value;
+  console.warn(`Ignoring ${name}=${raw}: expected a number >= 0`);
+  return fallback;
+}
+
 export const config = {
   port: Number(process.env.NICOTES_PORT ?? 3000),
   dataDir,
@@ -19,6 +29,13 @@ export const config = {
   secret: process.env.NICOTES_SECRET || undefined,
   /** Lets imports fetch hosts on private networks (off by default: SSRF protection). */
   importAllowPrivate: process.env.NICOTES_IMPORT_ALLOW_PRIVATE === 'true',
+  backup: {
+    dir: resolve(process.env.NICOTES_BACKUP_DIR?.trim() || resolve(dataDir, 'backups')),
+    /** 0 turns automatic backups off ("Back up now" still works). */
+    intervalHours: count('NICOTES_BACKUP_INTERVAL_HOURS', 24),
+    keepDaily: Math.floor(count('NICOTES_BACKUP_KEEP_DAILY', 7)),
+    keepWeekly: Math.floor(count('NICOTES_BACKUP_KEEP_WEEKLY', 4)),
+  },
   /** Defaults for settings users can override in the UI. */
   env: {
     openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
