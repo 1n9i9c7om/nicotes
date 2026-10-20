@@ -26,8 +26,15 @@ services:
       NICOTES_AI_COST_LIMIT: ${NICOTES_AI_COST_LIMIT:-}
       NICOTES_SEMANTIC_INDEX: ${NICOTES_SEMANTIC_INDEX:-}
       OPENROUTER_EMBEDDING_MODEL: ${OPENROUTER_EMBEDDING_MODEL:-}
+      NICOTES_BACKUP_INTERVAL_HOURS: ${NICOTES_BACKUP_INTERVAL_HOURS:-}
+      NICOTES_BACKUP_KEEP_DAILY: ${NICOTES_BACKUP_KEEP_DAILY:-}
+      NICOTES_BACKUP_KEEP_WEEKLY: ${NICOTES_BACKUP_KEEP_WEEKLY:-}
     volumes:
       - nicotes-data:/data
+      # Backups (NICOTES_BACKUP_DIR=/backups in the image). Set NICOTES_BACKUP_PATH to a host
+      # folder, ideally on a NAS or another disk, so backups survive losing the data volume.
+      - ${NICOTES_BACKUP_PATH:-nicotes-backups}:/backups
 
 volumes:
   nicotes-data:
+  nicotes-backups:

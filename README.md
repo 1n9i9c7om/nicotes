@@ -67,8 +67,33 @@ links open the importer.
 
 ### Backups
 
-Settings → Export downloads all notes as Markdown (an Obsidian-compatible vault, including
-attachments). For full backups, copy the `nicotes-data` volume.
+Nicotes backs itself up once a day: a consistent copy of the database (taken while it runs),
+the attachments and the key file for stored API keys, as one `nicotes-<time>.tar.gz`. It
+keeps everything from the last 24 hours and the newest backup of each of the last 7 days
+and of each of the last 4 weeks. **Settings → Backups** lists them, makes one on demand and
+downloads them. Interval and retention are set with `NICOTES_BACKUP_*` variables (see
+`.env.example`).
+
+In Docker, backups go to the `nicotes-backups` volume. To keep them on a NAS or another
+disk, point `NICOTES_BACKUP_PATH` in `.env` at a host folder the container's user
+(uid 1000) can write to, e.g. `NICOTES_BACKUP_PATH=/mnt/nas/nicotes-backups`. Backups
+contain everything, including the key that decrypts stored API keys (unless you set
+`NICOTES_SECRET`), so keep them private.
+
+**Restore** replaces all current data. Nothing is deleted: the previous database and
+attachments are moved to a `pre-restore-…` folder in the data directory.
+
+```bash
+docker compose stop nicotes
+docker compose run --rm nicotes node apps/server/dist/restore.js /backups/nicotes-2026-10-20T03-15-00Z.tar.gz
+docker compose start nicotes
+```
+
+A backup downloaded from Settings can be restored the same way after copying it into the
+backup folder. Without Docker, stop the server and run `npm run restore -- <backup file>`
+(or `node apps/server/dist/restore.js <backup file>` with a build); it restores into
+`DATA_DIR`. Separately, Settings → Export downloads all notes as Markdown (an
+Obsidian-compatible vault), handy for reading them without Nicotes.
 
 ### Import (optional)
 

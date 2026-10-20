@@ -30,9 +30,11 @@ const app = createApp({
   secret: config.secret,
   settingsEnv: config.env,
   importAllowPrivate: config.importAllowPrivate,
+  backups: config.backup,
 });
 
 app.semantic.start();
+app.backups.start();
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Nicotes listening on http://localhost:${info.port} (data: ${config.dataDir})`);

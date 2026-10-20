@@ -29,6 +29,7 @@ RUN npm ci --omit=dev --workspace @nicotes/server --include-workspace-root=false
 FROM node:24-slim
 ENV NODE_ENV=production \
     DATA_DIR=/data \
+    NICOTES_BACKUP_DIR=/backups \
     NICOTES_PORT=3000
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -36,9 +37,9 @@ COPY --from=build /app/apps/server/package.json ./apps/server/
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /data /backups && chown node:node /data /backups
 USER node
-VOLUME /data
+VOLUME ["/data", "/backups"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.NICOTES_PORT+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"

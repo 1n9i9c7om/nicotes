@@ -15,6 +15,7 @@ import {
   type SettingsUpdate,
 } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
+import { SettingsBackups } from '../components/SettingsBackups';
 import {
   exportUrl,
   useAuthStatus,
@@ -397,6 +398,8 @@ export function SettingsPage() {
           </a>
         </div>
       </section>
+
+      <SettingsBackups />
 
       <section className="settings-card">
         <h2>

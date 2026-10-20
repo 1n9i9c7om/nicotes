@@ -13,6 +13,8 @@ import { SemanticIndex, semanticRoutes } from './ai/semantic.js';
 import { askRoutes } from './ai/ask.js';
 import { insightRoutes } from './ai/insight.js';
 import { requireAuth } from './auth.js';
+import { backupRoutes } from './backup/routes.js';
+import { BackupService, type BackupOptions } from './backup/service.js';
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
 import { importRoutes } from './import/routes.js';
@@ -44,6 +46,8 @@ export interface AppOptions {
   settingsEnv?: Config['env'];
   /** Allow imports from private network hosts. */
   importAllowPrivate?: boolean;
+  /** Backup directory and schedule; defaults to `<dataDir>/backups` with no schedule. */
+  backups?: Partial<BackupOptions>;
   /** Tests: a fake embedder, and no waiting for typing to pause before indexing. */
   embedder?: Embedder;
   semanticQuietMs?: number;
@@ -57,6 +61,7 @@ export function createApp({
   secret,
   settingsEnv = {} as Config['env'],
   importAllowPrivate = false,
+  backups: backupOptions,
   embedder,
   semanticQuietMs,
 }: AppOptions) {
@@ -66,6 +71,12 @@ export function createApp({
   jobs.register('organize', organizeJob(db));
   jobs.register('research', researchJob(db, importAllowPrivate));
   const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
+  const backups = new BackupService(
+    db,
+    dataDir,
+    { dir: join(dataDir, 'backups'), intervalHours: 0, keepDaily: 7, keepWeekly: 4, ...backupOptions },
+    Boolean(secret),
+  );
   settings.onUpdate((userId, input) => {
     if (input.semanticIndex === undefined && input.embeddingModel === undefined && input.openrouterApiKey === undefined) return;
     // Switched off, the index is deleted; switched on, or with another model or key, it (re)builds.
@@ -117,7 +128,7 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'backups']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -135,6 +146,7 @@ export function createApp({
   app.route('/api/daily', dailyRoutes(db, settings));
   app.route('/api/tasks', taskRoutes(db, settings));
   app.route('/api/semantic', semanticRoutes(db, semantic));
+  app.route('/api/backups', backupRoutes(backups));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', insightRoutes(db, settings, semantic));
@@ -169,5 +181,5 @@ export function createApp({
     });
   }
 
-  return Object.assign(app, { jobs, semantic });
+  return Object.assign(app, { jobs, semantic, backups });
 }
