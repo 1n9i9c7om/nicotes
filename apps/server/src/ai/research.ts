@@ -83,7 +83,7 @@ async function searchSearxng(url: string, query: string, language: string, signa
 async function searchOpenRouter(ctx: JobContext<Input>, query: string): Promise<Candidate[]> {
   const reply = await chat({
     apiKey: ctx.cfg.openrouterApiKey!,
-    model: ctx.cfg.researchModel,
+    model: ctx.cfg.models.research,
     messages: [{ role: 'user', content: `Search the web for: ${query}\nList the most relevant pages in one line each.` }],
     maxTokens: 500,
     webResults: 6,
@@ -115,7 +115,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
   return async (ctx: JobContext<Input>): Promise<ResearchResult> => {
     const { input, cfg } = ctx;
     const depth = RESEARCH_DEPTHS[input.depth];
-    const model = cfg.researchModel;
+    const model = cfg.models.research;
     const notebook = db
       .select({ id: notebooks.id })
       .from(notebooks)

@@ -8,6 +8,34 @@ export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-5.3-flashx';
 export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 /** Pages with these tags keep their checklists out of the task list (imported recipes). */
 export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
+/**
+ * The AI features. Each can use its own model; unset ones use the default model
+ * (`openrouter.model`), so one cheap model can run everything.
+ */
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'summary', 'links'] as const;
+export type AiTask = (typeof AI_TASKS)[number];
+
+export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
+  import: {
+    label: 'Smart Import',
+    hint: 'Turns a web page into a structured note, one call per import. A fast, cheap model is enough.',
+  },
+  organize: {
+    label: 'Organize',
+    hint: 'Reviews whole notebooks for tags, moves and groups. Small models are inconsistent here; a stronger one pays off.',
+  },
+  research: {
+    label: 'Research',
+    hint: 'Plans searches, reads sources and writes a cited note: several calls per run, the most demanding task.',
+  },
+  ask: {
+    label: 'Ask your notes',
+    hint: 'Answers from your notes with citations. Needs a model that sticks to the given sources.',
+  },
+  summary: { label: 'Summaries', hint: 'One to three sentences per page. Any cheap model works.' },
+  links: { label: 'Link suggestions', hint: 'Finds words in a page that should link to other pages.' },
+};
+
 /** Default spending limit per AI job (research run, organize run), in USD. */
 export const DEFAULT_AI_COST_LIMIT = 0.5;
 
@@ -28,10 +56,9 @@ export interface Settings {
     tokenSet: boolean;
     tokenSource: SettingSource;
   };
+  /** Model per AI feature; `model` null means the default model is used. */
+  models: Record<AiTask, { model: string | null; source: SettingSource }>;
   ai: {
-    /** Model for research; falls back to the import model. */
-    researchModel: string;
-    researchModelSource: SettingSource;
     searxngUrl: string | null;
     searxngUrlSource: SettingSource;
     costLimit: number;
@@ -65,13 +92,23 @@ const optionalUrl = z
   .nullable()
   .optional();
 
+const modelId = z.string().trim().max(200).nullable().optional();
+
+/** Settings field of an AI task's model, e.g. `askModel`. */
+export const modelSetting = (task: AiTask) => `${task}Model` as const;
+
 /** `null` clears a stored value (falling back to the environment), `undefined` leaves it. */
 export const settingsUpdateSchema = z.object({
   openrouterApiKey: optionalSecret,
-  openrouterModel: z.string().trim().max(200).nullable().optional(),
+  openrouterModel: modelId,
   crawl4aiUrl: optionalUrl,
   crawl4aiToken: optionalSecret,
-  researchModel: z.string().trim().max(200).nullable().optional(),
+  importModel: modelId,
+  organizeModel: modelId,
+  researchModel: modelId,
+  askModel: modelId,
+  summaryModel: modelId,
+  linksModel: modelId,
   searxngUrl: optionalUrl,
   aiCostLimit: z.number().min(0.01).max(50).nullable().optional(),
   dailyNotebookId: z.string().max(64).nullable().optional(),
@@ -83,7 +120,7 @@ export const settingsUpdateSchema = z.object({
     .nullable()
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
-  embeddingModel: z.string().trim().max(200).nullable().optional(),
+  embeddingModel: modelId,
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
@@ -97,6 +134,8 @@ export interface ModelInfo {
   name: string;
   /** USD per million input tokens. */
   promptPrice: number | null;
+  /** USD per million output tokens (null for embedding models). */
+  completionPrice: number | null;
 }
 
 // ---------- Import ----------

@@ -136,7 +136,7 @@ export function askRoutes(db: Db, settings: SettingsStore, index: SemanticIndex)
         const { usage } = await streamChat(
           {
             apiKey: cfg.openrouterApiKey!,
-            model: cfg.researchModel,
+            model: cfg.models.ask,
             maxTokens: 1500,
             signal: controller.signal,
             messages: [
@@ -150,7 +150,7 @@ export function askRoutes(db: Db, settings: SettingsStore, index: SemanticIndex)
           },
           (text) => void send({ type: 'delta', text }),
         );
-        await send({ type: 'done', cost: usage.cost, model: cfg.researchModel });
+        await send({ type: 'done', cost: usage.cost, model: cfg.models.ask });
       } catch (error) {
         if (controller.signal.aborted) return;
         if (!(error instanceof LlmError)) console.error('Ask:', error);

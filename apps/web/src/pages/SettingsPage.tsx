@@ -1,11 +1,15 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, CheckCircle2, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Cpu, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { timeAgo } from '../lib/format';
 import {
+  AI_TASK_INFO,
+  AI_TASKS,
   DEFAULT_OPENROUTER_MODEL,
+  modelSetting,
   type ConnectionCheck,
+  type ModelInfo,
   type Settings,
   type SettingSource,
   type SettingsUpdate,
@@ -34,8 +38,8 @@ const SOURCE_LABEL: Record<Exclude<SettingSource, null>, string> = {
   default: 'Default',
 };
 
-function Source({ source }: { source: SettingSource }) {
-  return <span className={`source source-${source ?? 'none'}`}>{source ? SOURCE_LABEL[source] : 'Not set'}</span>;
+function Source({ source, unset = 'Not set' }: { source: SettingSource; unset?: string }) {
+  return <span className={`source source-${source ?? 'none'}`}>{source ? SOURCE_LABEL[source] : unset}</span>;
 }
 
 function CheckResult({ result }: { result?: ConnectionCheck }) {
@@ -61,6 +65,7 @@ function SettingField({
   placeholder,
   listId,
   allowEmpty,
+  unsetLabel,
   onSave,
   pending,
 }: {
@@ -73,10 +78,13 @@ function SettingField({
   listId?: string;
   /** Saving an empty field stores "" (e.g. an empty list); only "Clear" restores the default. */
   allowEmpty?: boolean;
+  /** Badge text while nothing is set, e.g. "Uses default". */
+  unsetLabel?: string;
   onSave: (value: string | null) => void;
   pending: boolean;
 }) {
   const [value, setValue] = useState(secret ? '' : (current ?? ''));
+  const inputId = useId();
   const dirty = secret ? value !== '' : value !== (current ?? '');
 
   const submit = (e: FormEvent) => {
@@ -88,11 +96,14 @@ function SettingField({
   return (
     <form className="setting" onSubmit={submit}>
       <div className="setting-head">
-        <label className="setting-label">{label}</label>
-        <Source source={source} />
+        <label className="setting-label" htmlFor={inputId}>
+          {label}
+        </label>
+        <Source source={source} unset={unsetLabel} />
       </div>
       <div className="setting-row">
         <input
+          id={inputId}
           type={secret ? 'password' : 'text'}
           autoComplete="off"
           spellCheck={false}
@@ -128,9 +139,10 @@ export function SettingsPage() {
   const allPages = usePages();
   const templates = (allPages.data ?? []).filter((p) => p.tags.includes(TEMPLATE_TAG));
   const undo = useUndoBatch();
-  const [loadModels, setLoadModels] = useState(false);
-  const models = useModels(loadModels);
+  const models = useModels(true);
+  const embeddingModels = useModels(true, 'embedding');
   const modelList = useId();
+  const embeddingList = useId();
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
@@ -165,33 +177,52 @@ export function SettingsPage() {
             </a>
           }
         />
-        <div onFocusCapture={() => setLoadModels(true)}>
-          <SettingField
-            key={`model-${openrouter.model}`}
-            label="Model"
-            source={openrouter.modelSource}
-            current={openrouter.model}
-            placeholder={DEFAULT_OPENROUTER_MODEL}
-            listId={modelList}
-            pending={update.isPending}
-            onSave={(v) => save({ openrouterModel: v })}
-            hint={`Any OpenRouter model id. Default: ${DEFAULT_OPENROUTER_MODEL}`}
-          />
-          <datalist id={modelList}>
-            {models.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-                {m.promptPrice !== null ? ` · $${m.promptPrice.toFixed(2)}/M in` : ''}
-              </option>
-            ))}
-          </datalist>
-        </div>
         <div className="setting-actions">
           <button className="btn" disabled={checkOpenRouter.isPending} onClick={() => checkOpenRouter.mutate('openrouter')}>
             {checkOpenRouter.isPending ? 'Testing…' : 'Test connection'}
           </button>
           <CheckResult result={checkOpenRouter.data} />
         </div>
+      </section>
+
+      <section className="settings-card models-card" id="models">
+        <h2>
+          <Cpu size={18} /> AI models
+        </h2>
+        <p className="muted">
+          Each AI feature can use its own OpenRouter model; empty ones use the default model. Prices are per million
+          tokens, input / output.
+        </p>
+        <SettingField
+          key={`model-${openrouter.model}`}
+          label="Default model"
+          source={openrouter.modelSource}
+          current={openrouter.model}
+          placeholder={DEFAULT_OPENROUTER_MODEL}
+          listId={modelList}
+          pending={update.isPending}
+          onSave={(v) => save({ openrouterModel: v })}
+          hint={<ModelHint id={openrouter.model} models={models.data} text={`Clear to go back to ${DEFAULT_OPENROUTER_MODEL}.`} />}
+        />
+        {AI_TASKS.map((task) => {
+          const own = settings.data!.models[task];
+          return (
+            <SettingField
+              key={`${task}-${own.model}`}
+              label={AI_TASK_INFO[task].label}
+              source={own.source}
+              current={own.model}
+              placeholder={`Default · ${openrouter.model}`}
+              unsetLabel="Uses default"
+              listId={modelList}
+              pending={update.isPending}
+              onSave={(v) => save({ [modelSetting(task)]: v } as SettingsUpdate)}
+              hint={<ModelHint id={own.model} models={models.data} text={AI_TASK_INFO[task].hint} />}
+            />
+          );
+        })}
+        <ModelList id={modelList} models={models.data} />
+        {models.error && <p className="setting-hint">OpenRouter's model list is unavailable, so prices are not shown.</p>}
       </section>
 
       <section className="settings-card">
@@ -237,17 +268,6 @@ export function SettingsPage() {
           Research searches the web via SearXNG when configured, otherwise via OpenRouter's web search (about $0.01 per
           search). Every AI run stops once it reaches the cost limit.
         </p>
-        <SettingField
-          key={`rmodel-${ai.researchModel}`}
-          label="Research model"
-          source={ai.researchModelSource}
-          current={ai.researchModel}
-          placeholder={openrouter.model}
-          listId={modelList}
-          pending={update.isPending}
-          onSave={(v) => save({ researchModel: v })}
-          hint="Leave empty to use the import model. A stronger model writes better notes but costs more."
-        />
         <SettingField
           key={`sx-${ai.searxngUrl}`}
           label="SearXNG URL"
@@ -297,7 +317,14 @@ export function SettingsPage() {
         )}
       </section>
 
-      <SemanticCard semantic={semantic} apiKeySet={openrouter.apiKeySet} pending={update.isPending} save={save} />
+      <SemanticCard
+        semantic={semantic}
+        apiKeySet={openrouter.apiKeySet}
+        pending={update.isPending}
+        save={save}
+        models={embeddingModels.data}
+        listId={embeddingList}
+      />
 
       {update.error && <p className="error">{update.error.message}</p>}
 
@@ -416,11 +443,15 @@ function SemanticCard({
   apiKeySet,
   pending,
   save,
+  models,
+  listId,
 }: {
   semantic: Settings['semantic'];
   apiKeySet: boolean;
   pending: boolean;
   save: (input: SettingsUpdate) => void;
+  models?: ModelInfo[];
+  listId: string;
 }) {
   const status = useSemanticStatus(semantic.enabled);
   const action = useSemanticAction();
@@ -471,10 +502,18 @@ function SemanticCard({
         label="Embedding model"
         source={semantic.modelSource}
         current={semantic.model}
+        listId={listId}
         pending={pending}
         onSave={(v) => save({ embeddingModel: v })}
-        hint="Any OpenRouter embedding model. Changing it rebuilds the index; multilingual models match notes across languages."
+        hint={
+          <ModelHint
+            id={semantic.model}
+            models={models}
+            text="Changing it rebuilds the index. Multilingual models match notes across languages."
+          />
+        }
       />
+      <ModelList id={listId} models={models} />
       {semantic.enabled && (
         <div className="setting-actions">
           <button className="btn" disabled={action.isPending} onClick={() => action.mutate('rebuild')}>
@@ -483,5 +522,39 @@ function SemanticCard({
         </div>
       )}
     </section>
+  );
+}
+
+// OpenRouter's prices carry float noise (0.09999…): cents above ~$0.10, two significant digits below.
+const price = (usd: number) => `$${usd >= 0.095 ? usd.toFixed(2) : String(Number(usd.toPrecision(2)))}`;
+
+/** A model's price per million tokens, or a warning when OpenRouter does not list it. */
+function ModelHint({ id, models, text }: { id: string | null; models?: ModelInfo[]; text: string }) {
+  const info = id ? models?.find((m) => m.id === id) : undefined;
+  return (
+    <>
+      {text}
+      {info && info.promptPrice !== null && (
+        <span className="model-price">
+          {' '}
+          · {price(info.promptPrice)}
+          {info.completionPrice !== null && ` / ${price(info.completionPrice)}`}
+        </span>
+      )}
+      {id && models && !info && <span className="model-unknown"> · Not in OpenRouter's model list — check the id.</span>}
+    </>
+  );
+}
+
+function ModelList({ id, models }: { id: string; models?: ModelInfo[] }) {
+  return (
+    <datalist id={id}>
+      {models?.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.name}
+          {m.promptPrice !== null ? ` · ${price(m.promptPrice)}/M in` : ''}
+        </option>
+      ))}
+    </datalist>
   );
 }

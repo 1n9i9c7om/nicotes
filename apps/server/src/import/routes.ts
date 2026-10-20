@@ -46,7 +46,7 @@ async function classify(cfg: ImportConfig, page: ExtractedPage) {
   const excerpt: ExtractedPage = { ...page, markdown: page.markdown.slice(0, 3000) };
   return completeJson({
     apiKey: cfg.openrouterApiKey!,
-    model: cfg.model,
+    model: cfg.models.import,
     system: SYSTEM,
     user: `Which kind of page is this? Options:\n${options}\n\nReply as {"profile": "<option>"}.\n\n${pageContext(excerpt)}`,
     schema: z.object({ profile: z.enum(IMPORT_PROFILES) }),
@@ -113,13 +113,13 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
         const hint = structured?.profile === profile ? structured.node : undefined;
         const result = await completeJson({
           apiKey: cfg.openrouterApiKey,
-          model: cfg.model,
+          model: cfg.models.import,
           system: SYSTEM,
           user: `Extract ${descriptions[profile]} as JSON with this TypeScript type:\n${shapes[profile]}\n\n${pageContext(page, hint)}`,
           schema: schemas[profile] as z.ZodType<ProfileData[ImportProfile]>,
         });
         data = result.data;
-        usage = { model: cfg.model, ...addUsage(spent, result.usage) };
+        usage = { model: cfg.models.import, ...addUsage(spent, result.usage) };
       } catch (error) {
         if (!(error instanceof LlmError)) throw error;
         warnings.push(`${error.message}. Imported the page text instead.`);

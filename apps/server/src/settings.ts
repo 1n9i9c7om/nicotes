@@ -3,11 +3,14 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import {
+  AI_TASKS,
   DEFAULT_AI_COST_LIMIT,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
+  modelSetting,
   settingsUpdateSchema,
+  type AiTask,
   type ConnectionCheck,
   type ModelInfo,
   type Settings,
@@ -26,7 +29,13 @@ const KEYS = {
   openrouterModel: { key: 'openrouter.model', secret: false },
   crawl4aiUrl: { key: 'crawl4ai.url', secret: false },
   crawl4aiToken: { key: 'crawl4ai.token', secret: true },
+  importModel: { key: 'ai.model.import', secret: false },
+  organizeModel: { key: 'ai.model.organize', secret: false },
+  // Kept under its original key, so research models saved before per-task models still apply.
   researchModel: { key: 'ai.researchModel', secret: false },
+  askModel: { key: 'ai.model.ask', secret: false },
+  summaryModel: { key: 'ai.model.summary', secret: false },
+  linksModel: { key: 'ai.model.links', secret: false },
   searxngUrl: { key: 'ai.searxngUrl', secret: false },
   aiCostLimit: { key: 'ai.costLimit', secret: false },
   dailyNotebookId: { key: 'daily.notebookId', secret: false },
@@ -40,10 +49,12 @@ type Name = keyof typeof KEYS;
 /** Effective values used by import and AI features (settings > environment > default). */
 export interface ImportConfig {
   openrouterApiKey: string | null;
+  /** The default model. */
   model: string;
+  /** The model each AI feature uses (its own, else the default). */
+  models: Record<AiTask, string>;
   crawl4aiUrl: string | null;
   crawl4aiToken: string | null;
-  researchModel: string;
   searxngUrl: string | null;
   /** USD per AI job. */
   costLimit: number;
@@ -88,7 +99,10 @@ export class SettingsStore {
       model: pick('openrouterModel', DEFAULT_OPENROUTER_MODEL),
       url: pick('crawl4aiUrl'),
       token: pick('crawl4aiToken'),
-      researchModel: pick('researchModel'),
+      tasks: Object.fromEntries(AI_TASKS.map((task) => [task, pick(modelSetting(task))])) as Record<
+        AiTask,
+        { value: string | null; source: SettingSource }
+      >,
       searxng: pick('searxngUrl'),
       costLimit: pick('aiCostLimit', String(DEFAULT_AI_COST_LIMIT)),
       dailyNotebook: pick('dailyNotebookId'),
@@ -115,9 +129,10 @@ export class SettingsStore {
         tokenSet: r.token.value !== null,
         tokenSource: r.token.source,
       },
+      models: Object.fromEntries(
+        AI_TASKS.map((task) => [task, { model: r.tasks[task].value, source: r.tasks[task].source }]),
+      ) as Settings['models'],
       ai: {
-        researchModel: r.researchModel.value ?? r.model.value!,
-        researchModelSource: r.researchModel.source ?? 'default',
         searxngUrl: r.searxng.value,
         searxngUrlSource: r.searxng.source,
         costLimit: Number(r.costLimit.value),
@@ -139,9 +154,9 @@ export class SettingsStore {
     return {
       openrouterApiKey: r.apiKey.value,
       model: r.model.value!,
+      models: Object.fromEntries(AI_TASKS.map((task) => [task, r.tasks[task].value ?? r.model.value!])) as Record<AiTask, string>,
       crawl4aiUrl: r.url.value?.replace(/\/+$/, '') ?? null,
       crawl4aiToken: r.token.value,
-      researchModel: r.researchModel.value ?? r.model.value!,
       searxngUrl: r.searxng.value?.replace(/\/+$/, '') ?? null,
       costLimit: Number(r.costLimit.value) || DEFAULT_AI_COST_LIMIT,
       semanticIndex: r.semanticIndex.value === 'true',
@@ -245,22 +260,30 @@ export async function checkSearxng(url: string | null): Promise<ConnectionCheck>
   }
 }
 
-let modelCache: { at: number; models: ModelInfo[] } | null = null;
+type ModelKind = 'chat' | 'embedding';
+const MODEL_LISTS: Record<ModelKind, string> = {
+  chat: 'https://openrouter.ai/api/v1/models',
+  embedding: 'https://openrouter.ai/api/v1/embeddings/models',
+};
+const modelCache = new Map<ModelKind, { at: number; models: ModelInfo[] }>();
 
-/** OpenRouter's public model list (cached for an hour), for the model picker. */
-async function listModels(): Promise<ModelInfo[]> {
-  if (modelCache && Date.now() - modelCache.at < 60 * 60 * 1000) return modelCache.models;
-  const res = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(TIMEOUT_MS) });
+/** OpenRouter's public model lists (cached for an hour), for the model pickers. */
+async function listModels(kind: ModelKind): Promise<ModelInfo[]> {
+  const cached = modelCache.get(kind);
+  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.models;
+  const res = await fetch(MODEL_LISTS[kind], { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!res.ok) throw new HTTPException(502, { message: `OpenRouter answered ${res.status}` });
-  const body = (await res.json()) as { data: { id: string; name: string; pricing?: { prompt?: string } }[] };
+  const body = (await res.json()) as { data: { id: string; name: string; pricing?: { prompt?: string; completion?: string } }[] };
+  const perMillion = (price?: string) => (price ? Number(price) * 1_000_000 : null);
   const models = body.data
     .map((m) => ({
       id: m.id,
       name: m.name,
-      promptPrice: m.pricing?.prompt ? Number(m.pricing.prompt) * 1_000_000 : null,
+      promptPrice: perMillion(m.pricing?.prompt),
+      completionPrice: kind === 'chat' ? perMillion(m.pricing?.completion) : null,
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  modelCache = { at: Date.now(), models };
+  modelCache.set(kind, { at: Date.now(), models });
   return models;
 }
 
@@ -282,5 +305,5 @@ export function settingsRoutes(store: SettingsStore) {
             : await checkSearxng(cfg.searxngUrl);
       return c.json(result);
     })
-    .get('/models', async (c) => c.json(await listModels()));
+    .get('/models', async (c) => c.json(await listModels(c.req.query('kind') === 'embedding' ? 'embedding' : 'chat')));
 }

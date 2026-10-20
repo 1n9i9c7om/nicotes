@@ -12,6 +12,7 @@ import {
   type SemanticHit,
   type SemanticResults,
   type SemanticStatus,
+  type Settings,
 } from '@nicotes/shared';
 import { setup } from './helpers.js';
 
@@ -404,5 +405,36 @@ describe('summaries and AI link suggestions', () => {
       { phrase: 'levain', pageId: starter.id, title: 'Starter', target: 'Starter', reason: 'Levain is a starter.' },
       { phrase: 'rye flour', pageId: flour.id, title: 'Flour types', target: 'Flour types', reason: 'Flour details.' },
     ]);
+  });
+});
+
+describe('models per AI feature', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses the feature model where set and the default model elsewhere', async () => {
+    const api = setup({ settingsEnv: { openrouterApiKey: 'sk-test', researchModel: 'env/research' } as never });
+    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    const notes = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Notes' })).body;
+    const page = (
+      await api.call<Page>('POST', '/api/pages', { notebookId: notes.id, title: 'Bread', content: 'Sourdough needs a lively starter. '.repeat(5) })
+    ).body;
+
+    const settings = (await api.call<Settings>('PATCH', '/api/settings', { summaryModel: 'vendor/strong', askModel: 'vendor/ask' })).body;
+    expect(settings.models).toMatchObject({
+      summary: { model: 'vendor/strong', source: 'settings' },
+      ask: { model: 'vendor/ask', source: 'settings' },
+      research: { model: 'env/research', source: 'env' },
+      import: { model: null, source: null },
+    });
+
+    const models: string[] = [];
+    vi.stubGlobal('fetch', async (_input: string | URL | Request, init?: RequestInit) => {
+      models.push((JSON.parse(String(init?.body)) as { model: string }).model);
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'A summary.' } }], usage: { cost: 0 } }), { status: 200 });
+    });
+    await api.call('POST', `/api/ai/summary/${page.id}`);
+    await api.call('PATCH', '/api/settings', { summaryModel: null });
+    await api.call('POST', `/api/ai/summary/${page.id}`);
+    expect(models).toEqual(['vendor/strong', 'z-ai/glm-5.3-flashx']);
   });
 });

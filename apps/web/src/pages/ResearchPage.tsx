@@ -164,7 +164,7 @@ export function ResearchPage() {
             <span className="muted research-meta">
               {ai && (
                 <>
-                  {ai.researchModel} · {ai.searxngUrl ? 'SearXNG' : 'OpenRouter web search'} · limit {formatCost(ai.costLimit)}{' '}
+                  {settings.data?.models.research.model ?? settings.data?.openrouter.model} · {ai.searxngUrl ? 'SearXNG' : 'OpenRouter web search'} · limit {formatCost(ai.costLimit)}{' '}
                   <Link to="/settings" aria-label="AI settings">
                     <SettingsIcon size={13} />
                   </Link>

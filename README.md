@@ -46,7 +46,9 @@ With an OpenRouter key, **Research** answers a question by searching the web, re
 best sources and writing a note with numbered citations; **Organize with AI** (notebook or
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
-at a configurable limit (default $0.50).
+at a configurable limit (default $0.50). Under Settings → **AI models** every feature
+(import, organize, research, Ask, summaries, link suggestions) can use its own model, with
+prices shown; unset ones use the default model.
 
 Research searches via [SearXNG](https://docs.searxng.org) if `SEARXNG_URL` is set (the JSON
 format must be enabled), otherwise via OpenRouter's web search. For a local instance, set

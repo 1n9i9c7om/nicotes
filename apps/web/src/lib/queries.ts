@@ -358,12 +358,14 @@ export const useCheckConnection = () =>
   });
 
 /** OpenRouter's model list for the picker; loaded on demand. */
-export const useModels = (enabled: boolean) =>
+/** OpenRouter's chat or embedding models (for pickers and prices). */
+export const useModels = (enabled: boolean, kind: 'chat' | 'embedding' = 'chat') =>
   useQuery({
-    queryKey: keys.models,
-    queryFn: () => api.get<ModelInfo[]>('/settings/models'),
+    queryKey: [...keys.models, kind],
+    queryFn: () => api.get<ModelInfo[]>(`/settings/models?kind=${kind}`),
     enabled,
     staleTime: 60 * 60 * 1000,
+    retry: false,
   });
 
 export const useImportPreview = () =>

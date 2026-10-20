@@ -25,7 +25,13 @@ export const config = {
     openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
     crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
     crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
+    // Per-feature models; unset ones use OPENROUTER_MODEL.
+    importModel: process.env.OPENROUTER_IMPORT_MODEL?.trim() || undefined,
+    organizeModel: process.env.OPENROUTER_ORGANIZE_MODEL?.trim() || undefined,
     researchModel: process.env.OPENROUTER_RESEARCH_MODEL?.trim() || undefined,
+    askModel: process.env.OPENROUTER_ASK_MODEL?.trim() || undefined,
+    summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
+    linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
     searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
     embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,

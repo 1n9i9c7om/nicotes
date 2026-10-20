@@ -342,3 +342,35 @@
   background: var(--gradient);
   transition: width 0.4s;
 }
+
+/* AI models card */
+
+.model-price {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.model-unknown {
+  color: #fbbf24;
+}
+
+@media (min-width: 900px) {
+  /* Many model fields: label and hint on the left, input on the right. */
+  .models-card .setting {
+    grid-template-columns: 200px minmax(0, 1fr);
+    column-gap: 20px;
+    align-items: start;
+  }
+
+  .models-card .setting-head {
+    grid-row: span 2;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding-top: 9px;
+  }
+
+  .models-card .setting-hint {
+    grid-column: 2;
+  }
+}

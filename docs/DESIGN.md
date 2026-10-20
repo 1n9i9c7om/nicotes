@@ -185,6 +185,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 
 ### AI assistants
 
+- **Models per feature:** import, organize, research, ask, summaries and link suggestions
+  each resolve their own model (settings > environment variable > the default model), so
+  cheap extraction and demanding writing can use different models. Settings shows
+  OpenRouter's prices next to each and warns about ids missing from its model list.
+
 - **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
   time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
   a restart are marked failed. Every OpenRouter call reports its cost (`usage.include`);
@@ -275,11 +280,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start |
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | Import LLM (overridable in Settings) |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_RESEARCH_MODEL` | import model | Model for research runs |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |

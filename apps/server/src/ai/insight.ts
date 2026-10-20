@@ -66,7 +66,7 @@ async function summarize(db: Db, cfg: AiConfig, userId: string, pageId: string):
   const reply = await upstream(() =>
     chat({
       apiKey: requireKey(cfg),
-      model: cfg.model,
+      model: cfg.models.summary,
       maxTokens: 400,
       messages: [
         {
@@ -80,12 +80,12 @@ async function summarize(db: Db, cfg: AiConfig, userId: string, pageId: string):
   const summary = reply.content.replace(/\s+/g, ' ').replace(/^["“]|["”]$/g, '').trim();
   if (!summary) throw new HTTPException(502, { message: 'The model returned an empty summary, please try again' });
   const now = Date.now();
-  const values = { summary, version: page.version, model: cfg.model, cost: reply.usage.cost, createdAt: now };
+  const values = { summary, version: page.version, model: cfg.models.summary, cost: reply.usage.cost, createdAt: now };
   db.insert(pageSummaries)
     .values({ pageId, userId, ...values })
     .onConflictDoUpdate({ target: pageSummaries.pageId, set: values })
     .run();
-  return { summary, stale: false, model: cfg.model, cost: reply.usage.cost, createdAt: now };
+  return { summary, stale: false, model: cfg.models.summary, cost: reply.usage.cost, createdAt: now };
 }
 
 const linkReplySchema = z.object({
@@ -146,7 +146,7 @@ async function suggestLinks(db: Db, index: SemanticIndex, cfg: AiConfig, userId:
   const reply = await upstream(() =>
     completeJson({
       apiKey: requireKey(cfg),
-      model: cfg.model,
+      model: cfg.models.links,
       schema: linkReplySchema,
       maxTokens: 1500,
       system: `You help connect notes in a personal knowledge base by suggesting links. Reply with one JSON object only.`,
