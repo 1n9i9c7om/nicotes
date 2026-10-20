@@ -32,6 +32,8 @@ const app = createApp({
   importAllowPrivate: config.importAllowPrivate,
 });
 
+app.semantic.start();
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Nicotes listening on http://localhost:${info.port} (data: ${config.dataDir})`);
 });

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router';
 import { AppShell } from './components/AppShell';
+import { AskPage } from './pages/AskPage';
 import { ApiError } from './lib/api';
 import { keys, useAuthStatus } from './lib/queries';
 import { Home } from './pages/Home';
@@ -16,6 +17,7 @@ import { ResearchPage } from './pages/ResearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SharePage } from './pages/SharePage';
 import { TagView } from './pages/TagView';
+import { TasksPage } from './pages/TasksPage';
 
 // force-graph is large; the graph page loads on demand.
 const GraphPage = lazy(() => import('./pages/GraphPage').then((m) => ({ default: m.GraphPage })));
@@ -52,6 +54,8 @@ export function App() {
         <Route path="research" element={<ResearchPage />} />
         <Route path="organize" element={<OrganizePage />} />
         <Route path="journal" element={<JournalPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="ask" element={<AskPage />} />
         <Route
           path="graph"
           element={

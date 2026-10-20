@@ -1,6 +1,8 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AiBatch,
+  AiLinkSuggestions,
+  PageSummaryInfo,
   AuthStatus,
   Job,
   JobKind,
@@ -14,6 +16,7 @@ import type {
   GraphLinks,
   ImportPreview,
   ImportRequest,
+  MentionsResult,
   ModelInfo,
   Notebook,
   NotebookCreate,
@@ -22,17 +25,24 @@ import type {
   PageCreate,
   PageMove,
   PageSummary,
+  PageTask,
   PageVersion,
   PageVersionSummary,
   RenameResult,
   SearchResult,
+  SemanticHit,
+  SemanticResults,
+  SemanticStatus,
   Settings,
   SettingsUpdate,
   Tag,
   TagUpdate,
+  TaskCreate,
+  TaskUpdate,
   TrashItem,
   User,
 } from '@nicotes/shared';
+import { parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
 import { api } from './api';
 
 export const keys = {
@@ -41,6 +51,7 @@ export const keys = {
   pages: ['pages'] as const,
   page: (id: string) => ['page', id] as const,
   backlinks: (id: string) => ['backlinks', id] as const,
+  mentions: (id: string) => ['mentions', id] as const,
   tags: ['tags'] as const,
   settings: ['settings'] as const,
   models: ['models'] as const,
@@ -52,6 +63,10 @@ export const keys = {
   batches: ['ai-batches'] as const,
   graph: ['graph'] as const,
   daily: (from: string, to: string) => ['daily', from, to] as const,
+  tasks: ['tasks'] as const,
+  semantic: ['semantic-status'] as const,
+  related: (id: string) => ['related', id] as const,
+  summary: (id: string) => ['summary', id] as const,
 };
 
 /**
@@ -252,6 +267,28 @@ export function useDeletePage() {
 export const useBacklinks = (id: string) =>
   useQuery({ queryKey: keys.backlinks(id), queryFn: () => api.get<Backlink[]>(`/pages/${id}/backlinks`) });
 
+/** Unlinked mentions; `version` refetches them after each save of the page. */
+export const useMentions = (id: string, version?: number) =>
+  useQuery({
+    queryKey: [...keys.mentions(id), version],
+    queryFn: () => api.get<MentionsResult>(`/pages/${id}/mentions`),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+/** Links this page's first unlinked mention in each of `sourceIds`. */
+export function useLinkMentions(pageId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sourceIds: string[]) => api.post<RenameResult>(`/pages/${pageId}/mentions/link`, { sourceIds }),
+    onSuccess: (result) => {
+      afterRelink(qc, result);
+      qc.invalidateQueries({ queryKey: ['mentions'] });
+      qc.invalidateQueries({ queryKey: keys.graph });
+    },
+  });
+}
+
 // ---------- Tags ----------
 
 export const useTags = () => useQuery({ queryKey: keys.tags, queryFn: () => api.get<Tag[]>('/tags') });
@@ -304,7 +341,14 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: SettingsUpdate) => api.patch<Settings>('/settings', input),
-    onSuccess: (settings) => qc.setQueryData(keys.settings, settings),
+    onSuccess: (settings, input) => {
+      qc.setQueryData(keys.settings, settings);
+      if (input.tasksExcludeTags !== undefined) qc.invalidateQueries({ queryKey: keys.tasks });
+      if (input.semanticIndex !== undefined || input.embeddingModel !== undefined) {
+        qc.invalidateQueries({ queryKey: keys.semantic });
+        qc.invalidateQueries({ queryKey: ['related'] });
+      }
+    },
   });
 }
 
@@ -481,3 +525,132 @@ export function useOpenDaily() {
     },
   });
 }
+
+// ---------- Tasks ----------
+
+/** All tasks (open and done); views filter them, so ticked-off tasks can linger in place. */
+export const useTasks = () =>
+  useQuery({ queryKey: keys.tasks, queryFn: () => api.get<PageTask[]>('/tasks?status=all'), staleTime: 15_000 });
+
+/** A task change rewrote `page`: hand it to an open editor and re-read that page's tasks locally. */
+function afterTaskChange(qc: QueryClient, page: Page) {
+  if (qc.getQueryData(keys.page(page.id))) qc.setQueryData(keys.page(page.id), page);
+  qc.setQueryData<PageSummary[]>(keys.pages, (list) =>
+    list?.map((p) => (p.id === page.id ? { ...p, updatedAt: page.updatedAt } : p)),
+  );
+  qc.setQueryData<PageTask[]>(keys.tasks, (list) => {
+    if (!list) return list;
+    const skip = [TEMPLATE_TAG, ...(qc.getQueryData<Settings>(keys.settings)?.tasks.excludeTags ?? [])];
+    const fresh = page.tags.some((t) => skip.includes(t))
+      ? []
+      : parseTasks(page.content).map((t) => ({
+          ...t,
+          pageId: page.id,
+          pageTitle: page.title,
+          notebookId: page.notebookId,
+          version: page.version,
+          pageUpdatedAt: page.updatedAt,
+        }));
+    return [...list.filter((t) => t.pageId !== page.id), ...fresh];
+  });
+}
+
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TaskUpdate) => api.patch<Page>('/tasks', input),
+    // One at a time: each change is checked against the line the previous one wrote.
+    scope: { id: 'tasks' },
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: keys.tasks });
+      qc.setQueryData<PageTask[]>(keys.tasks, (list) =>
+        list?.map((t) =>
+          t.pageId === input.pageId && t.line === input.line
+            ? {
+                ...t,
+                done: input.done ?? t.done,
+                due: input.due === undefined ? t.due : input.due,
+                raw: updateTaskLine(t.raw, { done: input.done, due: input.due }),
+              }
+            : t,
+        ),
+      );
+    },
+    onSuccess: (page) => afterTaskChange(qc, page),
+    // A stale line or a network error: reload the real state.
+    onError: () => qc.invalidateQueries({ queryKey: keys.tasks }),
+  });
+}
+
+export function useAddTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TaskCreate) => api.post<Page>('/tasks', input),
+    onSuccess: (page) => afterTaskChange(qc, page),
+  });
+}
+
+// ---------- Semantic index ----------
+
+/** Index progress; polls while pages are still being embedded. */
+export const useSemanticStatus = (enabled = true) =>
+  useQuery({
+    queryKey: keys.semantic,
+    queryFn: () => api.get<SemanticStatus>('/semantic/status'),
+    enabled,
+    refetchInterval: (q) => {
+      const s = q.state.data;
+      return s?.enabled && s.ready && !s.error && s.indexed < s.pages ? 4000 : false;
+    },
+  });
+
+export function useSemanticAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (action: 'rebuild' | 'retry') => api.post<SemanticStatus>(`/semantic/${action}`),
+    onSuccess: (status) => qc.setQueryData(keys.semantic, status),
+  });
+}
+
+export const semanticSearch = (q: string) =>
+  api.get<SemanticResults<SemanticHit>>(`/semantic/search?q=${encodeURIComponent(q)}&limit=6`);
+
+/** Similar pages not yet connected to this one; `version` refreshes them after saves. */
+export const useRelated = (id: string, enabled: boolean, version?: number) =>
+  useQuery({
+    queryKey: [...keys.related(id), version],
+    queryFn: () => api.get<SemanticResults<SemanticHit>>(`/semantic/related/${id}`),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+
+// ---------- Summaries and AI link suggestions ----------
+
+/** The page's AI summary (or null); `version` refreshes its "stale" flag after saves. */
+export const usePageSummary = (id: string, version?: number) =>
+  useQuery({
+    queryKey: [...keys.summary(id), version],
+    queryFn: () => api.get<PageSummaryInfo | null>(`/ai/summary/${id}`),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+
+export function useSummarize(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<PageSummaryInfo>(`/ai/summary/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.summary(id) }),
+  });
+}
+
+export function useDeleteSummary(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete(`/ai/summary/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.summary(id) }),
+  });
+}
+
+export const useSuggestLinks = (id: string) =>
+  useMutation({ mutationFn: () => api.post<AiLinkSuggestions>(`/ai/link-suggestions/${id}`) });

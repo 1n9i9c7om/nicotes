@@ -5,6 +5,10 @@ export * from './ai';
 export * from './tags';
 export * from './history';
 export * from './importing';
+export * from './insight';
+export * from './mentions';
+export * from './sections';
+export * from './tasks';
 export * from './wikilinks';
 
 // ---------- Auth ----------

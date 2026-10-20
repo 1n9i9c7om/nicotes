@@ -1,8 +1,13 @@
 import { z } from 'zod';
+import { normalizeTag } from './tags';
 
 // ---------- Settings ----------
 
 export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-5.3-flashx';
+/** Embeddings for semantic search, related pages and "Ask your notes". */
+export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+/** Pages with these tags keep their checklists out of the task list (imported recipes). */
+export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
 /** Default spending limit per AI job (research run, organize run), in USD. */
 export const DEFAULT_AI_COST_LIMIT = 0.5;
 
@@ -38,6 +43,17 @@ export interface Settings {
     /** Template page for new daily notes. */
     templateId: string | null;
   };
+  tasks: {
+    excludeTags: string[];
+    excludeTagsSource: SettingSource;
+  };
+  semantic: {
+    /** Opt-in: indexing sends all note text to OpenRouter for embeddings. */
+    enabled: boolean;
+    enabledSource: SettingSource;
+    model: string;
+    modelSource: SettingSource;
+  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
@@ -60,6 +76,14 @@ export const settingsUpdateSchema = z.object({
   aiCostLimit: z.number().min(0.01).max(50).nullable().optional(),
   dailyNotebookId: z.string().max(64).nullable().optional(),
   dailyTemplateId: z.string().max(64).nullable().optional(),
+  tasksExcludeTags: z
+    .array(z.string().max(60))
+    .max(20)
+    .transform((list) => [...new Set(list.map(normalizeTag).filter(Boolean))])
+    .nullable()
+    .optional(),
+  semanticIndex: z.boolean().nullable().optional(),
+  embeddingModel: z.string().trim().max(200).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

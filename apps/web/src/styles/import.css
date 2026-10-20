@@ -312,3 +312,33 @@
     margin: 8px -12px 0;
   }
 }
+
+/* Semantic index status */
+
+.semantic-status {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.semantic-status .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.semantic-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  overflow: hidden;
+}
+
+.semantic-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient);
+  transition: width 0.4s;
+}

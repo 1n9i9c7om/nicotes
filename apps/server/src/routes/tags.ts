@@ -29,6 +29,17 @@ export function tagsByPage(db: Conn, userId: string, pageIds?: string[]): Map<st
   return map;
 }
 
+/** Ids of the pages carrying a tag directly, e.g. templates. */
+export function pageIdsWithTag(db: Conn, userId: string, name: string): Set<string> {
+  const rows = db
+    .select({ pageId: pageTags.pageId })
+    .from(pageTags)
+    .innerJoin(tags, eq(tags.id, pageTags.tagId))
+    .where(and(eq(tags.userId, userId), eq(tags.name, name)))
+    .all();
+  return new Set(rows.map((r) => r.pageId));
+}
+
 /** Replaces a page's tags, creating new tags and dropping ones that became unused and empty. */
 export function setPageTags(tx: Tx, userId: string, pageId: string, names: string[]) {
   const wanted = [...new Set(names)];

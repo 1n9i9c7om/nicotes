@@ -37,18 +37,14 @@ export async function fromTemplate(templateId: string, title: string, day?: stri
 
 export const DEFAULT_DAILY_CONTENT = '## Notes\n\n\n## Tasks\n\n- [ ] ';
 
-/** Opens (creating if needed) the daily note for a date, using the configured template. */
-export function useOpenDailyNote() {
+/** Resolves the daily note's page id for a date, creating it from the configured template. */
+export function useDailyNote() {
   const settings = useSettings();
   const open = useOpenDaily();
-  const navigate = useNavigate();
   return useCallback(
-    async (date = localDate()) => {
+    async (date = localDate()): Promise<string> => {
       const existing = await api.get<{ date: string; pageId: string }[]>(`/daily?from=${date}&to=${date}`);
-      if (existing[0]) {
-        navigate(`/p/${existing[0].pageId}`);
-        return;
-      }
+      if (existing[0]) return existing[0].pageId;
       const templateId = settings.data?.daily.templateId;
       const filled = templateId
         ? await fromTemplate(templateId, date, date).catch(() => null)
@@ -58,8 +54,18 @@ export function useOpenDailyNote() {
         content: filled?.content ?? DEFAULT_DAILY_CONTENT,
         tags: ['daily', ...(filled?.tags ?? [])],
       });
-      navigate(`/p/${page.id}`);
+      return page.id;
     },
-    [settings.data, open, navigate],
+    [settings.data, open],
+  );
+}
+
+/** Opens (creating if needed) the daily note for a date. */
+export function useOpenDailyNote() {
+  const dailyNote = useDailyNote();
+  const navigate = useNavigate();
+  return useCallback(
+    async (date = localDate()) => navigate(`/p/${await dailyNote(date)}`),
+    [dailyNote, navigate],
   );
 }

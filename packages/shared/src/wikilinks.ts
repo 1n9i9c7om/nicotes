@@ -152,6 +152,12 @@ export function linkTargetFor(ctx: LinkContext, page: LinkablePage): string {
   return path.join('/');
 }
 
+/** The bare title where it resolves to the page from `fromNotebookId`, else a qualified path. */
+export function preferredTarget(ctx: LinkContext, page: LinkablePage, fromNotebookId: string): string {
+  const title = page.title.trim();
+  return resolveWikilink(ctx, title, fromNotebookId)?.id === page.id ? title : linkTargetFor(ctx, page);
+}
+
 /**
  * Recomputes a link after renames: keeps the same qualification depth as `original`, but with
  * the page's current titles. Returns null if nothing changed.

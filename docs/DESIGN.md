@@ -33,8 +33,10 @@ User ─┬─ Notebook ── Page ── Page (children, any depth)
 | Tag        | Many-to-many with pages, normalised names (`Open World` → `open-world`). A tag with a description acts as a hub; unused tags without one are removed automatically. |
 | Link       | Index of `[[wikilinks]]` per page, rebuilt on save (and on startup). Stored as written, resolved at read time. |
 | Attachment | Files under `/data/attachments/<id>`, embedded in Markdown as `/api/attachments/<id>/<name>`. |
+| Task       | Not stored separately: `- [ ]` lines in pages, read on demand and edited in place. |
+| Semantic index | Optional embeddings of page passages (`page_chunks`, `page_index`), plus AI summaries (`page_summaries`). |
 
-### Example: a games knowledge base
+### Example: a topic hub (here: games)
 
 ```
 Notebook "Games"
@@ -224,6 +226,46 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   configured notebook or an auto-created "Journal". The client fills in the configured
   template. `/journal` shows a month calendar.
 
+### Connections, tasks and AI over notes
+
+- **Connections panel:** under each page, one tabbed panel instead of stacked sections:
+  backlinks, unlinked mentions, related pages and AI link suggestions; tabs without
+  content are hidden.
+- **Unlinked mentions** (`shared/mentions.ts`): a title matches as whole words, case-
+  insensitively, with the same punctuation between words; one-word titles must also match
+  the case of their first letter ("Notes" doesn't claim every "notes"). Code, links, URLs,
+  HTML, headings and due dates never match, nor do titles without letters (years, dates).
+  Incoming mentions use FTS5 phrase queries as a pre-filter and skip pages that link already;
+  outgoing ones skip empty pages and resolve shared titles like a bare link would. Linking
+  rewrites the first mention (`[[text]]` or `[[target|text]]`); in other pages the server
+  does it and keeps a `relink` version, on the open page the editor does it.
+- **Tasks:** `GET /api/tasks` parses `- [ ]` lines of all pages with a checkbox (templates
+  and pages tagged with an excluded tag — `recipe` by default — are skipped). Updates send
+  page, line and the line as seen; the server refuses a changed line (409), otherwise
+  rewrites it and saves a version. Due dates use Obsidian's `📅 YYYY-MM-DD`
+  (`due:` / `@` are read too). Quick add fills today's daily note (placeholder task, a
+  "Tasks" section, or the end).
+- **Semantic index** (opt-in per user, OpenRouter embeddings, default
+  `openai/text-embedding-3-small` at 512 dimensions): a background indexer embeds pages
+  whose version, title or model changed, once typing has paused for 30 s, in passages of
+  ≤ 1200 characters split by heading (title and heading path are embedded with each
+  passage; unchanged passages keep their vectors by hash). Vectors live in SQLite and in an
+  in-memory copy per user; queries are a linear scan (thousands of passages take
+  milliseconds). Results are cut by an absolute floor and by distance to the best hit.
+  Switching the index off deletes it.
+- **Related pages:** nearest pages by mean passage vector, minus pages already connected
+  (links both ways, parent, children); "Link" adds the page to a "See also" section.
+- **Ask your notes:** `POST /api/ai/ask` streams server-sent events: the retrieved
+  passages (semantic, or FTS keyword fallback), then the answer as it is generated, then
+  the cost. The model may only use the numbered passages and cites them as `[n]`;
+  follow-ups send the last turns along. Answers render through a small Markdown renderer
+  that builds React elements (no HTML injection) and can be saved as notes.
+- **Summaries:** 1–3 sentences per page (`page_summaries`), shown above the text and marked
+  as outdated once the page version changes.
+- **AI link suggestions:** the model gets the page and up to 120 candidates (nearest by
+  meaning, or most recent, plus pages it names) and returns phrases to link; each phrase
+  must be found in the text outside code and links before it is offered.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -239,6 +281,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
 | `OPENROUTER_RESEARCH_MODEL` | import model | Model for research runs |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
+| `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
+| `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
 
 ## Roadmap
 
@@ -263,4 +307,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
      optional auto-apply mode records every change in version history.
 6. ✅ **Graph & daily work** — graph view (global + local), tag inheritance, templates,
    daily notes with a journal calendar.
-7. **Later** — multi-user, GitLab CI → registry.
+7. ✅ **Connections & insight** — connections panel (backlinks, unlinked mentions, related
+   pages, AI link suggestions), tasks across pages with due dates, semantic index with
+   search by meaning, "Ask your notes" with citations, page summaries.
+8. **Later** — automatic backups, end-to-end tests, GitLab CI → registry, multi-user.

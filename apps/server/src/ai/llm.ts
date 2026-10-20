@@ -117,6 +117,98 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
   };
 }
 
+/**
+ * A chat completion streamed token by token (`onDelta` gets each piece of text). Returns the
+ * full text and the usage OpenRouter reports in its last event.
+ */
+export async function streamChat(
+  opts: Omit<ChatOptions, 'json' | 'webResults'>,
+  onDelta: (text: string) => void,
+): Promise<{ content: string; usage: Usage }> {
+  const body = {
+    model: opts.model,
+    messages: opts.messages,
+    temperature: 0.2,
+    max_tokens: opts.maxTokens,
+    reasoning: { effort: opts.effort ?? 'minimal', exclude: true },
+    usage: { include: true },
+    stream: true,
+  };
+  const signal = opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000);
+  const send = (payload: object) =>
+    fetch(ENDPOINT, {
+      method: 'POST',
+      signal,
+      headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
+      body: JSON.stringify(payload),
+    });
+
+  let res: Response;
+  try {
+    res = await send(body);
+    if (res.status === 400) {
+      const error = (await res.clone().json().catch(() => ({}))) as CompletionResponse;
+      if (/reasoning|effort/i.test(error.error?.message ?? '')) {
+        const { reasoning: _unused, ...withoutReasoning } = body;
+        res = await send(withoutReasoning);
+      }
+    }
+  } catch (error) {
+    if (opts.signal?.aborted) throw new LlmError('Cancelled');
+    throw new LlmError(`Cannot reach OpenRouter: ${(error as Error).message}`);
+  }
+  if (!res.ok || !res.body) {
+    const data = (await res.json().catch(() => ({}))) as CompletionResponse;
+    if (res.status === 401) throw new LlmError('OpenRouter rejected the API key');
+    if (res.status === 402) throw new LlmError('Your OpenRouter credits are used up');
+    if (res.status === 429) throw new LlmError('OpenRouter rate limit reached, try again shortly');
+    throw new LlmError(`OpenRouter error: ${data.error?.message ?? `HTTP ${res.status}`}`);
+  }
+
+  let content = '';
+  let usage = emptyUsage();
+  let buffer = '';
+  const decoder = new TextDecoder();
+  const handle = (line: string) => {
+    // Server-sent events; lines starting with ":" are keep-alive comments.
+    if (!line.startsWith('data:')) return;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') return;
+    const event = JSON.parse(data) as {
+      choices?: { delta?: { content?: string | null } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+      error?: { message?: string };
+    };
+    if (event.error) throw new LlmError(`OpenRouter error: ${event.error.message ?? 'stream failed'}`);
+    const piece = event.choices?.[0]?.delta?.content;
+    if (piece) {
+      content += piece;
+      onDelta(piece);
+    }
+    if (event.usage) {
+      usage = {
+        promptTokens: event.usage.prompt_tokens ?? 0,
+        completionTokens: event.usage.completion_tokens ?? 0,
+        cost: event.usage.cost ?? 0,
+      };
+    }
+  };
+  try {
+    for await (const bytes of res.body as unknown as AsyncIterable<Uint8Array>) {
+      buffer += decoder.decode(bytes, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) handle(line);
+    }
+    handle(buffer);
+  } catch (error) {
+    if (error instanceof LlmError) throw error;
+    if (opts.signal?.aborted) throw new LlmError('Cancelled');
+    throw new LlmError(`The answer was interrupted: ${(error as Error).message}`);
+  }
+  return { content, usage };
+}
+
 /** Pulls the JSON object out of a reply, tolerating code fences or chatter around it. */
 export function parseJsonReply(content: string): unknown {
   const unfenced = content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');

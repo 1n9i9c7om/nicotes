@@ -45,3 +45,33 @@ export async function uploadFile(file: File, pageId?: string): Promise<Attachmen
   if (!res.ok) throw new ApiError(res.status, data);
   return data as Attachment;
 }
+
+/** POSTs JSON and reads the server-sent events of the response, one parsed `data:` object at a time. */
+export async function postStream<E>(path: string, body: unknown, onEvent: (event: E) => void, signal?: AbortSignal) {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text();
+    throw new ApiError(res.status, text ? JSON.parse(text) : null);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const handle = (line: string) => {
+    if (line.startsWith('data:')) onEvent(JSON.parse(line.slice(5)) as E);
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    lines.forEach(handle);
+  }
+  handle(buffer);
+}

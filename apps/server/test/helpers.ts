@@ -38,6 +38,9 @@ export function setup(options: Partial<AppOptions> = {}) {
   }
 
   const raw = (path: string) => app.request(path, { headers: { cookie } });
+  /** POSTs JSON and returns the raw response (e.g. a server-sent event stream). */
+  const rawPost = (path: string, body: unknown) =>
+    app.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  return { db, jobs: app.jobs, call, upload, raw, logout: () => (cookie = '') };
+  return { db, jobs: app.jobs, semantic: app.semantic, call, upload, raw, rawPost, logout: () => (cookie = '') };
 }

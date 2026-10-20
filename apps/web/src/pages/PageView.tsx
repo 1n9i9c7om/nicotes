@@ -1,10 +1,34 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { AlertTriangle, Check, ChevronRight, CloudOff, Code2, Eye, FolderInput, History, Loader2, Wand2, Waypoints, X } from 'lucide-react';
-import type { Page } from '@nicotes/shared';
+import {
+  AlertTriangle,
+  Check,
+  ChevronRight,
+  CloudOff,
+  Code2,
+  Eye,
+  FolderInput,
+  History,
+  Link2,
+  Loader2,
+  Sparkles,
+  Wand2,
+  Waypoints,
+  X,
+} from 'lucide-react';
+import {
+  appendSeeAlso,
+  findPhrase,
+  linkFirstMention,
+  linkMention,
+  type AiLinkSuggestion,
+  type OutgoingMention,
+  type Page,
+} from '@nicotes/shared';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
-import { Backlinks } from '../components/Backlinks';
+import { Connections } from '../components/Connections';
+import { PageSummary } from '../components/PageSummary';
 import { LocalGraph } from '../components/graph/LocalGraph';
 import { HistoryDialog } from '../components/HistoryDialog';
 import { Menu } from '../components/Menu';
@@ -13,7 +37,7 @@ import { TagEditor } from '../components/TagEditor';
 import { ApiError, uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
 import { useLocalState } from '../lib/storage';
-import { useNotebooks, usePage, usePages, useRenamePage, useTags } from '../lib/queries';
+import { useNotebooks, usePage, usePages, useRenamePage, useSuggestLinks, useSummarize, useTags } from '../lib/queries';
 import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 import { NotFound } from './NotFound';
@@ -43,7 +67,12 @@ function PageEditor({ page }: { page: Page }) {
   const notebooks = useNotebooks();
   const pages = usePages();
   const rename = useRenamePage();
-  const { content, setContent, status, conflict, resolveConflict, revision, flush } = useAutosave(page);
+  const { content, setContent, replaceContent, status, conflict, resolveConflict, revision, flush } = useAutosave(page);
+  const saved = usePage(page.id);
+  const version = saved.data?.version ?? page.version;
+  const summarize = useSummarize(page.id);
+  const suggest = useSuggestLinks(page.id);
+  const [suggestRuns, setSuggestRuns] = useState(0);
   const [mode, setMode] = useLocalState<Mode>('nicotes.editorMode', 'visual');
   const [title, setTitle] = useState(page.title);
   const editor = useRef<EditorHandle>(null);
@@ -69,6 +98,25 @@ function PageEditor({ page }: { page: Page }) {
   );
   const notebook = notebooks.data?.find((n) => n.id === page.notebookId);
   const trail = ancestors(tree, page.id);
+
+  const linkHere = (mention: OutgoingMention) => {
+    const next = linkFirstMention(content, mention.title, mention.target);
+    if (next !== null) replaceContent(next);
+  };
+  const linkPhrases = (suggestions: AiLinkSuggestion[]) => {
+    let next = content;
+    for (const s of suggestions) {
+      const found = findPhrase(next, s.phrase);
+      if (found) next = linkMention(next, found, s.target);
+    }
+    if (next !== content) replaceContent(next);
+  };
+  // The server reads the saved text, so unsaved edits are flushed first.
+  const suggestLinks = async () => {
+    await flush();
+    setSuggestRuns((n) => n + 1);
+    suggest.mutate();
+  };
 
   // Keep the title in sync when it is renamed from the sidebar.
   const treeTitle = tree.byId.get(page.id)?.title;
@@ -138,6 +186,12 @@ function PageEditor({ page }: { page: Page }) {
               { label: 'Show in graph', icon: <Waypoints size={15} />, onSelect: () => navigate(`/graph?focus=${page.id}&depth=2`) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
               {
+                label: 'Summarize with AI',
+                icon: <Sparkles size={15} />,
+                onSelect: () => void flush().then(() => summarize.mutate()),
+              },
+              { label: 'Suggest links with AI', icon: <Link2 size={15} />, onSelect: () => void suggestLinks() },
+              {
                 label: 'Organize with AI',
                 icon: <Wand2 size={15} />,
                 onSelect: () =>
@@ -197,6 +251,7 @@ function PageEditor({ page }: { page: Page }) {
           }}
         />
         <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
+        <PageSummary pageId={page.id} version={version} summarize={summarize} />
         {mode === 'visual' ? (
           <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
         ) : (
@@ -204,7 +259,15 @@ function PageEditor({ page }: { page: Page }) {
             <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} {...env} />
           </Suspense>
         )}
-        <Backlinks pageId={page.id} />
+        <Connections
+          pageId={page.id}
+          notebookId={page.notebookId}
+          version={version}
+          onLinkHere={linkHere}
+          onSeeAlso={(target) => replaceContent(appendSeeAlso(content, target))}
+          ai={{ run: suggest, requested: suggestRuns }}
+          onLinkPhrases={linkPhrases}
+        />
         <LocalGraph pageId={page.id} notebookId={page.notebookId} />
       </div>
 

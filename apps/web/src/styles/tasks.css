@@ -1,0 +1,368 @@
+/* Tasks view */
+
+.tasks-page {
+  max-width: 860px;
+}
+
+.tasks-page h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.nav-count.overdue {
+  background: rgb(248 113 113 / 0.14);
+  color: #fca5a5;
+}
+
+/* Quick add */
+
+.task-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 8px 10px 8px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.task-add:focus-within {
+  border-color: var(--accent);
+}
+
+.task-add > input {
+  flex: 1;
+  min-width: 160px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.task-add > input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.task-add .error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.task-add .due-picker:not(.set) .due-chip {
+  opacity: 1;
+}
+
+/* Toolbar */
+
+.tasks-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.tasks-toolbar select {
+  height: 36px;
+  max-width: 200px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-size: 14px;
+}
+
+.tasks-toolbar select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tasks-hidden {
+  margin: -16px 0 24px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.tasks-hidden a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tasks-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 150px;
+  height: 36px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-faint);
+}
+
+.tasks-filter input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.tasks-filter input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.tasks-filter:focus-within {
+  border-color: var(--accent);
+}
+
+/* Groups and rows */
+
+.task-group + .task-group {
+  margin-top: 28px;
+}
+
+.task-group .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-group .section-title a {
+  color: inherit;
+}
+
+.task-group .section-title a:hover {
+  color: var(--accent-strong);
+}
+
+.task-group.bucket-overdue .section-title {
+  color: #fca5a5;
+}
+
+.task-group.bucket-today .section-title {
+  color: var(--accent-strong);
+}
+
+.task-group-count {
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+}
+
+.task-row + .task-row {
+  border-top: 1px solid var(--border);
+}
+
+.task-row:hover {
+  background: var(--bg-hover);
+}
+
+.task-check {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.task-check:hover {
+  border-color: var(--accent);
+}
+
+.task-check:checked {
+  background: var(--gradient);
+  border-color: transparent;
+}
+
+.task-check:checked::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid #04121f;
+  border-bottom: 2px solid #04121f;
+  transform: rotate(-45deg);
+}
+
+.task-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.task-text {
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.task-row.done .task-text {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.task-where {
+  font-size: 13px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-where a {
+  color: var(--text-muted);
+}
+
+.task-where a:hover,
+.task-link:hover {
+  color: var(--accent-strong);
+}
+
+.task-link {
+  color: var(--accent);
+}
+
+.task-link.missing {
+  color: var(--text-muted);
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+/* Due dates */
+
+.due-picker {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.due-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  border: 1px solid transparent;
+}
+
+.due-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.due-picker:not(.set) .due-chip {
+  opacity: 0;
+}
+
+.task-row:hover .due-picker:not(.set) .due-chip,
+.due-picker:not(.set) .due-chip:focus-visible {
+  opacity: 1;
+}
+
+.due-picker.set .due-chip {
+  background: var(--bg-elev-2);
+  color: var(--text-muted);
+}
+
+.due-picker.due-today .due-chip,
+.due-picker.due-tomorrow .due-chip {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.due-picker.due-overdue .due-chip {
+  background: rgb(248 113 113 / 0.12);
+  color: #fca5a5;
+}
+
+.due-picker.due-done .due-chip {
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.due-clear {
+  width: 20px;
+  height: 20px;
+  margin-left: -2px;
+  opacity: 0;
+}
+
+.due-picker:hover .due-clear,
+.due-clear:focus-visible {
+  opacity: 1;
+}
+
+/* The real input only anchors the browser's date picker. */
+.due-input {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 800px) {
+  .due-picker:not(.set) .due-chip {
+    opacity: 1;
+  }
+
+  .tasks-toolbar .segmented button {
+    padding: 0 8px;
+  }
+}

@@ -1,9 +1,16 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, CheckCircle2, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { timeAgo } from '../lib/format';
-import { DEFAULT_OPENROUTER_MODEL, type ConnectionCheck, type SettingSource, type SettingsUpdate } from '@nicotes/shared';
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  type ConnectionCheck,
+  type Settings,
+  type SettingSource,
+  type SettingsUpdate,
+} from '@nicotes/shared';
+import { formatCost } from '../components/JobProgress';
 import {
   exportUrl,
   useAuthStatus,
@@ -12,6 +19,8 @@ import {
   useModels,
   useNotebooks,
   usePages,
+  useSemanticAction,
+  useSemanticStatus,
   useSettings,
   useSignOut,
   useUndoBatch,
@@ -51,6 +60,7 @@ function SettingField({
   secret,
   placeholder,
   listId,
+  allowEmpty,
   onSave,
   pending,
 }: {
@@ -61,6 +71,8 @@ function SettingField({
   secret?: boolean;
   placeholder?: string;
   listId?: string;
+  /** Saving an empty field stores "" (e.g. an empty list); only "Clear" restores the default. */
+  allowEmpty?: boolean;
   onSave: (value: string | null) => void;
   pending: boolean;
 }) {
@@ -69,7 +81,7 @@ function SettingField({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onSave(value.trim() || null);
+    onSave(value.trim() || (allowEmpty ? '' : null));
     if (secret) setValue('');
   };
 
@@ -122,7 +134,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, crawl4ai, ai, daily } = settings.data;
+  const { openrouter, crawl4ai, ai, daily, tasks, semantic } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -285,6 +297,8 @@ export function SettingsPage() {
         )}
       </section>
 
+      <SemanticCard semantic={semantic} apiKeySet={openrouter.apiKeySet} pending={update.isPending} save={save} />
+
       {update.error && <p className="error">{update.error.message}</p>}
 
       <section className="settings-card" id="daily">
@@ -319,6 +333,27 @@ export function SettingsPage() {
             </select>
           </label>
         </div>
+      </section>
+
+      <section className="settings-card" id="tasks">
+        <h2>
+          <ListChecks size={18} /> Tasks
+        </h2>
+        <p className="muted">
+          The task list collects every checkbox. Checklists that are not to-dos, like the ingredients of imported
+          recipes, can be left out by tag (subpages of tags that apply to subpages count too).
+        </p>
+        <SettingField
+          key={`tasks-${tasks.excludeTags.join(',')}`}
+          label="Leave out pages tagged"
+          source={tasks.excludeTagsSource}
+          current={tasks.excludeTags.join(', ')}
+          placeholder="nothing left out"
+          pending={update.isPending}
+          allowEmpty
+          onSave={(v) => save({ tasksExcludeTags: v === null ? null : v.split(/[\s,]+/).filter(Boolean) })}
+          hint="Comma-separated tags; save it empty to include everything. “Clear” goes back to the default (recipe)."
+        />
       </section>
 
       <section className="settings-card">
@@ -373,5 +408,80 @@ export function SettingsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function SemanticCard({
+  semantic,
+  apiKeySet,
+  pending,
+  save,
+}: {
+  semantic: Settings['semantic'];
+  apiKeySet: boolean;
+  pending: boolean;
+  save: (input: SettingsUpdate) => void;
+}) {
+  const status = useSemanticStatus(semantic.enabled);
+  const action = useSemanticAction();
+  const s = semantic.enabled ? status.data : undefined;
+  const percent = s?.pages ? Math.round((s.indexed / s.pages) * 100) : 0;
+
+  return (
+    <section className="settings-card" id="semantic">
+      <h2>
+        <Sparkles size={18} /> Semantic index
+      </h2>
+      <p className="muted">
+        Finds notes by meaning: related pages under each page, “By meaning” results in search and “Ask your notes”.
+        While it is on, the text of your notes is sent to OpenRouter to compute embeddings (with the default model
+        about $0.02 per million words, a few cents for thousands of pages). Switching it off deletes the index.
+      </p>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={semantic.enabled}
+          disabled={pending || (!apiKeySet && !semantic.enabled)}
+          onChange={(e) => save({ semanticIndex: e.target.checked })}
+        />
+        Index my notes
+      </label>
+      {!apiKeySet && <p className="setting-hint">Needs an OpenRouter API key (see above).</p>}
+      {s && (
+        <div className="semantic-status" role="status">
+          <div className="semantic-bar" aria-hidden="true">
+            <span style={{ width: `${percent}%` }} />
+          </div>
+          <span className="muted">
+            {s.indexed} of {s.pages} pages indexed · {s.chunks} passages · {formatCost(s.cost)} so far
+            {s.indexed < s.pages && !s.error && ' · indexing…'}
+          </span>
+          {s.error && (
+            <p className="check fail">
+              <XCircle size={15} /> {s.error}
+              <button className="btn btn-sm" disabled={action.isPending} onClick={() => action.mutate('retry')}>
+                Retry now
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+      <SettingField
+        key={`emb-${semantic.model}`}
+        label="Embedding model"
+        source={semantic.modelSource}
+        current={semantic.model}
+        pending={pending}
+        onSave={(v) => save({ embeddingModel: v })}
+        hint="Any OpenRouter embedding model. Changing it rebuilds the index; multilingual models match notes across languages."
+      />
+      {semantic.enabled && (
+        <div className="setting-actions">
+          <button className="btn" disabled={action.isPending} onClick={() => action.mutate('rebuild')}>
+            <RotateCcw size={14} /> Rebuild index
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

@@ -28,5 +28,7 @@ export function plainExcerpt(text: string): string {
     // Excerpts can start in the middle of a checkbox: "…x] Defeat Margit".
     .replace(/(^|[\s…])[ xX]?\] /g, '$1')
     .replace(/\*\*|__|~~|`/g, '')
+    // List markers at line starts ("- Monday: pasta").
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
     .replace(/\s+/g, ' ');
 }

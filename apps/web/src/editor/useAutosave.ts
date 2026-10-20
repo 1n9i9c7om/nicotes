@@ -8,6 +8,7 @@ export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
 
 const DEBOUNCE_MS = 800;
 const RETRY_MS = 5000;
+const HAS_TASK = /\[[ xX]\]/;
 
 /**
  * Debounced autosave for a page's Markdown content with optimistic concurrency.
@@ -41,6 +42,10 @@ export function useAutosave(page: Page) {
     try {
       const result = await api.patch<Page>(`/pages/${page.id}`, { content: body, baseVersion: version.current });
       version.current = result.version;
+      // The task list re-reads pages with checkboxes the next time it is shown.
+      if (HAS_TASK.test(body) || HAS_TASK.test(saved.current)) {
+        qc.invalidateQueries({ queryKey: keys.tasks, refetchType: 'none' });
+      }
       saved.current = body;
       qc.setQueryData(keys.page(page.id), result);
       qc.setQueryData<PageSummary[]>(keys.pages, (list) =>
@@ -74,6 +79,15 @@ export function useAutosave(page: Page) {
       timer.current = setTimeout(save, DEBOUNCE_MS);
     },
     [save],
+  );
+
+  /** Replaces the text programmatically (e.g. linking a mention): editors remount with it. */
+  const replaceContent = useCallback(
+    (markdown: string) => {
+      setContent(markdown);
+      setRevision((r) => r + 1);
+    },
+    [setContent],
   );
 
   /** Resolve a conflict by keeping the local text (overwrite) or loading the server copy. */
@@ -127,5 +141,5 @@ export function useAutosave(page: Page) {
     };
   }, [save]);
 
-  return { content, setContent, status, conflict, resolveConflict, revision, flush: save };
+  return { content, setContent, replaceContent, status, conflict, resolveConflict, revision, flush: save };
 }

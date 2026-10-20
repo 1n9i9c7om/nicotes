@@ -2,16 +2,16 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Hash, Search, TextSearch } from 'lucide-react';
+import { FileText, Hash, MessageCircleQuestion, Search, Sparkles, TextSearch } from 'lucide-react';
 import { MATCH_END, MATCH_START } from '@nicotes/shared';
 import { plainExcerpt } from '../lib/format';
 import { fuzzyFilter } from '../lib/fuzzy';
-import { searchPages, useNotebooks, usePages, useTags } from '../lib/queries';
+import { searchPages, semanticSearch, useNotebooks, usePages, useSettings, useTags } from '../lib/queries';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 
 interface Item {
   key: string;
-  kind: 'page' | 'tag' | 'content';
+  kind: 'page' | 'tag' | 'content' | 'meaning' | 'ask';
   label: string;
   detail: ReactNode;
   href: string;
@@ -45,7 +45,7 @@ export function Excerpt({ text }: { text: string }) {
   );
 }
 
-const ICONS = { page: FileText, tag: Hash, content: TextSearch };
+const ICONS = { page: FileText, tag: Hash, content: TextSearch, meaning: Sparkles, ask: MessageCircleQuestion };
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -57,12 +57,23 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const list = useRef<HTMLUListElement>(null);
   const q = query.trim();
   const debounced = useDebounced(q, 200);
+  // Searching by meaning costs an embedding call, so it waits for a longer pause.
+  const slow = useDebounced(q, 450);
+  const settings = useSettings();
+  const semanticOn = !!settings.data?.semantic.enabled;
 
   const content = useQuery({
     queryKey: ['search', debounced],
     queryFn: () => searchPages(debounced),
     enabled: debounced.length >= 2 || debounced.startsWith('#'),
     staleTime: 10_000,
+  });
+
+  const meaning = useQuery({
+    queryKey: ['semantic-search', slow],
+    queryFn: () => semanticSearch(slow),
+    enabled: semanticOn && slow.length >= 3 && !slow.startsWith('#'),
+    staleTime: 60_000,
   });
 
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
@@ -107,8 +118,27 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               href: `/p/${r.id}`,
             }))
         : [];
-    return [...pageItems, ...tagItems, ...contentItems];
-  }, [q, debounced, pages.data, tags.data, content.data, tree, notebookTitle]);
+    for (const item of contentItems) shown.add(`p:${item.key.slice(2)}`);
+    const meaningItems: Item[] =
+      q && slow === q
+        ? (meaning.data?.results ?? [])
+            .filter((r) => !shown.has(`p:${r.id}`))
+            .slice(0, 5)
+            .map((r) => ({
+              key: `m:${r.id}`,
+              kind: 'meaning',
+              label: displayTitle(r.title),
+              detail: plainExcerpt(r.excerpt) || where(r.id, r.notebookId),
+              href: `/p/${r.id}`,
+            }))
+        : [];
+    // Questions can go straight to "Ask your notes".
+    const askItems: Item[] =
+      semanticOn && q.length >= 3 && !isTagQuery && (q.endsWith('?') || q.split(/\s+/).length >= 3)
+        ? [{ key: 'ask', kind: 'ask', label: `Ask your notes: “${q}”`, detail: '', href: `/ask?q=${encodeURIComponent(q)}` }]
+        : [];
+    return [...pageItems, ...tagItems, ...contentItems, ...meaningItems, ...askItems];
+  }, [q, debounced, slow, pages.data, tags.data, content.data, meaning.data, semanticOn, tree, notebookTitle]);
 
   useEffect(() => setActive(0), [q]);
   useEffect(() => {
@@ -123,7 +153,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const sectionTitle = (item: Item, i: number) => {
     if (i > 0 && items[i - 1]!.kind === item.kind) return null;
-    const titles = { page: q ? 'Pages' : 'Recent', tag: 'Tags', content: 'In page content' };
+    const titles = { page: q ? 'Pages' : 'Recent', tag: 'Tags', content: 'In page content', meaning: 'By meaning', ask: 'Ask' };
     return <li className="palette-section">{titles[item.kind]}</li>;
   };
 

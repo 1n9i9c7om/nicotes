@@ -4,7 +4,9 @@ import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import {
   DEFAULT_AI_COST_LIMIT,
+  DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_TASK_EXCLUDE_TAGS,
   settingsUpdateSchema,
   type ConnectionCheck,
   type ModelInfo,
@@ -29,6 +31,9 @@ const KEYS = {
   aiCostLimit: { key: 'ai.costLimit', secret: false },
   dailyNotebookId: { key: 'daily.notebookId', secret: false },
   dailyTemplateId: { key: 'daily.templateId', secret: false },
+  tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
+  semanticIndex: { key: 'ai.semanticIndex', secret: false },
+  embeddingModel: { key: 'ai.embeddingModel', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -42,10 +47,14 @@ export interface ImportConfig {
   searxngUrl: string | null;
   /** USD per AI job. */
   costLimit: number;
+  semanticIndex: boolean;
+  embeddingModel: string;
 }
 export type AiConfig = ImportConfig;
 
 export class SettingsStore {
+  private listeners: ((userId: string, input: SettingsUpdate) => void)[] = [];
+
   constructor(
     private db: Db,
     private box: SecretBox,
@@ -84,6 +93,9 @@ export class SettingsStore {
       costLimit: pick('aiCostLimit', String(DEFAULT_AI_COST_LIMIT)),
       dailyNotebook: pick('dailyNotebookId'),
       dailyTemplate: pick('dailyTemplateId'),
+      excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
+      semanticIndex: pick('semanticIndex', 'false'),
+      embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
     };
   }
 
@@ -112,6 +124,13 @@ export class SettingsStore {
         costLimitSource: r.costLimit.source,
       },
       daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
+      tasks: { excludeTags: parseList(r.excludeTags.value), excludeTagsSource: r.excludeTags.source },
+      semantic: {
+        enabled: r.semanticIndex.value === 'true',
+        enabledSource: r.semanticIndex.source,
+        model: r.embeddingModel.value!,
+        modelSource: r.embeddingModel.source,
+      },
     };
   }
 
@@ -125,7 +144,14 @@ export class SettingsStore {
       researchModel: r.researchModel.value ?? r.model.value!,
       searxngUrl: r.searxng.value?.replace(/\/+$/, '') ?? null,
       costLimit: Number(r.costLimit.value) || DEFAULT_AI_COST_LIMIT,
+      semanticIndex: r.semanticIndex.value === 'true',
+      embeddingModel: r.embeddingModel.value!,
     };
+  }
+
+  /** Called after every update, e.g. to start or clear the semantic index. */
+  onUpdate(listener: (userId: string, input: SettingsUpdate) => void) {
+    this.listeners.push(listener);
   }
 
   update(userId: string, input: SettingsUpdate) {
@@ -140,7 +166,8 @@ export class SettingsStore {
           tx.delete(settings).where(where).run();
           continue;
         }
-        const text = String(value);
+        // Lists are stored as JSON, so an empty list stays distinct from "not set".
+        const text = Array.isArray(value) ? JSON.stringify(value) : String(value);
         const stored = def.secret ? this.box.encrypt(text) : text;
         tx.insert(settings)
           .values({ userId, key: def.key, value: stored, updatedAt: now })
@@ -148,6 +175,16 @@ export class SettingsStore {
           .run();
       }
     });
+    for (const listener of this.listeners) listener(userId, input);
+  }
+}
+
+function parseList(value: string | null): string[] {
+  try {
+    const list = JSON.parse(value ?? '[]') as unknown;
+    return Array.isArray(list) ? list.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
   }
 }
 

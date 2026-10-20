@@ -28,6 +28,8 @@ export const config = {
     researchModel: process.env.OPENROUTER_RESEARCH_MODEL?.trim() || undefined,
     searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
+    embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,
+    semanticIndex: process.env.NICOTES_SEMANTIC_INDEX?.trim() || undefined,
   },
 };
 

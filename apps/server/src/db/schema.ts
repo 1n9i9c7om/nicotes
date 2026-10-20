@@ -1,4 +1,5 @@
 import {
+  blob,
   index,
   integer,
   primaryKey,
@@ -222,3 +223,62 @@ export const dailyNotes = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.date] })],
 );
+
+/**
+ * Semantic index: embedding vectors of page chunks (unit length, float32). Only filled when the
+ * user enabled it; rebuilt per page when its version, title or the embedding model changes.
+ */
+export const pageChunks = sqliteTable(
+  'page_chunks',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    ord: integer('ord').notNull(),
+    heading: text('heading').notNull().default(''),
+    text: text('text').notNull(),
+    /** Hash of model + embedded input, to reuse vectors of unchanged chunks. */
+    hash: text('hash').notNull(),
+    vector: blob('vector', { mode: 'buffer' }).notNull(),
+  },
+  (t) => [index('page_chunks_page_idx').on(t.pageId), index('page_chunks_user_idx').on(t.userId)],
+);
+
+/** Which state of a page the semantic index holds. */
+export const pageIndex = sqliteTable(
+  'page_index',
+  {
+    pageId: text('page_id')
+      .primaryKey()
+      .references(() => pages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    title: text('title').notNull(),
+    model: text('model').notNull(),
+    indexedAt: integer('indexed_at').notNull(),
+    /** USD spent on embeddings for this page so far. */
+    cost: real('cost').notNull().default(0),
+  },
+  (t) => [index('page_index_user_idx').on(t.userId)],
+);
+
+/** AI summaries of pages, shown above their content; `version` tells whether they are stale. */
+export const pageSummaries = sqliteTable('page_summaries', {
+  pageId: text('page_id')
+    .primaryKey()
+    .references(() => pages.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  summary: text('summary').notNull(),
+  version: integer('version').notNull(),
+  model: text('model').notNull(),
+  cost: real('cost').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+});

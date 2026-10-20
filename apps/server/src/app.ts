@@ -8,6 +8,10 @@ import { secureHeaders } from 'hono/secure-headers';
 import { jobRoutes, JobRunner } from './ai/jobs.js';
 import { aiRoutes, organizeJob } from './ai/organize.js';
 import { researchJob } from './ai/research.js';
+import type { Embedder } from './ai/embeddings.js';
+import { SemanticIndex, semanticRoutes } from './ai/semantic.js';
+import { askRoutes } from './ai/ask.js';
+import { insightRoutes } from './ai/insight.js';
 import { requireAuth } from './auth.js';
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
@@ -17,9 +21,11 @@ import { authRoutes } from './routes/auth.js';
 import { dailyRoutes } from './routes/daily.js';
 import { exportRoutes } from './routes/export.js';
 import { graphRoutes } from './routes/graph.js';
+import { mentionRoutes } from './routes/mentions.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
+import { taskRoutes } from './routes/tasks.js';
 import { tagRoutes } from './routes/tags.js';
 import { trashRoutes } from './routes/trash.js';
 import { SecretBox } from './secrets.js';
@@ -38,6 +44,9 @@ export interface AppOptions {
   settingsEnv?: Config['env'];
   /** Allow imports from private network hosts. */
   importAllowPrivate?: boolean;
+  /** Tests: a fake embedder, and no waiting for typing to pause before indexing. */
+  embedder?: Embedder;
+  semanticQuietMs?: number;
 }
 
 export function createApp({
@@ -48,12 +57,24 @@ export function createApp({
   secret,
   settingsEnv = {} as Config['env'],
   importAllowPrivate = false,
+  embedder,
+  semanticQuietMs,
 }: AppOptions) {
   const app = new Hono();
   const settings = new SettingsStore(db, SecretBox.load(dataDir, secret), settingsEnv);
   const jobs = new JobRunner(db, settings);
   jobs.register('organize', organizeJob(db));
   jobs.register('research', researchJob(db, importAllowPrivate));
+  const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
+  settings.onUpdate((userId, input) => {
+    if (input.semanticIndex === undefined && input.embeddingModel === undefined && input.openrouterApiKey === undefined) return;
+    // Switched off, the index is deleted; switched on, or with another model or key, it (re)builds.
+    if (!settings.effective(userId).semanticIndex) semantic.clear(userId);
+    else {
+      semantic.retry(userId);
+      semantic.poke();
+    }
+  });
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
@@ -96,12 +117,13 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
   app.route('/api/notebooks', notebookRoutes(db));
   app.route('/api/pages', pageRoutes(db));
+  app.route('/api/pages', mentionRoutes(db));
   app.route('/api/tags', tagRoutes(db));
   app.route('/api/search', searchRoutes(db));
   app.route('/api/attachments', attachmentRoutes(db, dataDir));
@@ -111,7 +133,11 @@ export function createApp({
   app.route('/api/jobs', jobRoutes(jobs));
   app.route('/api/graph', graphRoutes(db));
   app.route('/api/daily', dailyRoutes(db, settings));
+  app.route('/api/tasks', taskRoutes(db, settings));
+  app.route('/api/semantic', semanticRoutes(db, semantic));
   app.route('/api/ai', aiRoutes(db, jobs));
+  app.route('/api/ai', askRoutes(db, settings, semantic));
+  app.route('/api/ai', insightRoutes(db, settings, semantic));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
@@ -143,5 +169,5 @@ export function createApp({
     });
   }
 
-  return Object.assign(app, { jobs });
+  return Object.assign(app, { jobs, semantic });
 }

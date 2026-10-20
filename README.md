@@ -23,6 +23,23 @@ graph. **Today** opens the daily note (filed as Journal › year › month, see 
 the calendar). Any page tagged `#template` can be used for new pages and daily notes, with
 `{{date}}`, `{{time}}`, `{{weekday}}` and `{{title}}` placeholders.
 
+### Tasks and connections
+
+Every `- [ ]` checkbox in any page shows up under **Tasks**, grouped by due date
+(`📅 2026-10-25` in the text, or pick a date in the list); ticking one off there updates its
+page, and new tasks go into today's journal note. Checklists of pages tagged `#recipe` stay
+out (Settings → Tasks). Below each page, **Connections** shows backlinks, **unlinked
+mentions** (pages that name each other without a link, linked with one click) and, with
+the semantic index, **related** pages.
+
+### Ask your notes (optional)
+
+With an OpenRouter key, **Ask** answers questions from your own notes with numbered
+sources, and the page menu can **summarize** a page or **suggest links** to other pages.
+Switch on the **semantic index** (Settings) to find notes by meaning — related pages,
+"By meaning" results in search, better answers. It sends the text of your notes to
+OpenRouter for embeddings (with the default model a few cents for thousands of pages).
+
 ### Research & organize (optional)
 
 With an OpenRouter key, **Research** answers a question by searching the web, reading the

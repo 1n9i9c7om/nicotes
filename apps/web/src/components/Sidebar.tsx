@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronRight,
   LayoutTemplate,
+  ListChecks,
   Download,
   FileDown,
   FilePlus,
@@ -13,6 +14,7 @@ import {
   Hash,
   House,
   LogOut,
+  MessageCircleQuestion,
   Palette,
   Pencil,
   Plus,
@@ -37,10 +39,11 @@ import {
   useRenamePage,
   useSignOut,
   useTags,
+  useTasks,
   exportUrl,
 } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
-import { useOpenDailyNote } from '../lib/daily';
+import { localDate, useOpenDailyNote } from '../lib/daily';
 import { buildTree, childrenOf, displayTitle, isDescendant, rootKey, type PageTree } from '../lib/tree';
 import { TemplateDialog } from './TemplateDialog';
 import { Menu } from './Menu';
@@ -191,14 +194,21 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/journal" className="nav-item">
             <CalendarDays size={16} /> Journal
           </NavLink>
-          <NavLink to="/import" className="nav-item">
-            <Download size={16} /> Import
+          <NavLink to="/tasks" className="nav-item">
+            <ListChecks size={16} /> Tasks
+            <DueCount />
+          </NavLink>
+          <NavLink to="/ask" className="nav-item">
+            <MessageCircleQuestion size={16} /> Ask
           </NavLink>
           <NavLink to="/graph" className="nav-item">
             <Waypoints size={16} /> Graph
           </NavLink>
           <NavLink to="/research" className="nav-item">
             <Telescope size={16} /> Research
+          </NavLink>
+          <NavLink to="/import" className="nav-item">
+            <Download size={16} /> Import
           </NavLink>
 
           <div className="sidebar-section">
@@ -515,5 +525,19 @@ function RenameInput({ page, onDone }: { page: PageSummary; onDone: () => void }
         if (e.key === 'Escape') finish(false);
       }}
     />
+  );
+}
+
+/** Open tasks due today or earlier, as a small badge on the Tasks entry. */
+function DueCount() {
+  const tasks = useTasks();
+  const today = localDate();
+  const due = (tasks.data ?? []).filter((t) => !t.done && t.due && t.due <= today);
+  if (!due.length) return null;
+  const overdue = due.some((t) => t.due! < today);
+  return (
+    <span className={overdue ? 'nav-count overdue' : 'nav-count'} title={`${due.length} due today or overdue`}>
+      {due.length}
+    </span>
   );
 }
