@@ -54,6 +54,9 @@ export function ResearchPage() {
 
   const active = job.data && (job.data.status === 'queued' || job.data.status === 'running');
   const result = job.data?.status === 'done' ? job.data.result : null;
+  // Runs outlive their notes: a deleted note must not be linked as if it still existed.
+  const live = useMemo(() => new Set((pages.data ?? []).map((p) => p.id)), [pages.data]);
+  const isDeleted = (r: ResearchResult | null) => !!r && !!pages.data && !live.has(r.pageId);
 
   return (
     <div className="content research">
@@ -75,9 +78,15 @@ export function ResearchPage() {
               <span className="muted">
                 {result.sources} sources via {result.searchProvider === 'searxng' ? 'SearXNG' : 'OpenRouter web search'}
               </span>
-              <Link className="btn btn-primary" to={`/p/${result.pageId}`}>
-                Open “{result.title}” <ArrowRight size={15} />
-              </Link>
+              {isDeleted(result) ? (
+                <span className="muted">
+                  “{result.title}” was deleted. <Link to="/trash">Restore it from the trash</Link>
+                </span>
+              ) : (
+                <Link className="btn btn-primary" to={`/p/${result.pageId}`}>
+                  Open “{result.title}” <ArrowRight size={15} />
+                </Link>
+              )}
             </div>
           )}
           {!active && (
@@ -177,7 +186,12 @@ export function ResearchPage() {
           <h2 className="section-title">Recent research</h2>
           <ul className="recent-list">
             {history.data.map((j) => (
-              <RecentResearch key={j.id} job={j} onOpen={() => setParams({ job: j.id })} />
+              <RecentResearch
+                key={j.id}
+                job={j}
+                deleted={isDeleted(j.result as ResearchResult | null)}
+                onOpen={() => setParams({ job: j.id })}
+              />
             ))}
           </ul>
         </section>
@@ -186,16 +200,16 @@ export function ResearchPage() {
   );
 }
 
-function RecentResearch({ job, onOpen }: { job: Job; onOpen: () => void }) {
+function RecentResearch({ job, deleted, onOpen }: { job: Job; deleted: boolean; onOpen: () => void }) {
   const result = job.result as ResearchResult | null;
   const input = job.input as ResearchRequest;
   return (
     <li>
-      <button className="recent-item research-item" onClick={onOpen}>
+      <button className={deleted ? 'recent-item research-item deleted' : 'recent-item research-item'} onClick={onOpen}>
         <FileText size={16} className="muted" />
         <span className="recent-title">{result?.title ?? input.question}</span>
         <span className="recent-meta">
-          {job.status === 'done' ? `${result?.sources} sources` : job.status} · {formatCost(job.cost)}
+          {deleted ? 'deleted' : job.status === 'done' ? `${result?.sources} sources` : job.status} · {formatCost(job.cost)}
         </span>
         <span className="recent-time">{timeAgo(job.createdAt)}</span>
       </button>

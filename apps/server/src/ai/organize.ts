@@ -21,6 +21,7 @@ import { propagateRenames, type Tx } from '../links.js';
 import { applyMove, descendantIds, siblingIndex } from '../routes/pages.js';
 import { inheritedTags, setPageTags, tagsByPage } from '../routes/tags.js';
 import { deletionTime } from '../routes/trash.js';
+import { guessLanguage, languageName } from './language.js';
 import { completeJson } from './llm.js';
 import type { JobContext, JobRunner } from './jobs.js';
 
@@ -62,7 +63,7 @@ const replySchema = z.object({
 });
 
 const SYSTEM = `You help organise a personal notes app. Notes live in notebooks as a tree of pages and can carry tags.
-Reply with one JSON object only. Write reasons in the language of the notes, one short sentence each.`;
+Reply with one JSON object only. Reasons are one short sentence each.`;
 
 function instructions(opts: { tags: boolean; moves: boolean; groups: boolean }) {
   const parts = [
@@ -165,6 +166,10 @@ export function organizeJob(db: Db) {
       .join('\n');
     const vocabText = [...vocabulary.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`).join(', ') || '(none yet)';
 
+    // Small models drift into other languages unless told explicitly (one run answered in Danish).
+    const sample = inScope.map((p) => `${p.title} ${plainExcerpt(p.content)}`).join(' ').slice(0, 6000);
+    const reasonLanguage = languageName(guessLanguage(sample) ?? 'en');
+
     const suggestions: OrganizeSuggestion[] = [];
     let n = 0;
     const nextId = () => `s${++n}`;
@@ -184,7 +189,7 @@ export function organizeJob(db: Db) {
         apiKey: cfg.openrouterApiKey!,
         model: cfg.model,
         system: SYSTEM,
-        user: `${instructions(input)}\n\nEXISTING TAGS: ${vocabText}\n\nPARENT OPTIONS (id | path):\n${parentOptions}\n\nPAGES TO REVIEW (id | path | tags | beginning):\n${list}`,
+        user: `${instructions(input)}\nWrite all reasons in ${reasonLanguage}.\n\nEXISTING TAGS: ${vocabText}\n\nPARENT OPTIONS (id | path):\n${parentOptions}\n\nPAGES TO REVIEW (id | path | tags | beginning):\n${list}`,
         schema: replySchema,
         maxTokens: 4000,
         signal: ctx.signal,

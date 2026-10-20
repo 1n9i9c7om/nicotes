@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { FileText, GitFork, Hash, Pencil, Trash2 } from 'lucide-react';
-import { normalizeTag } from '@nicotes/shared';
+import { normalizeTag, TEMPLATE_TAG } from '@nicotes/shared';
 import { Menu } from '../components/Menu';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { timeAgo } from '../lib/format';
@@ -26,8 +26,9 @@ export function TagView() {
 
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
   const tag = tags.data?.find((t) => t.name === tagName);
+  // Templates hand their tags on to new pages; they are not content of the hub.
   const tagged = (pages.data ?? [])
-    .filter((p) => p.tags.includes(tagName))
+    .filter((p) => p.tags.includes(tagName) && (tagName === TEMPLATE_TAG || !p.tags.includes(TEMPLATE_TAG)))
     .sort((a, b) => a.title.localeCompare(b.title));
   const notebookById = new Map(notebooks.data?.map((n) => [n.id, n]));
   const inheritedCount = useMemo(() => {
@@ -93,7 +94,7 @@ export function TagView() {
                 <Link to={`/p/${page.id}`} className="card-title hub-title">
                   {displayTitle(page.title)}
                 </Link>
-                <span className="card-meta">{where}</span>
+                <span className="card-meta hub-where">{where}</span>
                 {kids.length > 0 && (
                   <ul className="hub-subpages">
                     {kids.slice(0, SUBPAGE_PREVIEW).map((kid) => (

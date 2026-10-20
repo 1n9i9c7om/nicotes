@@ -1,4 +1,4 @@
-import type { GraphLinks, Notebook, PageSummary, Tag } from '@nicotes/shared';
+import { TEMPLATE_TAG, type GraphLinks, type Notebook, type PageSummary, type Tag } from '@nicotes/shared';
 import { effectiveTags, inheritedTagMap } from './tags';
 import { displayTitle } from './tree';
 
@@ -68,12 +68,14 @@ export const missingNodeId = (target: string) => `missing:${target.trim().toLowe
 export function buildGraph(input: GraphInput, opt: GraphOptions): { nodes: GraphNode[]; links: GraphEdge[] } {
   const colors = new Map(input.notebooks.map((n) => [n.id, n.color]));
   const inherited = inheritedTagMap(input.pages, input.tags);
-  const focusing = !!opt.focus && input.pages.some((p) => p.id === opt.focus);
+  const focusing = !!opt.focus && input.pages.some((p) => p.id === opt.focus && !p.tags.includes(TEMPLATE_TAG));
 
-  // In focus mode everything is a candidate: neighbourhoods cross notebooks.
+  // Templates are scaffolding, not knowledge. In focus mode everything else is a candidate:
+  // neighbourhoods cross notebooks.
+  const content = input.pages.filter((p) => !p.tags.includes(TEMPLATE_TAG));
   const pages = focusing
-    ? input.pages
-    : input.pages.filter(
+    ? content
+    : content.filter(
         (p) =>
           (!opt.notebookId || p.notebookId === opt.notebookId) &&
           (!opt.tag || effectiveTags(p, inherited).includes(opt.tag)),

@@ -8,6 +8,7 @@ import { indexPageLinks } from '../links.js';
 import { newId } from '../ids.js';
 import { setPageTags } from '../routes/tags.js';
 import type { AiConfig } from '../settings.js';
+import { guessLanguage, languageName } from './language.js';
 import { chat, completeJson, LlmError } from './llm.js';
 import { mapLimit, type JobContext } from './jobs.js';
 
@@ -122,13 +123,15 @@ export function researchJob(db: Db, allowPrivate: boolean) {
       .get();
     if (!notebook) throw new LlmError('The target notebook no longer exists');
 
-    // 1. Plan
+    // 1. Plan. The model sometimes misjudges the language, so a confident local guess is
+    // stated explicitly and wins over the model's answer.
     ctx.step('Planning searches…');
+    const guessed = guessLanguage(input.question);
     const plan = await completeJson({
       apiKey: cfg.openrouterApiKey!,
       model,
       system: 'You plan web research for a notes app. Reply with one JSON object only.',
-      user: `Research question:\n${input.question}\n\nReply as {"title": "<short note title in the question's language>", "language": "<ISO 639-1 code of the question>", "queries": ["<${depth.queries} diverse web search queries, mostly in the question's language; add English ones when that finds better sources>"], "labels": {"question": "<'Research question' in that language>", "sources": "<'Sources'>", "openQuestions": "<'Open questions'>"}}`,
+      user: `Research question:\n${input.question}\n\n${guessed ? `The question is written in ${languageName(guessed)}; title and labels must be in ${languageName(guessed)}.\n\n` : ''}Reply as {"title": "<short note title in the question's language>", "language": "<ISO 639-1 code of the question>", "queries": ["<${depth.queries} diverse web search queries, mostly in the question's language; add English ones when that finds better sources>"], "labels": {"question": "<'Research question' in that language>", "sources": "<'Sources'>", "openQuestions": "<'Open questions'>"}}`,
       schema: z.object({
         title: z.string().min(1),
         language: z.string().default('en'),
@@ -141,6 +144,8 @@ export function researchJob(db: Db, allowPrivate: boolean) {
       signal: ctx.signal,
     });
     ctx.charge(plan.usage);
+    const language = guessed ?? plan.data.language;
+    const writeIn = languageName(language);
     const queries = plan.data.queries.slice(0, depth.queries);
 
     // 2. Search
@@ -151,7 +156,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
       try {
         results.push(
           provider === 'searxng'
-            ? await searchSearxng(cfg.searxngUrl!, query, plan.data.language, ctx.signal)
+            ? await searchSearxng(cfg.searxngUrl!, query, language, ctx.signal)
             : await searchOpenRouter(ctx, query),
         );
       } catch (error) {
@@ -189,7 +194,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
           apiKey: cfg.openrouterApiKey!,
           model,
           system: 'You take research notes from one web page. Reply with one JSON object only. Only use facts stated on the page.',
-          user: `Research question: ${input.question}\nWrite in language: ${plan.data.language}\n\nReply as {"relevant": true|false, "summary": "<2-4 sentences on what this source says about the question>", "facts": ["<specific facts, numbers, steps or claims relevant to the question>"]}\n\nSource: ${title} (${c.url})\n\n${text.slice(0, SOURCE_CHARS)}`,
+          user: `Research question: ${input.question}\nWrite in ${writeIn}.\n\nReply as {"relevant": true|false, "summary": "<2-4 sentences on what this source says about the question>", "facts": ["<specific facts, numbers, steps or claims relevant to the question>"]}\n\nSource: ${title} (${c.url})\n\n${text.slice(0, SOURCE_CHARS)}`,
           schema: noteSchema,
           maxTokens: 1500,
           signal: ctx.signal,
@@ -224,7 +229,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
         },
         {
           role: 'user',
-          content: `Question: ${input.question}\nLanguage: ${plan.data.language}\n\nStructure: a short summary paragraph first, then sections with "## " headings covering the findings (lists and tables where they help), and finally "## ${plan.data.labels.openQuestions}" with what the sources leave unclear or disagree on.\n\nSOURCE NOTES:\n${sourceText}`,
+          content: `Question: ${input.question}\nWrite the whole note in ${writeIn}, including headings.\n\nStructure: a short summary paragraph first, then sections with "## " headings covering the findings (lists and tables where they help), and finally "## ${plan.data.labels.openQuestions}" with what the sources leave unclear or disagree on.\n\nSOURCE NOTES:\n${sourceText}`,
         },
       ],
     });

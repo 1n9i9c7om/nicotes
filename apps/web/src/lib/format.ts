@@ -25,6 +25,8 @@ export function plainExcerpt(text: string): string {
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target: string, label?: string) => label ?? target)
     .replace(/(^|\s)#{1,6}\s/g, '$1')
     .replace(/(^|\s)[-*+] \[[ xX]\] /g, '$1')
+    // Excerpts can start in the middle of a checkbox: "…x] Defeat Margit".
+    .replace(/(^|[\s…])[ xX]?\] /g, '$1')
     .replace(/\*\*|__|~~|`/g, '')
     .replace(/\s+/g, ' ');
 }

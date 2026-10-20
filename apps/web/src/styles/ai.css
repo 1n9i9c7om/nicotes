@@ -131,6 +131,15 @@
   text-align: left;
 }
 
+.research-item.deleted .recent-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.research .import-card + .section {
+  margin-top: 32px;
+}
+
 /* ---------- Organize ---------- */
 
 .organize-result {

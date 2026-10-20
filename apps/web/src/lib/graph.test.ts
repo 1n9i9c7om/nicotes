@@ -58,6 +58,12 @@ describe('buildGraph', () => {
     expect(g.nodes.find((n) => n.id === 'tag:gaming')).toMatchObject({ kind: 'tag', label: '#gaming', degree: 2 });
   });
 
+  it('leaves template pages out', () => {
+    const withTemplate = { ...input, pages: [...input.pages, page('tpl', 'games', null, ['template', 'gaming'])] };
+    expect(ids(buildGraph(withTemplate, DEFAULT_GRAPH_OPTIONS))).not.toContain('tpl');
+    expect(ids(buildGraph(withTemplate, { ...DEFAULT_GRAPH_OPTIONS, tag: 'gaming' }))).not.toContain('tpl');
+  });
+
   it('shows the neighbourhood of a focused page across notebooks', () => {
     const one = buildGraph(input, { ...DEFAULT_GRAPH_OPTIONS, notebookId: 'games', focus: 'factorio', depth: 1 });
     expect(ids(one)).toEqual(['elden', 'factorio']);

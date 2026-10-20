@@ -225,6 +225,11 @@
   min-height: 0;
 }
 
+/* Only the timestamp sits at the bottom; the location stays under the title. */
+.hub-card .hub-where {
+  margin-top: 0;
+}
+
 .hub-title:hover {
   color: var(--accent-strong);
 }
@@ -532,4 +537,9 @@
     grid-column: 2;
     text-align: left;
   }
+}
+
+/* The palette field already shows focus; no extra ring around the input itself. */
+.palette-input:focus-visible {
+  box-shadow: none;
 }
