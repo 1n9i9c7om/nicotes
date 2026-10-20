@@ -22,8 +22,11 @@ export const VisualEditor = forwardRef<EditorHandle, Props>(function VisualEdito
     contentType: 'markdown',
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
-    editorProps: { attributes: { class: 'prose', spellcheck: 'true' } },
-    onUpdate: ({ editor }) => onChange(editor.getMarkdown()),
+    editorProps: {
+      attributes: { class: 'prose', spellcheck: 'true', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Page content' },
+    },
+    // The serializer ends lists with blank lines; stored Markdown should not grow them.
+    onUpdate: ({ editor }) => onChange(editor.getMarkdown().replace(/\n+$/, '')),
   });
 
   // Focus synchronously: TipTap's focus command waits for an animation frame, which lets

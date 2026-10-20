@@ -80,13 +80,15 @@ function PageEditor({ page }: { page: Page }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const bridge = useLinkBridge(page.notebookId);
+  const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
+  const summary = tree.byId.get(page.id);
+  // The page may be moved while open ("Move to…"); the tree has its current notebook.
+  const notebookId = summary?.notebookId ?? page.notebookId;
+  const bridge = useLinkBridge(notebookId);
   const upload = useCallback((file: File) => uploadFile(file, page.id), [page.id]);
   const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
   const env = { bridge, upload, onUploadError };
 
-  const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
-  const summary = tree.byId.get(page.id);
   const tagList = useTags();
   const inherited = useMemo(
     () =>
@@ -96,7 +98,7 @@ function PageEditor({ page }: { page: Page }) {
       })),
     [pages.data, tagList.data, page.id, tree],
   );
-  const notebook = notebooks.data?.find((n) => n.id === page.notebookId);
+  const notebook = notebooks.data?.find((n) => n.id === notebookId);
   const trail = ancestors(tree, page.id);
 
   const linkHere = (mention: OutgoingMention) => {
@@ -261,14 +263,14 @@ function PageEditor({ page }: { page: Page }) {
         )}
         <Connections
           pageId={page.id}
-          notebookId={page.notebookId}
+          notebookId={notebookId}
           version={version}
           onLinkHere={linkHere}
           onSeeAlso={(target) => replaceContent(appendSeeAlso(content, target))}
           ai={{ run: suggest, requested: suggestRuns }}
           onLinkPhrases={linkPhrases}
         />
-        <LocalGraph pageId={page.id} notebookId={page.notebookId} />
+        <LocalGraph pageId={page.id} notebookId={notebookId} />
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}

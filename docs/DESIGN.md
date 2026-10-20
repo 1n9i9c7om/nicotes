@@ -343,4 +343,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 7. ✅ **Connections & insight** — connections panel (backlinks, unlinked mentions, related
    pages, AI link suggestions), tasks across pages with due dates, semantic index with
    search by meaning, "Ask your notes" with citations, page summaries.
-8. **Later** — ✅ automatic backups, end-to-end tests, GitLab CI → registry, multi-user.
+8. ✅ **Hardening** — automatic backups with restore, Playwright end-to-end tests
+   (`npm run e2e`), a model per AI feature.
+9. **Later** — GitLab CI → registry, multi-user.

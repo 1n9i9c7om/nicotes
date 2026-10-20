@@ -12,7 +12,8 @@
     "start": "npm run start -w apps/server",
     "restore": "npm run restore -w apps/server --",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "e2e": "npm run build && npm run e2e -w apps/e2e --"
   },
   "engines": {
     "node": ">=24"

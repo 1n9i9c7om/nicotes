@@ -5,3 +5,6 @@ data
 .git
 .env
 *.log
+apps/e2e/.auth
+apps/e2e/test-results
+apps/e2e/playwright-report

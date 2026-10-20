@@ -12,6 +12,7 @@ FROM toolchain AS build
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/e2e/package.json apps/e2e/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci
 COPY . .
@@ -22,6 +23,7 @@ FROM toolchain AS deps
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/e2e/package.json apps/e2e/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci --omit=dev --workspace @nicotes/server --include-workspace-root=false
 
