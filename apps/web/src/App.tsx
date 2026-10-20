@@ -9,6 +9,8 @@ import { Login } from './pages/Login';
 import { NotebookView } from './pages/NotebookView';
 import { NotFound } from './pages/NotFound';
 import { PageView } from './pages/PageView';
+import { ImportPage } from './pages/ImportPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { TagView } from './pages/TagView';
 
 export function App() {
@@ -35,6 +37,8 @@ export function App() {
         <Route path="n/:notebookId" element={<NotebookView />} />
         <Route path="p/:pageId" element={<PageView />} />
         <Route path="t/:tagName" element={<TagView />} />
+        <Route path="import" element={<ImportPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

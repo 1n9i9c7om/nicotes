@@ -451,13 +451,15 @@
 .prose img {
   display: block;
   max-width: 100%;
+  max-height: 420px;
+  width: auto;
   height: auto;
   margin: 1em 0;
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
 
-.prose img.ProseMirror-selectednode {
+.ProseMirror-focused img.ProseMirror-selectednode {
   outline: 2px solid var(--accent);
 }
 

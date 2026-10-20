@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import type {
   AuthStatus,
   Backlink,
+  ConnectionCheck,
   Credentials,
+  ImportPreview,
+  ImportRequest,
+  ModelInfo,
   Notebook,
   NotebookCreate,
   NotebookUpdate,
@@ -12,6 +16,8 @@ import type {
   PageSummary,
   RenameResult,
   SearchResult,
+  Settings,
+  SettingsUpdate,
   Tag,
   TagUpdate,
   User,
@@ -25,6 +31,8 @@ export const keys = {
   page: (id: string) => ['page', id] as const,
   backlinks: (id: string) => ['backlinks', id] as const,
   tags: ['tags'] as const,
+  settings: ['settings'] as const,
+  models: ['models'] as const,
 };
 
 /**
@@ -266,3 +274,32 @@ export function useDeleteTag() {
 // ---------- Search ----------
 
 export const searchPages = (q: string) => api.get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`);
+
+// ---------- Settings & import ----------
+
+export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: () => api.get<Settings>('/settings') });
+
+export function useUpdateSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SettingsUpdate) => api.patch<Settings>('/settings', input),
+    onSuccess: (settings) => qc.setQueryData(keys.settings, settings),
+  });
+}
+
+export const useCheckConnection = () =>
+  useMutation({
+    mutationFn: (target: 'openrouter' | 'crawl4ai') => api.post<ConnectionCheck>('/settings/check', { target }),
+  });
+
+/** OpenRouter's model list for the picker; loaded on demand. */
+export const useModels = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.models,
+    queryFn: () => api.get<ModelInfo[]>('/settings/models'),
+    enabled,
+    staleTime: 60 * 60 * 1000,
+  });
+
+export const useImportPreview = () =>
+  useMutation({ mutationFn: (input: ImportRequest) => api.post<ImportPreview>('/import/preview', input) });

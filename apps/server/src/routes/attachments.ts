@@ -30,6 +30,31 @@ const safeName = (name: string) =>
 
 const urlFor = (id: string, filename: string) => `/api/attachments/${id}/${encodeURIComponent(filename)}`;
 
+/** Writes a file to the attachment store and records it. */
+export async function storeAttachment(
+  db: Db,
+  dataDir: string,
+  file: { userId: string; pageId: string | null; filename: string; mime: string; bytes: Buffer },
+): Promise<Attachment> {
+  const dir = join(dataDir, 'attachments');
+  const id = newId();
+  const filename = safeName(file.filename);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, id), file.bytes);
+  db.insert(attachments)
+    .values({
+      id,
+      userId: file.userId,
+      pageId: file.pageId,
+      filename,
+      mime: file.mime,
+      size: file.bytes.length,
+      createdAt: Date.now(),
+    })
+    .run();
+  return { id, url: urlFor(id, filename), filename, mime: file.mime, size: file.bytes.length };
+}
+
 export function attachmentRoutes(db: Db, dataDir: string) {
   const dir = join(dataDir, 'attachments');
 
@@ -57,16 +82,13 @@ export function attachmentRoutes(db: Db, dataDir: string) {
           if (!page) throw notFound('Page');
         }
 
-        const id = newId();
-        const filename = safeName(file.name);
-        const mime = file.type || 'application/octet-stream';
-        await mkdir(dir, { recursive: true });
-        await writeFile(join(dir, id), Buffer.from(await file.arrayBuffer()));
-        db.insert(attachments)
-          .values({ id, userId, pageId, filename, mime, size: file.size, createdAt: Date.now() })
-          .run();
-
-        const result: Attachment = { id, url: urlFor(id, filename), filename, mime, size: file.size };
+        const result = await storeAttachment(db, dataDir, {
+          userId,
+          pageId,
+          filename: file.name,
+          mime: file.type || 'application/octet-stream',
+          bytes: Buffer.from(await file.arrayBuffer()),
+        });
         return c.json(result, 201);
       },
     )

@@ -4,20 +4,31 @@ import { Hash, Plus, X } from 'lucide-react';
 import { normalizeTag } from '@nicotes/shared';
 import { useSetPageTags, useTags } from '../lib/queries';
 
-/** Tag chips under the page title, with an inline input to add more. */
+/** Tag chips under the page title, saved to the page right away. */
 export function TagEditor({ pageId, tags }: { pageId: string; tags: string[] }) {
-  const allTags = useTags();
   const setTags = useSetPageTags();
+  return <TagChips tags={tags} onChange={(next) => setTags.mutate({ id: pageId, tags: next })} />;
+}
+
+/** Controlled tag chips with an inline input; `linked` makes chips open the tag hub. */
+export function TagChips({
+  tags,
+  onChange,
+  linked = true,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  linked?: boolean;
+}) {
+  const allTags = useTags();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState('');
   const listId = useId();
 
-  const save = (next: string[]) => setTags.mutate({ id: pageId, tags: next });
-
   const add = () => {
     const tag = normalizeTag(value);
     setValue('');
-    if (tag && !tags.includes(tag)) save([...tags, tag]);
+    if (tag && !tags.includes(tag)) onChange([...tags, tag]);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -28,7 +39,7 @@ export function TagEditor({ pageId, tags }: { pageId: string; tags: string[] }) 
       setValue('');
       setAdding(false);
     } else if (e.key === 'Backspace' && !value && tags.length) {
-      save(tags.slice(0, -1));
+      onChange(tags.slice(0, -1));
     }
   };
 
@@ -36,11 +47,23 @@ export function TagEditor({ pageId, tags }: { pageId: string; tags: string[] }) 
     <div className="tag-editor">
       {tags.map((tag) => (
         <span key={tag} className="tag-chip">
-          <Link to={`/t/${encodeURIComponent(tag)}`} className="tag-chip-link">
-            <Hash size={12} />
-            {tag}
-          </Link>
-          <button className="tag-chip-remove" aria-label={`Remove tag ${tag}`} onClick={() => save(tags.filter((t) => t !== tag))}>
+          {linked ? (
+            <Link to={`/t/${encodeURIComponent(tag)}`} className="tag-chip-link">
+              <Hash size={12} />
+              {tag}
+            </Link>
+          ) : (
+            <span className="tag-chip-link">
+              <Hash size={12} />
+              {tag}
+            </span>
+          )}
+          <button
+            type="button"
+            className="tag-chip-remove"
+            aria-label={`Remove tag ${tag}`}
+            onClick={() => onChange(tags.filter((t) => t !== tag))}
+          >
             <X size={12} />
           </button>
         </span>
@@ -65,7 +88,7 @@ export function TagEditor({ pageId, tags }: { pageId: string; tags: string[] }) 
           </datalist>
         </>
       ) : (
-        <button className="tag-add" onClick={() => setAdding(true)}>
+        <button type="button" className="tag-add" onClick={() => setAdding(true)}>
           <Plus size={12} /> {tags.length ? 'Tag' : 'Add tag'}
         </button>
       )}

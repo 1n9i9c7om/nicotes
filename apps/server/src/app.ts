@@ -6,13 +6,17 @@ import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
 import { requireAuth } from './auth.js';
+import type { Config } from './config.js';
 import type { Db } from './db/index.js';
+import { importRoutes } from './import/routes.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
 import { tagRoutes } from './routes/tags.js';
+import { SecretBox } from './secrets.js';
+import { settingsRoutes, SettingsStore } from './settings.js';
 
 export interface AppOptions {
   db: Db;
@@ -21,10 +25,25 @@ export interface AppOptions {
   dataDir: string;
   /** Directory with the built web app; omitted in tests. */
   webDir?: string;
+  /** Key material for stored secrets (NICOTES_SECRET); a key file in dataDir otherwise. */
+  secret?: string;
+  /** Environment defaults for user settings. */
+  settingsEnv?: Config['env'];
+  /** Allow imports from private network hosts. */
+  importAllowPrivate?: boolean;
 }
 
-export function createApp({ db, secureCookies, dataDir, webDir }: AppOptions) {
+export function createApp({
+  db,
+  secureCookies,
+  dataDir,
+  webDir,
+  secret,
+  settingsEnv = {} as Config['env'],
+  importAllowPrivate = false,
+}: AppOptions) {
   const app = new Hono();
+  const settings = new SettingsStore(db, SecretBox.load(dataDir, secret), settingsEnv);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
@@ -67,7 +86,7 @@ export function createApp({ db, secureCookies, dataDir, webDir }: AppOptions) {
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -76,6 +95,8 @@ export function createApp({ db, secureCookies, dataDir, webDir }: AppOptions) {
   app.route('/api/tags', tagRoutes(db));
   app.route('/api/search', searchRoutes(db));
   app.route('/api/attachments', attachmentRoutes(db, dataDir));
+  app.route('/api/settings', settingsRoutes(settings));
+  app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
   if (webDir && existsSync(join(webDir, 'index.html'))) {

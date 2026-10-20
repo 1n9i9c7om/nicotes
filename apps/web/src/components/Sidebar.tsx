@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState, type DragEvent, t
 import { NavLink, useNavigate } from 'react-router';
 import {
   ChevronRight,
+  Download,
   FilePlus,
   FileText,
   FolderInput,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   Trash2,
   X,
 } from 'lucide-react';
@@ -169,6 +171,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/" end className="nav-item">
             <House size={16} /> Home
           </NavLink>
+          <NavLink to="/import" className="nav-item">
+            <Download size={16} /> Import
+          </NavLink>
 
           <div className="sidebar-section">
             <span>Notebooks</span>
@@ -209,6 +214,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
             {user.username.slice(0, 1).toUpperCase()}
           </span>
           <span className="sidebar-user">{user.username}</span>
+          <NavLink to="/settings" className="icon-btn" aria-label="Settings" title="Settings">
+            <Settings size={16} />
+          </NavLink>
           <button className="icon-btn" aria-label="Sign out" title="Sign out" onClick={() => signOut.mutate()}>
             <LogOut size={16} />
           </button>

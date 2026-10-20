@@ -2,16 +2,16 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApp } from '../src/app.js';
+import { createApp, type AppOptions } from '../src/app.js';
 import { openDb } from '../src/db/index.js';
 
 export const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
 export const dataDir = mkdtempSync(join(tmpdir(), 'nicotes-test-'));
 
 /** In-memory app plus a tiny cookie-keeping client. */
-export function setup() {
+export function setup(options: Partial<AppOptions> = {}) {
   const db = openDb(':memory:', migrationsFolder);
-  const app = createApp({ db, secureCookies: false, dataDir });
+  const app = createApp({ db, secureCookies: false, dataDir, secret: 'test-secret', ...options });
   let cookie = '';
 
   async function call<T = unknown>(method: string, path: string, body?: unknown) {
@@ -39,5 +39,5 @@ export function setup() {
 
   const raw = (path: string) => app.request(path, { headers: { cookie } });
 
-  return { call, upload, raw, logout: () => (cookie = '') };
+  return { db, call, upload, raw, logout: () => (cookie = '') };
 }

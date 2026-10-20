@@ -15,4 +15,17 @@ export const config = {
   secureCookies: process.env.NICOTES_SECURE_COOKIES === 'true',
   adminUser: process.env.NICOTES_ADMIN_USER?.trim() || undefined,
   adminPassword: process.env.NICOTES_ADMIN_PASSWORD || undefined,
+  /** Key material for encrypting stored secrets; generated into DATA_DIR when unset. */
+  secret: process.env.NICOTES_SECRET || undefined,
+  /** Lets imports fetch hosts on private networks (off by default: SSRF protection). */
+  importAllowPrivate: process.env.NICOTES_IMPORT_ALLOW_PRIVATE === 'true',
+  /** Defaults for settings users can override in the UI. */
+  env: {
+    openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
+    openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
+    crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
+    crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
+  },
 };
+
+export type Config = typeof config;

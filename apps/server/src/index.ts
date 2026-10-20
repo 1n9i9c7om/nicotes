@@ -17,7 +17,15 @@ setInterval(() => purgeExpiredSessions(db), 60 * 60 * 1000).unref();
 
 reindexAllLinks(db);
 
-const app = createApp({ db, secureCookies: config.secureCookies, dataDir: config.dataDir, webDir: config.webDir });
+const app = createApp({
+  db,
+  secureCookies: config.secureCookies,
+  dataDir: config.dataDir,
+  webDir: config.webDir,
+  secret: config.secret,
+  settingsEnv: config.env,
+  importAllowPrivate: config.importAllowPrivate,
+});
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Nicotes listening on http://localhost:${info.port} (data: ${config.dataDir})`);

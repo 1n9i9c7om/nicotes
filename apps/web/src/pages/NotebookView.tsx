@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { FilePlus, Palette } from 'lucide-react';
+import { Download, FilePlus, Palette } from 'lucide-react';
 import { NotebookDialog } from '../components/NotebookDialog';
 import { timeAgo } from '../lib/format';
 import { useCreatePage, useNotebooks, usePages } from '../lib/queries';
@@ -41,6 +41,9 @@ export function NotebookView() {
           <button className="btn" onClick={() => setEditing(true)}>
             <Palette size={16} /> Edit
           </button>
+          <Link className="btn" to={`/import?notebook=${notebook.id}`}>
+            <Download size={16} /> Import
+          </Link>
           <button className="btn btn-primary" onClick={addPage} disabled={createPage.isPending}>
             <FilePlus size={16} /> New page
           </button>

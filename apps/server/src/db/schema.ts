@@ -134,3 +134,17 @@ export const attachments = sqliteTable(
   },
   (t) => [index('attachments_user_idx').on(t.userId)],
 );
+
+/** Per-user key/value settings. Secret values are stored encrypted (see secrets.ts). */
+export const settings = sqliteTable(
+  'settings',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);

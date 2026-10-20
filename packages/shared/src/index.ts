@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizeTag } from './tags';
 
 export * from './tags';
+export * from './importing';
 export * from './wikilinks';
 
 // ---------- Auth ----------

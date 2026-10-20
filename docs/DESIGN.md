@@ -131,29 +131,35 @@ and tsup respectively).
 - **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
   and plain text display inline; everything else downloads.
 
-### Smart Import (Phase 3)
+### Smart Import
 
 ```
-URL ─► fetch ─► 1. schema.org JSON-LD? ─► 2. clean text ─► 3. LLM → JSON ─► 4. template ─► preview ─► page
+URL ─► crawl4ai /crawl (if configured) ─┐
+   └─► direct fetch (SSRF-guarded) ─────┴─► JSON-LD · og meta · Readability → Markdown
+        ─► Recipe in JSON-LD? ── yes ─► recipe template (no LLM)
+                              └─ no ──► LLM: classify (if "Detect") → extract JSON ─► profile template
+        ─► no API key / LLM error ─► clip of the page text
+   ─► cover image saved as attachment ─► preview (editable) ─► page
 ```
 
-1. **Structured data first.** Many sites embed `schema.org/Recipe` (or Article, Product,
-   Event) as JSON-LD. When present it is used directly — free and exact.
-2. **Content extraction.** If `CRAWL4AI_URL` is configured, the self-hosted crawl4ai
-   service fetches and renders the page (handles JS-heavy sites) and returns Markdown.
-   Otherwise the server fetches the HTML itself and extracts the main content with
-   Mozilla Readability.
-3. **LLM via OpenRouter** (`OPENROUTER_API_KEY`, configurable model). Content is mapped
-   to an *import profile* schema and validated with Zod; one retry on invalid output.
-4. **Template.** Each profile renders to Markdown — e.g. *Recipe*: ingredients as a
-   checklist first, then numbered steps. Source URL, import date and image are kept.
-
-Profiles: Recipe, Article (summary + key points), Product, Event, Generic. Detected from
-JSON-LD `@type` or an LLM guess; always overridable. Fallback: paste text/HTML manually.
-
-Safety: server-side fetching only (API keys never reach the browser); block private /
-loopback / link-local addresses (SSRF) unless explicitly allowed; size and time limits;
-token cap per import. Android PWA share target posts URLs straight into the importer.
+- **Profiles:** Recipe (ingredients checklist, numbered steps, sections), Article (summary
+  + key points, optional full text), Product (specs table, pros/cons), Event, Generic.
+  "Detect" uses the JSON-LD `@type`, else a short classification call.
+- **LLM:** OpenRouter chat completions in JSON mode; the expected shape is given as a
+  TypeScript type in the prompt and validated with Zod, with one corrective retry
+  (`z-ai/glm-5.3-flashx` has JSON mode but no strict schema support). Output keeps the
+  page's language; page text is capped at 40k characters. Token usage is shown.
+- **crawl4ai** (0.9.x, `POST /crawl`, Bearer token, pruning content filter). Readability
+  runs on crawl4ai's rendered HTML, which is usually cleaner than its Markdown. If
+  crawl4ai fails, the built-in fetcher is used and a warning shown.
+- **SSRF protection:** only http(s); every connection (including each redirect hop) goes
+  through a DNS lookup that rejects loopback, private, link-local, CGNAT, multicast and
+  NAT64 addresses, so DNS rebinding cannot bypass it. Targets handed to crawl4ai are
+  checked the same way. 8 MB / 15 s limits. `NICOTES_IMPORT_ALLOW_PRIVATE=true` lifts it.
+- **Settings:** per account (`settings` table) with environment variables as defaults;
+  API key and crawl4ai token are AES-256-GCM encrypted with `NICOTES_SECRET` or a key file
+  generated in the data directory, and never returned to the browser.
+- The import page is a route (`/import?url=…`) so the PWA share target can use it.
 
 ## Configuration
 
@@ -163,8 +169,10 @@ token cap per import. Android PWA share target posts URLs straight into the impo
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and attachments |
 | `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start |
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | — | Smart Import LLM (Phase 3) |
-| `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai extraction (Phase 3) |
+| `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | Import LLM (overridable in Settings) |
+| `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
+| `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 
 ## Roadmap
 
@@ -173,7 +181,7 @@ token cap per import. Android PWA share target posts URLs straight into the impo
 2. ✅ **Linking** — `[[wikilinks]]` with autocomplete and rename propagation, backlinks,
    tags + tag hubs, Ctrl+K quick switcher, full-text search, attachments, and a
    touch-friendly "Move to…" dialog (native drag & drop does not work on phones).
-3. **Smart Import** — JSON-LD, crawl4ai / Readability, OpenRouter, profiles, preview.
+3. ✅ **Smart Import** — JSON-LD, crawl4ai / Readability, OpenRouter, profiles, preview.
    Builds the shared LLM + fetching layer that phase 5 reuses.
 4. **Safety nets & mobile** — version history (with restore), trash UI, `.md` zip export
    (Obsidian-compatible folders + frontmatter), PWA install + Android share target

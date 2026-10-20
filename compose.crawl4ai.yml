@@ -1,0 +1,19 @@
+# Optional: a local crawl4ai instance for development or self-hosting next to Nicotes.
+#
+#   docker compose -f compose.crawl4ai.yml up -d
+#
+# Then set CRAWL4AI_URL (or Settings → Import) to http://localhost:11235 for `npm run dev`,
+# or http://crawl4ai:11235 when Nicotes runs in the same compose project.
+services:
+  crawl4ai:
+    image: unclecode/crawl4ai:0.9.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11235:11235"
+    environment:
+      # Required since crawl4ai 0.9: without a token the API only answers inside the
+      # container. Nicotes sends the same value as CRAWL4AI_TOKEN (Bearer auth).
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_TOKEN:?Set CRAWL4AI_TOKEN in .env}
+      CRAWL4AI_NO_CLOUD_NOTICE: "1"
+    # Headless Chromium needs a larger /dev/shm than Docker's 64 MB default.
+    shm_size: 1g
