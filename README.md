@@ -96,5 +96,23 @@ npm test
 npm run build      # production build of web + server
 ```
 
+### End-to-end tests
+
+`apps/e2e` drives the real web UI with [Playwright](https://playwright.dev) against the built
+server, started on free ports with throwaway data dirs in the system temp folder (one with a
+test account from `NICOTES_ADMIN_USER`, one empty for the first-run setup screen). AI features
+are not covered: the test servers run without an OpenRouter key and all outbound requests
+go to a dead proxy.
+
+```bash
+npx playwright install chromium   # once; without it the installed Microsoft Edge is used
+npm run e2e                       # builds web + server, then runs all specs
+```
+
+After a build, run specs directly with `npm run e2e -w apps/e2e -- tests/editor.spec.ts`
+(add `--headed` or `--ui` to watch). Set `E2E_CHANNEL=msedge` (or `chrome`) to pick a
+browser. Failures leave a trace in `apps/e2e/test-results`
+(`npx playwright show-trace <file>`).
+
 Database schema changes: edit `apps/server/src/db/schema.ts`, then
 `npm run db:generate -w apps/server` and commit the generated migration.
