@@ -9,6 +9,7 @@ import {
   Eye,
   FolderInput,
   History,
+  LayoutTemplate,
   Link2,
   Loader2,
   Sparkles,
@@ -31,6 +32,7 @@ import { Connections } from '../components/Connections';
 import { PageSummary } from '../components/PageSummary';
 import { LocalGraph } from '../components/graph/LocalGraph';
 import { HistoryDialog } from '../components/HistoryDialog';
+import { PageLayout } from '../components/layouts/PageLayout';
 import { Menu } from '../components/Menu';
 import { MoveDialog } from '../components/MoveDialog';
 import { TagEditor } from '../components/TagEditor';
@@ -74,6 +76,15 @@ function PageEditor({ page }: { page: Page }) {
   const suggest = useSuggestLinks(page.id);
   const [suggestRuns, setSuggestRuns] = useState(0);
   const [mode, setMode] = useLocalState<Mode>('nicotes.editorMode', 'visual');
+  // The interactive view is remembered per page (a recipe opens in cook view, notes in the editor).
+  const [viewPages, setViewPages] = useLocalState<string[]>('nicotes.viewPages', []);
+  const viewing = viewPages.includes(page.id);
+  const showView = (on: boolean) =>
+    setViewPages((list) => (on ? [...list.filter((id) => id !== page.id), page.id].slice(-500) : list.filter((id) => id !== page.id)));
+  const editIn = (next: Mode) => {
+    setMode(next);
+    showView(false);
+  };
   const [title, setTitle] = useState(page.title);
   const editor = useRef<EditorHandle>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
@@ -202,11 +213,27 @@ function PageEditor({ page }: { page: Page }) {
             ]}
           />
           <div className="segmented" role="group" aria-label="Editor mode">
-            <button className={mode === 'visual' ? 'active' : ''} aria-pressed={mode === 'visual'} onClick={() => setMode('visual')}>
+            <button
+              className={!viewing && mode === 'visual' ? 'active' : ''}
+              aria-pressed={!viewing && mode === 'visual'}
+              onClick={() => editIn('visual')}
+            >
               <Eye size={15} /> <span>Visual</span>
             </button>
-            <button className={mode === 'source' ? 'active' : ''} aria-pressed={mode === 'source'} onClick={() => setMode('source')}>
+            <button
+              className={!viewing && mode === 'source' ? 'active' : ''}
+              aria-pressed={!viewing && mode === 'source'}
+              onClick={() => editIn('source')}
+            >
               <Code2 size={15} /> <span>Markdown</span>
+            </button>
+            <button
+              className={viewing ? 'active' : ''}
+              aria-pressed={viewing}
+              title="Interactive view: checklist, recipe, guide or reader"
+              onClick={() => showView(true)}
+            >
+              <LayoutTemplate size={15} /> <span>View</span>
             </button>
           </div>
         </div>
@@ -254,7 +281,18 @@ function PageEditor({ page }: { page: Page }) {
         />
         <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
         <PageSummary pageId={page.id} version={version} summarize={summarize} />
-        {mode === 'visual' ? (
+        {viewing ? (
+          <PageLayout
+            pageId={page.id}
+            notebookId={notebookId}
+            title={title}
+            content={content}
+            tags={summary?.tags ?? page.tags}
+            version={version}
+            onChange={replaceContent}
+            flush={flush}
+          />
+        ) : mode === 'visual' ? (
           <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
         ) : (
           <Suspense fallback={null}>

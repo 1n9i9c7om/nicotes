@@ -33,13 +33,13 @@ const LINK_INPUT_CHARS = 8_000;
 const MAX_CANDIDATES = 120;
 const MAX_LINK_SUGGESTIONS = 8;
 
-function requireKey(cfg: AiConfig) {
+export function requireKey(cfg: AiConfig) {
   if (!cfg.openrouterApiKey) throw new HTTPException(400, { message: 'This needs an OpenRouter API key — add one under Settings.' });
   return cfg.openrouterApiKey;
 }
 
 /** LLM failures are the upstream's fault, not ours: 502 with the readable message. */
-async function upstream<T>(work: () => Promise<T>): Promise<T> {
+export async function upstream<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {

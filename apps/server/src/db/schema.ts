@@ -282,3 +282,26 @@ export const pageSummaries = sqliteTable('page_summaries', {
   cost: real('cost').notNull().default(0),
   createdAt: integer('created_at').notNull(),
 });
+
+/**
+ * How a page is shown in the interactive view (see shared/layout.ts), when the AI chose it or
+ * the user picked one; pages without a row use the instant heuristic.
+ */
+export const pageLayouts = sqliteTable('page_layouts', {
+  pageId: text('page_id')
+    .primaryKey()
+    .references(() => pages.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** LayoutSpec as JSON. */
+  spec: text('spec').notNull(),
+  /** Page version the layout was made for. */
+  version: integer('version').notNull(),
+  /** 'ai' | 'manual' */
+  source: text('source').notNull(),
+  model: text('model'),
+  cost: real('cost').notNull().default(0),
+  reason: text('reason').notNull().default(''),
+  createdAt: integer('created_at').notNull(),
+});

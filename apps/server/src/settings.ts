@@ -36,6 +36,7 @@ const KEYS = {
   askModel: { key: 'ai.model.ask', secret: false },
   summaryModel: { key: 'ai.model.summary', secret: false },
   linksModel: { key: 'ai.model.links', secret: false },
+  layoutModel: { key: 'ai.model.layout', secret: false },
   searxngUrl: { key: 'ai.searxngUrl', secret: false },
   aiCostLimit: { key: 'ai.costLimit', secret: false },
   dailyNotebookId: { key: 'daily.notebookId', secret: false },

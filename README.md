@@ -32,6 +32,15 @@ out (Settings → Tasks). Below each page, **Connections** shows backlinks, **un
 mentions** (pages that name each other without a link, linked with one click) and, with
 the semantic index, **related** pages.
 
+### Interactive views
+
+Next to Visual and Markdown, **View** shows a page the way its content wants to be used: a
+checklist to tick and drag around, a recipe with adjustable servings, timers and a
+full-screen cook mode, a step-by-step guide, or a reader that reads stories aloud and
+highlights the current sentence. The layout is detected automatically; with an OpenRouter
+key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
+yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
+
 ### Ask your notes (optional)
 
 With an OpenRouter key, **Ask** answers questions from your own notes with numbered

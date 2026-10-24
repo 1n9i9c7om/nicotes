@@ -72,6 +72,18 @@ function List({ items, ordered, env }: { items: { depth: number; text: string }[
   );
 }
 
+/** One line of Markdown (emphasis, code, links, [[wikilinks]]) as React elements. */
+export function InlineMarkdown({ text, notebookId }: { text: string; notebookId?: string }) {
+  const ctx = useLinkContext();
+  const env: InlineEnv = {
+    linkTo: (target) => {
+      const page = resolveWikilink(ctx, target, notebookId);
+      return page ? `/p/${page.id}` : null;
+    },
+  };
+  return <>{inline(text, env)}</>;
+}
+
 /**
  * Renders the Markdown subset that AI answers use (paragraphs, headings, lists, quotes, code,
  * emphasis, links, [[wikilinks]] and [n] citations) as React elements, so it can never inject HTML.

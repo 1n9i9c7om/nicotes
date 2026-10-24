@@ -2,12 +2,17 @@ import { z } from 'zod';
 import { normalizeTag } from './tags';
 
 export * from './ai';
+export * from './blocks';
 export * from './backups';
 export * from './tags';
 export * from './history';
 export * from './importing';
 export * from './insight';
+export * from './language';
+export * from './layout';
+export * from './listEdits';
 export * from './mentions';
+export * from './recipe';
 export * from './sections';
 export * from './tasks';
 export * from './wikilinks';

@@ -12,6 +12,7 @@ import type { Embedder } from './ai/embeddings.js';
 import { SemanticIndex, semanticRoutes } from './ai/semantic.js';
 import { askRoutes } from './ai/ask.js';
 import { insightRoutes } from './ai/insight.js';
+import { layoutRoutes } from './ai/layout.js';
 import { requireAuth } from './auth.js';
 import { backupRoutes } from './backup/routes.js';
 import { BackupService, type BackupOptions } from './backup/service.js';
@@ -150,6 +151,7 @@ export function createApp({
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', insightRoutes(db, settings, semantic));
+  app.route('/api/ai', layoutRoutes(db, settings));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

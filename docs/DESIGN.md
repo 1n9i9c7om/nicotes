@@ -271,6 +271,30 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   meaning, or most recent, plus pages it names) and returns phrases to link; each phrase
   must be found in the text outside code and links before it is offered.
 
+### Interactive page views
+
+- **View mode** (next to Visual and Markdown, remembered per page) shows a page in a layout
+  that fits its content: **checklist** (tick, add, edit, delete, drag & drop or arrow keys to
+  reorder, hide done, undo), **recipe** (servings scale the amounts, ingredients to tick off,
+  steps with timers, full-screen cook mode with wake lock), **guide** (steps one at a time),
+  **reader** (read aloud with the browser's speech synthesis, sentence and word highlighting,
+  position remembered) and **document** (clean read view).
+- **Blocks:** `shared/blocks.ts` splits Markdown into headings, lists (items with line ranges,
+  depth, checkbox state), paragraphs, quotes, code, tables and images. Each block has a key
+  from its kind, the headings above it and its position under them (`list:Ingredients:0`), so
+  a layout keeps pointing at the right parts while the page is edited.
+- **Layout spec:** type, language, servings and block keys for ingredients, steps and checklist
+  lists (`shared/layout.ts`). A heuristic picks one instantly (ingredient/step headings in
+  several languages, share of checkboxes, amount of prose, numbered lists) with a confidence;
+  below 0.75, and with an API key, the AI is asked once (`POST /api/ai/layout/:pageId`). It
+  sees one line per block with numbered ids and answers with the type and ids, which the server
+  checks and turns into keys; missing parts come from the heuristic. Users can pick a type by
+  hand (`PUT`) or go back to automatic (`DELETE`); choices live in `page_layouts`.
+- **Two-way:** views never render HTML from the model. Their actions are line edits
+  (`shared/listEdits.ts`: tick, set text, add, remove, move with nested items) applied to the
+  editor's text, so they autosave, show up in version history and can be undone in the view.
+  Recipe check-offs and servings are temporary on purpose: cooking should not change the note.
+
 ### Backups
 
 - **Archive:** `nicotes-<UTC time>.tar.gz` with `manifest.json` (format version, time,
@@ -308,7 +332,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
@@ -345,4 +369,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    search by meaning, "Ask your notes" with citations, page summaries.
 8. ✅ **Hardening** — automatic backups with restore, Playwright end-to-end tests
    (`npm run e2e`), a model per AI feature.
-9. **Later** — GitLab CI → registry, multi-user.
+9. ✅ **Interactive views** — checklist, recipe with cook mode, guide, reader with
+   read-aloud, chosen by heuristics or the AI and editing the page's Markdown.
+10. **Later** — GitLab CI → registry, multi-user.

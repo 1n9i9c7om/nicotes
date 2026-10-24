@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AiBatch,
+  LayoutType,
+  PageLayoutInfo,
   AiLinkSuggestions,
   PageSummaryInfo,
   AuthStatus,
@@ -67,6 +69,7 @@ export const keys = {
   semantic: ['semantic-status'] as const,
   related: (id: string) => ['related', id] as const,
   summary: (id: string) => ['summary', id] as const,
+  layout: (id: string) => ['layout', id] as const,
 };
 
 /**
@@ -656,3 +659,30 @@ export function useDeleteSummary(id: string) {
 
 export const useSuggestLinks = (id: string) =>
   useMutation({ mutationFn: () => api.post<AiLinkSuggestions>(`/ai/link-suggestions/${id}`) });
+
+// ---------- Page layouts ----------
+
+/** The stored layout of a page (AI-chosen or hand-picked), or null for automatic. */
+export const usePageLayout = (id: string, version?: number) =>
+  useQuery({
+    queryKey: [...keys.layout(id), version],
+    queryFn: () => api.get<PageLayoutInfo | null>(`/ai/layout/${id}`),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+
+export function useLayoutActions(id: string) {
+  const qc = useQueryClient();
+  const done = () => qc.invalidateQueries({ queryKey: keys.layout(id) });
+  return {
+    analyze: useMutation({
+      mutationFn: (type?: LayoutType) => api.post<PageLayoutInfo>(`/ai/layout/${id}`, type ? { type } : {}),
+      onSuccess: done,
+    }),
+    choose: useMutation({
+      mutationFn: (type: LayoutType) => api.put<PageLayoutInfo>(`/ai/layout/${id}`, { type }),
+      onSuccess: done,
+    }),
+    reset: useMutation({ mutationFn: () => api.delete(`/ai/layout/${id}`), onSuccess: done }),
+  };
+}

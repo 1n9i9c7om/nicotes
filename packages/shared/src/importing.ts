@@ -12,7 +12,7 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
-export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'summary', 'links'] as const;
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'summary', 'links', 'layout'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
@@ -34,6 +34,10 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
   },
   summary: { label: 'Summaries', hint: 'One to three sentences per page. Any cheap model works.' },
   links: { label: 'Link suggestions', hint: 'Finds words in a page that should link to other pages.' },
+  layout: {
+    label: 'Page layouts',
+    hint: 'Recognises recipes, checklists, guides and stories for the interactive view. One short call per page.',
+  },
 };
 
 /** Default spending limit per AI job (research run, organize run), in USD. */
@@ -109,6 +113,7 @@ export const settingsUpdateSchema = z.object({
   askModel: modelId,
   summaryModel: modelId,
   linksModel: modelId,
+  layoutModel: modelId,
   searxngUrl: optionalUrl,
   aiCostLimit: z.number().min(0.01).max(50).nullable().optional(),
   dailyNotebookId: z.string().max(64).nullable().optional(),

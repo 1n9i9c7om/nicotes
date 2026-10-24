@@ -49,6 +49,7 @@ export const config = {
     askModel: process.env.OPENROUTER_ASK_MODEL?.trim() || undefined,
     summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
     linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
+    layoutModel: process.env.OPENROUTER_LAYOUT_MODEL?.trim() || undefined,
     searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
     embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,
