@@ -43,8 +43,12 @@ default:
   script:
     # The NICOTES_* build args end up in the image and are shown under Settings → About.
     # Tag builds pass their version (v1.2.3 -> 1.2.3); branch builds use package.json's version.
+    # No attestations: Docker 29 would otherwise push an OCI index (image + attestation
+    # manifest), which our registry rejects with "blob unknown to registry"; this way a plain
+    # single-platform image manifest is pushed.
     - >
       docker build --pull
+      --provenance=false --sbom=false
       --file "$DOCKERFILE"
       --label "org.opencontainers.image.source=$CI_PROJECT_URL"
       --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
