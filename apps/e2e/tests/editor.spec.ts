@@ -83,3 +83,29 @@ test('restores an earlier version from the history', async ({ page }) => {
   await page.reload();
   await expect(visualEditor(page)).toHaveText('The first draft.');
 });
+
+test('dragging the page edge changes and remembers the page width; double-click resets it', async ({ page }) => {
+  const nb = await createNotebook(page, uniq('Width NB'));
+  const doc = await createPage(page, { notebookId: nb.id, title: uniq('Wide page') });
+  await page.goto(`/p/${doc.id}`);
+
+  const body = page.locator('.page-body');
+  const width = async () => (await body.boundingBox())!.width;
+  const before = await width();
+  const handle = (await page.locator('.page-width-handle.right').boundingBox())!;
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + 200;
+
+  // The body stays centred, so it grows by twice the pointer movement.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 60, y, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBeCloseTo(before + 120, -1);
+
+  await page.reload();
+  await expect.poll(width).toBeCloseTo(before + 120, -1);
+
+  await page.locator('.page-width-handle.right').dblclick();
+  await expect.poll(width).toBe(before);
+});

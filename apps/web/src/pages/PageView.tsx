@@ -30,6 +30,7 @@ import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
 import { Connections } from '../components/Connections';
 import { PageSummary } from '../components/PageSummary';
+import { PageWidthHandles } from '../components/PageWidthHandles';
 import { LocalGraph } from '../components/graph/LocalGraph';
 import { HistoryDialog } from '../components/HistoryDialog';
 import { PageLayout } from '../components/layouts/PageLayout';
@@ -88,6 +89,9 @@ function PageEditor({ page }: { page: Page }) {
   const [title, setTitle] = useState(page.title);
   const editor = useRef<EditorHandle>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  // Per device, as the right width depends on the screen; null = the default width.
+  const [pageWidth, setPageWidth] = useLocalState<number | null>('nicotes.pageWidth', null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -262,7 +266,8 @@ function PageEditor({ page }: { page: Page }) {
         </div>
       )}
 
-      <div className="page-body">
+      <div ref={body} className="page-body" style={pageWidth ? { maxWidth: pageWidth } : undefined}>
+        <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />
         <textarea
           ref={titleInput}
           className="page-title"

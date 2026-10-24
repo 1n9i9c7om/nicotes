@@ -41,6 +41,9 @@ highlights the current sentence. The layout is detected automatically; with an O
 key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
 yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
 
+In every mode, drag either edge of the page to make it wider or narrower (double-click the
+edge to reset); the width is remembered per browser.
+
 ### Ask your notes (optional)
 
 With an OpenRouter key, **Ask** answers questions from your own notes with numbered
