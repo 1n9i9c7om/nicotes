@@ -32,3 +32,20 @@ export function plainExcerpt(text: string): string {
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
     .replace(/\s+/g, ' ');
 }
+
+/** "340 KB", "12.3 MB", "1.25 GB"; zero stays "0 KB". */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${bytes ? Math.max(1, Math.round(bytes / 1024)) : 0} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+/** "3 days 4 h", "2 h 15 min", "5 min". */
+export function formatDuration(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d) return `${d} ${d === 1 ? 'day' : 'days'}${h ? ` ${h} h` : ''}`;
+  if (h) return `${h} h${m ? ` ${m} min` : ''}`;
+  return `${Math.max(m, 1)} min`;
+}

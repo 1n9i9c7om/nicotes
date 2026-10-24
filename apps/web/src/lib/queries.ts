@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AiBatch,
+  SystemInfo,
   LayoutType,
   PageLayoutInfo,
   AiLinkSuggestions,
@@ -70,6 +71,7 @@ export const keys = {
   related: (id: string) => ['related', id] as const,
   summary: (id: string) => ['summary', id] as const,
   layout: (id: string) => ['layout', id] as const,
+  system: ['system'] as const,
 };
 
 /**
@@ -686,3 +688,7 @@ export function useLayoutActions(id: string) {
     reset: useMutation({ mutationFn: () => api.delete(`/ai/layout/${id}`), onSuccess: done }),
   };
 }
+
+// ---------- System ----------
+
+export const useSystemInfo = () => useQuery({ queryKey: keys.system, queryFn: () => api.get<SystemInfo>('/system') });
