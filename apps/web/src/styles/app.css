@@ -890,6 +890,71 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* Drag handles on both edges of the page body (PageWidthHandles) */
+.page-width-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.page-width-handle.left {
+  left: -6px;
+}
+
+.page-width-handle.right {
+  right: -6px;
+}
+
+.page-width-handle::after {
+  content: '';
+  position: absolute;
+  top: 40px;
+  bottom: 40px;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.page-width-handle:hover::after,
+.page-width-handle:focus-visible::after,
+.page-width-handle.dragging::after {
+  opacity: 0.6;
+}
+
+.page-width-handle:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.page-width-label {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 20;
+}
+
+body:has(.page-width-handle.dragging) {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .page-title {
@@ -1006,6 +1071,10 @@
 
   .page-body {
     padding: 24px 16px 0;
+  }
+
+  .page-width-handle {
+    display: none;
   }
 
   .page-title {
