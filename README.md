@@ -152,3 +152,23 @@ browser. Failures leave a trace in `apps/e2e/test-results`
 
 Database schema changes: edit `apps/server/src/db/schema.ts`, then
 `npm run db:generate -w apps/server` and commit the generated migration.
+
+## Branches, releases and images
+
+- `develop` is where work comes together: every change starts as a feature branch off
+  `develop` and is merged back into it.
+- A release merges `develop` into `main` and tags it `vX.Y.Z` (bump the `version` fields in the
+  `package.json` files first). Settings → About shows the running version and build.
+
+GitLab CI (`.gitlab-ci.yml`) builds the Docker image on a runner with the host's Docker
+socket and pushes it to the project's container registry:
+
+| Push | Image tags |
+|---|---|
+| `develop` | `dev-latest`, `<short-sha>` |
+| `main` | `main-latest`, `<short-sha>` |
+| tag `v1.2.3` | `v1.2.3` |
+| other branches, merge requests | built only, not pushed |
+
+So `main-latest` is always the newest release, and `v1.2.3` pins an older one, e.g.
+`image: <registry>/1n9i9c7om/nicotes:main-latest` in docker-compose instead of `build: .`.

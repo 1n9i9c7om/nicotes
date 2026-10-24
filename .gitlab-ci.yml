@@ -1,0 +1,102 @@
+# Builds Docker images and pushes them to the GitLab Container Registry.
+# Runner: Docker executor with /var/run/docker.sock mounted (no dind, not privileged).
+#
+#   develop               -> :dev-latest  + :<short-sha>
+#   main                  -> :main-latest + :<short-sha>
+#   git tag v1.2.3        -> :v1.2.3
+#   MRs / other branches  -> build only, nothing is pushed
+#
+# Workflow: features branch off develop and merge back into develop; a release merges develop
+# into main and is tagged vX.Y.Z (see README, "Releases").
+
+workflow:
+  rules:
+    # Merge request pipelines
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Skip the branch pipeline if an MR pipeline already runs for the same push
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # Branch pipelines
+    - if: $CI_COMMIT_BRANCH
+    # Only semver tags start a pipeline (other tags would produce an empty pipeline)
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+stages:
+  - build
+
+variables:
+  DOCKERFILE: Dockerfile
+  BUILD_CONTEXT: .
+  # Unique per job, so concurrent jobs on the shared host daemon never overwrite each other's build
+  LOCAL_IMAGE: ci-local/$CI_PROJECT_PATH_SLUG:job-$CI_JOB_ID
+
+default:
+  # Pin to the Docker major version installed on the runner VM once it works, e.g. docker:28-cli
+  image: docker:cli
+
+.docker-build:
+  stage: build
+  # tags: [docker]   # uncomment if your runner only picks up tagged jobs
+  before_script:
+    # Fails fast with a clear error if the socket isn't mounted
+    - docker info --format 'Using host Docker daemon {{.ServerVersion}}'
+  script:
+    # The NICOTES_* build args end up in the image and are shown under Settings → About.
+    # Tag builds pass their version (v1.2.3 -> 1.2.3); branch builds use package.json's version.
+    - >
+      docker build --pull
+      --file "$DOCKERFILE"
+      --label "org.opencontainers.image.source=$CI_PROJECT_URL"
+      --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      --label "org.opencontainers.image.version=${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
+      --build-arg "NICOTES_VERSION=${CI_COMMIT_TAG#v}"
+      --build-arg "NICOTES_BUILD_REF=$CI_COMMIT_REF_NAME"
+      --build-arg "NICOTES_BUILD_COMMIT=$CI_COMMIT_SHA"
+      --build-arg "NICOTES_BUILD_DATE=$CI_PIPELINE_CREATED_AT"
+      --tag "$LOCAL_IMAGE"
+      "$BUILD_CONTEXT"
+    - |
+      if [ -n "$PUSH_TAGS" ]; then
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+        for tag in $PUSH_TAGS; do
+          docker tag "$LOCAL_IMAGE" "$CI_REGISTRY_IMAGE:$tag"
+          docker push "$CI_REGISTRY_IMAGE:$tag"
+        done
+      else
+        echo "Build-only pipeline, nothing pushed."
+      fi
+  after_script:
+    # Drop the job-local tag; layers stay in the build cache for the next job
+    - docker rmi "$LOCAL_IMAGE" >/dev/null 2>&1 || true
+
+build:check:
+  extends: .docker-build
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "develop" && $CI_COMMIT_BRANCH != "main"
+
+build:develop:
+  extends: .docker-build
+  interruptible: true
+  variables:
+    PUSH_TAGS: dev-latest $CI_COMMIT_SHORT_SHA
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+build:main:
+  extends: .docker-build
+  interruptible: true
+  variables:
+    PUSH_TAGS: main-latest $CI_COMMIT_SHORT_SHA
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+build:release:
+  extends: .docker-build
+  # Release builds are never auto-cancelled
+  interruptible: false
+  variables:
+    PUSH_TAGS: $CI_COMMIT_TAG
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/

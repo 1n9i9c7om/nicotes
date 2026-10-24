@@ -40,6 +40,16 @@ COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 RUN mkdir -p /data /backups && chown node:node /data /backups
+# Build information for Settings → About, passed by CI (empty in local builds). Kept last so a
+# new commit only changes this layer.
+ARG NICOTES_VERSION=""
+ARG NICOTES_BUILD_REF=""
+ARG NICOTES_BUILD_COMMIT=""
+ARG NICOTES_BUILD_DATE=""
+ENV NICOTES_VERSION=$NICOTES_VERSION \
+    NICOTES_BUILD_REF=$NICOTES_BUILD_REF \
+    NICOTES_BUILD_COMMIT=$NICOTES_BUILD_COMMIT \
+    NICOTES_BUILD_DATE=$NICOTES_BUILD_DATE
 USER node
 VOLUME ["/data", "/backups"]
 EXPOSE 3000
