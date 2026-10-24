@@ -334,6 +334,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
 | `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
+| `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
 | `NICOTES_BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where backups are written |

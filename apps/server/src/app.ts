@@ -33,6 +33,7 @@ import { tagRoutes } from './routes/tags.js';
 import { trashRoutes } from './routes/trash.js';
 import { SecretBox } from './secrets.js';
 import { settingsRoutes, SettingsStore } from './settings.js';
+import { systemRoutes } from './system.js';
 
 export interface AppOptions {
   db: Db;
@@ -129,7 +130,7 @@ export function createApp({
   const auth = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'backups']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system', 'backups']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -146,6 +147,7 @@ export function createApp({
   app.route('/api/graph', graphRoutes(db));
   app.route('/api/daily', dailyRoutes(db, settings));
   app.route('/api/tasks', taskRoutes(db, settings));
+  app.route('/api/system', systemRoutes(db, dataDir));
   app.route('/api/semantic', semanticRoutes(db, semantic));
   app.route('/api/backups', backupRoutes(backups));
   app.route('/api/ai', aiRoutes(db, jobs));

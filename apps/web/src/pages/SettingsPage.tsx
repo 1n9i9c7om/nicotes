@@ -1,8 +1,8 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, CheckCircle2, Cpu, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
-import { timeAgo } from '../lib/format';
+import { formatDuration, formatSize, timeAgo } from '../lib/format';
 import {
   AI_TASK_INFO,
   AI_TASKS,
@@ -28,6 +28,7 @@ import {
   useSemanticStatus,
   useSettings,
   useSignOut,
+  useSystemInfo,
   useUndoBatch,
   useUpdateSettings,
 } from '../lib/queries';
@@ -437,7 +438,61 @@ export function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <AboutCard />
     </div>
+  );
+}
+
+/** Version, build and what the server runs on; "Copy details" for bug reports. */
+function AboutCard() {
+  const system = useSystemInfo();
+  const [copied, setCopied] = useState(false);
+  const s = system.data;
+  if (!s) return null;
+
+  // A release tag repeats the version; branches (develop, main) are worth showing.
+  const ref = s.build.ref && s.build.ref !== `v${s.version}` ? s.build.ref : null;
+  const built = s.build.date ? new Date(s.build.date).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  const rows: [string, string][] = [
+    ['Version', [s.version, ref].filter(Boolean).join(' · ')],
+    ['Build', s.build.commit ? [s.build.commit.slice(0, 8), built].filter(Boolean).join(' · ') : 'Local build'],
+    ['Server', `Node ${s.server.node.replace(/^v/, '')} · ${s.server.os} (${s.server.arch})${s.server.docker ? ' · Docker' : ''}`],
+    ['Running for', formatDuration(s.server.uptime)],
+    ['Database', `SQLite ${s.database.sqlite} · ${formatSize(s.database.size)} · ${s.database.migrations} migrations`],
+    [
+      'Your data',
+      `${s.data.notebooks} notebooks · ${s.data.pages} pages · ${s.data.attachments} attachments (${formatSize(s.data.attachmentBytes)}) · ` +
+        `${s.data.versions} versions · ${s.data.trash} in the trash`,
+    ],
+    ['Data folder', s.dataDir],
+  ];
+  const copy = () => {
+    void navigator.clipboard.writeText(`Nicotes\n${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}`).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <section className="settings-card" id="about">
+      <h2>
+        <Info size={18} /> About Nicotes
+      </h2>
+      <dl className="about-list">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="setting-actions">
+        <button className="btn btn-sm" onClick={copy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy details'}
+        </button>
+      </div>
+    </section>
   );
 }
 

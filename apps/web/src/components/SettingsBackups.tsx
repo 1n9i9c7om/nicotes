@@ -2,15 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DatabaseBackup, FileDown, XCircle } from 'lucide-react';
 import type { BackupInfo, BackupStatus } from '@nicotes/shared';
 import { api } from '../lib/api';
-import { timeAgo } from '../lib/format';
+import { formatSize, timeAgo } from '../lib/format';
 
 const statusKey = ['backups'] as const;
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-}
 
 /** "in about 5 hours" for a future time. */
 const timeUntil = (time: number) => (time <= Date.now() ? 'soon' : timeAgo(time));
