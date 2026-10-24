@@ -374,3 +374,35 @@
     grid-column: 2;
   }
 }
+
+/* About card */
+
+.about-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.about-list > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.about-list dt {
+  color: var(--text-faint);
+}
+
+.about-list dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .about-list > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
