@@ -1,0 +1,309 @@
+/* Page assistant (PageAssistant) and reviewable diffs (DiffReview) */
+
+/* ---------- Page layout with the assistant beside it ---------- */
+
+.page-split {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+}
+
+.page-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.assistant-toggle.active {
+  background: var(--accent-soft);
+  border-color: rgb(34 211 238 / 0.5);
+  color: var(--accent-strong);
+}
+
+/* ---------- Panel ---------- */
+
+.assistant {
+  position: sticky;
+  top: 52px;
+  width: 420px;
+  flex-shrink: 0;
+  height: calc(100vh - 52px);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-sidebar);
+}
+
+.assistant-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px 6px 16px;
+}
+
+.assistant-head h2 {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.assistant-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.assistant-scope {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.assistant-scope select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-size: 13px;
+}
+
+.assistant-turns {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px;
+}
+
+.assistant-empty {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.assistant-empty p + p {
+  margin-top: 8px;
+}
+
+.assistant-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistant-message {
+  align-self: flex-end;
+  max-width: 90%;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent-soft);
+  border: 1px solid rgb(34 211 238 / 0.25);
+  color: var(--text-strong);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.assistant-reply {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.assistant-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.assistant-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.assistant-foot a {
+  color: var(--accent);
+}
+
+.assistant-note {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 12px;
+}
+
+.assistant-proposal .assistant-note {
+  padding: 0;
+}
+
+.assistant-outcome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--success);
+}
+
+.assistant-outcome.muted {
+  color: var(--text-muted);
+}
+
+.assistant-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.assistant-form textarea {
+  flex: 1;
+  resize: none;
+  font-size: 14px;
+}
+
+/* ---------- Proposal review ---------- */
+
+.assistant-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+
+.assistant-proposal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.assistant-pick,
+.history-pick {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.assistant-proposal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- Diff hunks ---------- */
+
+.diff-hunk > span {
+  display: block;
+  padding: 0 14px;
+}
+
+.diff-hunk.selectable {
+  margin: 4px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-hunk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 14px;
+  background: var(--bg-elev-2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.diff-hunk-head input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.diff-hunk-stats {
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.diff-hunk-stats .plus {
+  color: var(--success);
+}
+
+.diff-hunk-stats .minus {
+  color: var(--danger);
+}
+
+.diff-hunk.off > .diff-added,
+.diff-hunk.off > .diff-removed {
+  opacity: 0.35;
+}
+
+.diff-hunk.off > .diff-removed {
+  text-decoration: none;
+}
+
+.diff-compact {
+  flex: none;
+  max-height: 46vh;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.diff-compact > span,
+.diff-compact .diff-hunk > span,
+.diff-compact .diff-hunk-head {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.history-compare {
+  height: 30px;
+  font-size: 13px;
+}
+
+/* ---------- Mobile: the panel covers the page ---------- */
+
+@media (max-width: 800px) {
+  .assistant {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    width: auto;
+    height: auto;
+    border-left: none;
+  }
+
+  .assistant-toggle span {
+    display: none;
+  }
+}
+
+.assistant-outcome.warning {
+  color: var(--warning);
+}

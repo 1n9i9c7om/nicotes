@@ -170,6 +170,13 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   always snapshot first. Retention: everything from the last 24 h, then the newest per day
   for 90 days, max 200 per page. Restoring replaces the content (not the title, so links
   stay valid) and keeps the replaced text as a version.
+- **Diffs:** `packages/shared/src/diff.ts` splits a line diff (`diff` package) into hunks —
+  contiguous changes — and applies any subset of them (all hunks give the target, none the
+  original). The history dialog compares a version with the current text (each hunk can be
+  ticked off, so only some changes are restored) or with the version before. Reviewed
+  results go through `POST /api/pages/:id/changes` (`content`, `baseVersion`, `reason`),
+  which snapshots the current text with that reason and replaces it; a stale
+  `baseVersion` is a 409. The AI page assistant uses the same review and endpoint.
 - **Trash:** soft-deleted subtrees share one `deleted_at` and appear as one item; pages of a
   deleted notebook come back with it. Restored pages go back under their old parent if it
   still exists, else to the top level. Items are purged after 30 days (hourly job);
@@ -265,6 +272,20 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   the cost. The model may only use the numbered passages and cites them as `[n]`;
   follow-ups send the last turns along. Answers render through a small Markdown renderer
   that builds React elements (no HTML injection) and can be saved as notes.
+- **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
+  `section` (the parent page's subtree; a top-level page's own subtree), `notebook` or
+  `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
+  **Ask** searches everything unless the request names `notebookIds`.
+- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
+  the context it read (notes within the user's read scope setting, optionally a few web
+  sources found via SearXNG/OpenRouter and read like Research does), the message, and —
+  when it changes the page — the whole rewritten page as a `proposal`. The model writes the
+  page after its message between `<<<PAGE` / `PAGE>>>` lines; the server streams only the
+  message part and sends the page separately. The request carries the page as the user
+  sees it (unsaved edits included). The assistant never writes: the client diffs the
+  proposal against the current text, the user picks hunks, and the result is applied via
+  `/changes` with reason `assistant`. Notes and web content are marked as data, not
+  instructions, in the prompt.
 - **Summaries:** 1–3 sentences per page (`page_summaries`), shown above the text and marked
   as outdated once the page version changes.
 - **AI link suggestions:** the model gets the page and up to 120 candidates (nearest by
@@ -332,7 +353,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
@@ -372,4 +393,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    (`npm run e2e`), a model per AI feature.
 9. ✅ **Interactive views** — checklist, recipe with cook mode, guide, reader with
    read-aloud, chosen by heuristics or the AI and editing the page's Markdown.
-10. **Later** — GitLab CI → registry, multi-user.
+10. ✅ **Page assistant & reviewable changes** — chat beside a page that proposes edits to
+    that page only, approved hunk by hunk; read scopes for the assistant and Ask; version
+    history with diffs against the previous version and partial restore. GitLab CI builds
+    images into the registry.
+11. **Later** — multi-user.

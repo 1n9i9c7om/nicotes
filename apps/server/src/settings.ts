@@ -5,14 +5,17 @@ import { z } from 'zod';
 import {
   AI_TASKS,
   DEFAULT_AI_COST_LIMIT,
+  DEFAULT_ASSISTANT_SCOPE,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
   modelSetting,
+  READ_SCOPES,
   settingsUpdateSchema,
   type AiTask,
   type ConnectionCheck,
   type ModelInfo,
+  type ReadScope,
   type Settings,
   type SettingSource,
   type SettingsUpdate,
@@ -34,6 +37,7 @@ const KEYS = {
   // Kept under its original key, so research models saved before per-task models still apply.
   researchModel: { key: 'ai.researchModel', secret: false },
   askModel: { key: 'ai.model.ask', secret: false },
+  assistantModel: { key: 'ai.model.assistant', secret: false },
   summaryModel: { key: 'ai.model.summary', secret: false },
   linksModel: { key: 'ai.model.links', secret: false },
   layoutModel: { key: 'ai.model.layout', secret: false },
@@ -44,6 +48,7 @@ const KEYS = {
   tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
   semanticIndex: { key: 'ai.semanticIndex', secret: false },
   embeddingModel: { key: 'ai.embeddingModel', secret: false },
+  assistantScope: { key: 'ai.assistantScope', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -111,6 +116,7 @@ export class SettingsStore {
       excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
       semanticIndex: pick('semanticIndex', 'false'),
       embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
+      assistantScope: pick('assistantScope', DEFAULT_ASSISTANT_SCOPE),
     };
   }
 
@@ -147,6 +153,7 @@ export class SettingsStore {
         model: r.embeddingModel.value!,
         modelSource: r.embeddingModel.source,
       },
+      assistant: { scope: readScope(r.assistantScope.value) },
     };
   }
 
@@ -194,6 +201,9 @@ export class SettingsStore {
     for (const listener of this.listeners) listener(userId, input);
   }
 }
+
+const readScope = (value: string | null): ReadScope =>
+  (READ_SCOPES as readonly string[]).includes(value ?? '') ? (value as ReadScope) : DEFAULT_ASSISTANT_SCOPE;
 
 function parseList(value: string | null): string[] {
   try {

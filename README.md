@@ -51,6 +51,21 @@ sources, and the page menu can **summarize** a page or **suggest links** to othe
 Switch on the **semantic index** (Settings) to find notes by meaning — related pages,
 "By meaning" results in search, better answers. It sends the text of your notes to
 OpenRouter for embeddings (with the default model a few cents for thousands of pages).
+**Ask** searches all notebooks by default; the picker next to the question box limits it to
+some of them.
+
+### Page assistant (optional)
+
+**Assistant** in the page bar opens a chat beside the page: ask about it or tell it what to
+change ("add a section on costs", "fix the spelling", "translate to German"). It only ever
+changes the open page, and only what you approve: proposals arrive as a diff where every
+change can be ticked off on its own, like staging hunks in git, and the text before is kept
+in the version history ("Before AI changes"). What else it may read is your choice — this
+page only (the default), its section, its notebook or all notebooks — and **Web research**
+lets it search the web and read a few sources first.
+
+The **version history** shows a version's changes compared with the current text or with
+the version before, and can restore only some of the changes.
 
 ### Research & organize (optional)
 

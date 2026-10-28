@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { normalizeTag } from './tags';
 
 export * from './ai';
+export * from './assistant';
 export * from './blocks';
+export * from './diff';
 export * from './backups';
 export * from './tags';
 export * from './history';

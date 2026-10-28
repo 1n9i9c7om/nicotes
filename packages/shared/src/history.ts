@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 // ---------- Version history ----------
 
-/** Why a snapshot exists: periodic while editing, before a link rewrite, or before a restore. */
-export type VersionReason = 'edit' | 'relink' | 'restore';
+/** Why a snapshot exists: periodic while editing, before a link rewrite, a restore, or AI changes. */
+export type VersionReason = 'edit' | 'relink' | 'restore' | 'assistant';
 
 export interface PageVersionSummary {
   id: string;

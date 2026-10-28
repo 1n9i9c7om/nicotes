@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
+  pageChangesSchema,
   pageCreateSchema,
   pageMoveSchema,
   pageTagsSchema,
@@ -258,6 +259,26 @@ export function pageRoutes(db: Db) {
         indexPageLinks(tx, userId, page.id, version.content);
       });
       return c.json(findPage(db, userId, page.id));
+    })
+    // Content reviewed as a diff (accepted AI changes, a partial restore): the state before is
+    // always kept as a version, so the change can be undone from the history.
+    .post('/:id/changes', async (c) => {
+      const { content, baseVersion, reason } = await readJson(c, pageChangesSchema);
+      const userId = c.var.user.id;
+      const current = findPage(db, userId, c.req.param('id'));
+      if (current.version !== baseVersion) {
+        return c.json({ error: 'The page was changed elsewhere', current } satisfies ApiError, 409);
+      }
+      if (content === current.content) return c.json(current);
+      db.transaction((tx) => {
+        snapshotPage(tx, { ...current, userId }, reason, true);
+        tx.update(pages)
+          .set({ content, version: current.version + 1, updatedAt: Date.now() })
+          .where(eq(pages.id, current.id))
+          .run();
+        indexPageLinks(tx, userId, current.id, content);
+      });
+      return c.json(findPage(db, userId, current.id));
     })
     .get('/:id/backlinks', (c) => {
       const page = findPage(db, c.var.user.id, c.req.param('id'));
