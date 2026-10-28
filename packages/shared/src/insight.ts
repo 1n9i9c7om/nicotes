@@ -41,6 +41,8 @@ export const askRequestSchema = z.object({
     .array(z.object({ question: z.string().max(2000), answer: z.string().max(20_000) }))
     .max(6)
     .default([]),
+  /** Only search these notebooks; all when left out. */
+  notebookIds: z.array(z.string().max(64)).max(200).optional(),
 });
 export type AskRequest = z.input<typeof askRequestSchema>;
 

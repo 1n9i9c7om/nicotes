@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { READ_SCOPES, type ReadScope } from './assistant';
 import { normalizeTag } from './tags';
 
 // ---------- Settings ----------
@@ -12,7 +13,7 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
-export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'summary', 'links', 'layout'] as const;
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
@@ -31,6 +32,10 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
   ask: {
     label: 'Ask your notes',
     hint: 'Answers from your notes with citations. Needs a model that sticks to the given sources.',
+  },
+  assistant: {
+    label: 'Page assistant',
+    hint: 'Chats about the open page and proposes edits to it. Rewrites the whole page per change, so it needs a model that keeps text it was not asked to change.',
   },
   summary: { label: 'Summaries', hint: 'One to three sentences per page. Any cheap model works.' },
   links: { label: 'Link suggestions', hint: 'Finds words in a page that should link to other pages.' },
@@ -85,6 +90,10 @@ export interface Settings {
     model: string;
     modelSource: SettingSource;
   };
+  assistant: {
+    /** Which other pages the page assistant may read. */
+    scope: ReadScope;
+  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
@@ -111,6 +120,7 @@ export const settingsUpdateSchema = z.object({
   organizeModel: modelId,
   researchModel: modelId,
   askModel: modelId,
+  assistantModel: modelId,
   summaryModel: modelId,
   linksModel: modelId,
   layoutModel: modelId,
@@ -126,6 +136,7 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
+  assistantScope: z.enum(READ_SCOPES).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

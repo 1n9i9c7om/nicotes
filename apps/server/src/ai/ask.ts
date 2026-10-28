@@ -12,6 +12,7 @@ import type { SettingsStore } from '../settings.js';
 import { chunkPage } from './chunks.js';
 import { guessLanguage, languageName } from './language.js';
 import { LlmError, streamChat } from './llm.js';
+import { notebookPageIds } from './scope.js';
 import type { SemanticIndex } from './semantic.js';
 
 const MAX_PASSAGES = 10;
@@ -38,15 +39,18 @@ export interface RetrievedPassage {
 
 /**
  * Finds the passages a question is about: by meaning when the semantic index is on, else by
- * keywords (full-text search, then the passages with the most matching words).
+ * keywords (full-text search, then the passages with the most matching words). `allowed`
+ * limits the search to some pages (a read scope); null searches all of the user's pages.
  */
 export async function retrieve(
   db: Db,
   index: SemanticIndex,
   userId: string,
   query: string,
+  allowed: Set<string> | null = null,
+  limit = MAX_PASSAGES,
 ): Promise<{ passages: RetrievedPassage[]; retrieval: 'semantic' | 'keyword' }> {
-  const semantic = await index.passages(userId, query, MAX_PASSAGES, 3);
+  const semantic = await index.passages(userId, query, limit, 3, undefined, allowed);
   if (semantic) {
     const ids = [...new Set(semantic.map((p) => p.pageId))];
     const info = new Map(
@@ -74,10 +78,11 @@ export async function retrieve(
       `SELECT p.id, p.notebook_id AS notebookId, p.title, p.content
        FROM pages_fts f JOIN pages p ON p.id = f.page_id
        WHERE pages_fts MATCH @match AND p.user_id = @userId AND p.deleted_at IS NULL
+         AND (@allowed IS NULL OR p.id IN (SELECT value FROM json_each(@allowed)))
        ORDER BY bm25(pages_fts, 0.0, 8.0, 1.0)
        LIMIT ${KEYWORD_PAGES + 4}`,
     )
-    .all({ match: words.map((w) => `"${w}"*`).join(' OR '), userId }) as { id: string; notebookId: string; title: string; content: string }[];
+    .all({ match: words.map((w) => `"${w}"*`).join(' OR '), userId, allowed: allowed ? JSON.stringify([...allowed]) : null }) as { id: string; notebookId: string; title: string; content: string }[];
   const templates = pageIdsWithTag(db, userId, TEMPLATE_TAG);
   const passages: RetrievedPassage[] = [];
   for (const row of rows.filter((r) => !templates.has(r.id)).slice(0, KEYWORD_PAGES)) {
@@ -90,7 +95,7 @@ export async function retrieve(
       passages.push({ pageId: row.id, notebookId: row.notebookId, title: row.title, heading: c.heading, text: c.text });
     }
   }
-  return { retrieval: 'keyword', passages: passages.slice(0, MAX_PASSAGES) };
+  return { retrieval: 'keyword', passages: passages.slice(0, limit) };
 }
 
 const SYSTEM = `You answer questions from the user's personal notes.
@@ -115,7 +120,9 @@ export function askRoutes(db: Db, settings: SettingsStore, index: SemanticIndex)
       try {
         // Follow-up questions are often fragments ("and in winter?"): search with the previous one too.
         const previous = input.history.at(-1)?.question;
-        const { passages, retrieval } = await retrieve(db, index, userId, previous ? `${previous}\n${input.question}` : input.question);
+        const allowed = input.notebookIds ? notebookPageIds(db, userId, input.notebookIds) : null;
+        const query = previous ? `${previous}\n${input.question}` : input.question;
+        const { passages, retrieval } = await retrieve(db, index, userId, query, allowed);
         const sources: AskSource[] = passages.map((p, i) => ({
           n: i + 1,
           pageId: p.pageId,

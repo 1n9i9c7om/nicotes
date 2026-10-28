@@ -47,6 +47,7 @@ export const config = {
     organizeModel: process.env.OPENROUTER_ORGANIZE_MODEL?.trim() || undefined,
     researchModel: process.env.OPENROUTER_RESEARCH_MODEL?.trim() || undefined,
     askModel: process.env.OPENROUTER_ASK_MODEL?.trim() || undefined,
+    assistantModel: process.env.OPENROUTER_ASSISTANT_MODEL?.trim() || undefined,
     summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
     linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
     layoutModel: process.env.OPENROUTER_LAYOUT_MODEL?.trim() || undefined,

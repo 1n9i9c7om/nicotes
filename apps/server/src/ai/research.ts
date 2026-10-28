@@ -9,12 +9,12 @@ import { newId } from '../ids.js';
 import { setPageTags } from '../routes/tags.js';
 import type { AiConfig } from '../settings.js';
 import { guessLanguage, languageName } from './language.js';
-import { chat, completeJson, LlmError } from './llm.js';
+import { chat, completeJson, emptyUsage, LlmError, type Usage } from './llm.js';
 import { mapLimit, type JobContext } from './jobs.js';
 
 type Input = z.infer<typeof researchRequestSchema>;
 
-interface Candidate {
+export interface Candidate {
   url: string;
   title: string;
   /** Snippet or page text from the search provider, used if fetching the page fails. */
@@ -32,7 +32,7 @@ interface SourceNote {
 const SOURCE_CHARS = 15_000;
 const SKIP_URL = /\.(pdf|zip|mp4|mp3|jpe?g|png|gif)(\?|$)|youtube\.com\/watch|youtu\.be\/|tiktok\.com|instagram\.com|facebook\.com/i;
 
-const host = (url: string) => {
+export const host = (url: string) => {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
@@ -80,17 +80,28 @@ async function searchSearxng(url: string, query: string, language: string, signa
   return (body.results ?? []).map((r) => ({ url: r.url, title: r.title ?? r.url, snippet: r.content ?? '' }));
 }
 
-async function searchOpenRouter(ctx: JobContext<Input>, query: string): Promise<Candidate[]> {
+async function searchOpenRouter(cfg: AiConfig, model: string, query: string, signal: AbortSignal) {
   const reply = await chat({
-    apiKey: ctx.cfg.openrouterApiKey!,
-    model: ctx.cfg.models.research,
+    apiKey: cfg.openrouterApiKey!,
+    model,
     messages: [{ role: 'user', content: `Search the web for: ${query}\nList the most relevant pages in one line each.` }],
     maxTokens: 500,
     webResults: 6,
-    signal: ctx.signal,
+    signal,
   });
-  ctx.charge(reply.usage);
-  return reply.citations.map((c) => ({ url: c.url, title: c.title || c.url, snippet: c.content }));
+  return { results: reply.citations.map((c) => ({ url: c.url, title: c.title || c.url, snippet: c.content })), usage: reply.usage };
+}
+
+/** One web search: SearXNG when configured, else OpenRouter's web search with `model`. */
+export async function webSearch(
+  cfg: AiConfig,
+  model: string,
+  query: string,
+  language: string,
+  signal: AbortSignal,
+): Promise<{ results: Candidate[]; usage: Usage }> {
+  if (cfg.searxngUrl) return { results: await searchSearxng(cfg.searxngUrl, query, language, signal), usage: emptyUsage() };
+  return searchOpenRouter(cfg, model, query, signal);
 }
 
 /** Turns "[1]" / "[2, 3]" markers into links to the numbered sources. */
@@ -154,11 +165,9 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     for (const [i, query] of queries.entries()) {
       ctx.step(`Searching (${provider === 'searxng' ? 'SearXNG' : 'OpenRouter'}): ${query}`, i, queries.length);
       try {
-        results.push(
-          provider === 'searxng'
-            ? await searchSearxng(cfg.searxngUrl!, query, language, ctx.signal)
-            : await searchOpenRouter(ctx, query),
-        );
+        const found = await webSearch(cfg, model, query, language, ctx.signal);
+        ctx.charge(found.usage);
+        results.push(found.results);
       } catch (error) {
         if (ctx.signal.aborted) throw error;
         ctx.step(`Search failed for “${query}”: ${(error as Error).message}`);
