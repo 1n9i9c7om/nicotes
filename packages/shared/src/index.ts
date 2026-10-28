@@ -4,6 +4,7 @@ import { normalizeTag } from './tags';
 export * from './ai';
 export * from './assistant';
 export * from './blocks';
+export * from './citations';
 export * from './diff';
 export * from './backups';
 export * from './tags';

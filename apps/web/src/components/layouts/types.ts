@@ -13,6 +13,8 @@ export interface LayoutProps {
   spec: LayoutSpec;
   /** Replaces the page text (saved like editor changes, undoable in the view). */
   onChange: (markdown: string) => void;
+  /** Leave source citations out of the text shown (the page keeps them). */
+  hideSources?: boolean;
 }
 
 /** Item text without Markdown syntax, for labels and speech. */

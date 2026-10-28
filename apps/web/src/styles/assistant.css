@@ -15,7 +15,8 @@
   flex-direction: column;
 }
 
-.assistant-toggle.active {
+.assistant-toggle.active,
+.sources-toggle.active {
   background: var(--accent-soft);
   border-color: rgb(34 211 238 / 0.5);
   color: var(--accent-strong);
@@ -299,7 +300,8 @@
     border-left: none;
   }
 
-  .assistant-toggle span {
+  .assistant-toggle span,
+  .sources-toggle span {
     display: none;
   }
 }

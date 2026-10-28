@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BookOpen, Pause, Play, RotateCcw } from 'lucide-react';
-import { guessLanguage } from '@nicotes/shared';
+import { guessLanguage, withoutCitations } from '@nicotes/shared';
 import { useLocalState } from '../../lib/storage';
 import { plainText, type LayoutProps } from './types';
 
@@ -49,13 +49,14 @@ function useVoices(lang: string) {
  * sentence (on the device, no AI) and highlights the sentence and word being spoken. Clicking
  * a sentence reads from there; the position is remembered per page.
  */
-export function ReaderLayout({ pageId, blocks, spec }: LayoutProps) {
+export function ReaderLayout({ pageId, blocks, spec, hideSources }: LayoutProps) {
   const lang = spec.language ?? guessLanguage(blocks.map((b) => ('text' in b ? b.text : '')).join(' ').slice(0, 4000)) ?? navigator.language.slice(0, 2);
   const parts = useMemo(() => {
     let index = 0;
     const result: Part[] = [];
     const add = (key: string, kind: Part['kind'], level: number, text: string) => {
-      const plain = plainText(text);
+      // Hidden sources are not read aloud either.
+      const plain = plainText(hideSources ? withoutCitations(text) : text);
       if (!plain) return;
       result.push({ key, kind, level, sentences: splitSentences(plain, lang).map((s) => ({ index: index++, text: s })) });
     };
@@ -66,7 +67,7 @@ export function ReaderLayout({ pageId, blocks, spec }: LayoutProps) {
       else if (block.kind === 'list') block.items.forEach((item, n) => add(`${block.key}:${n}`, 'item', item.depth, item.text));
     }
     return result;
-  }, [blocks, lang]);
+  }, [blocks, lang, hideSources]);
   const sentences = useMemo(() => parts.flatMap((p) => p.sentences), [parts]);
 
   const { voices, exact } = useVoices(lang);

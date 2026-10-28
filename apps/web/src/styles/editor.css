@@ -412,3 +412,9 @@
 .prose:focus-visible {
   box-shadow: none;
 }
+
+/* Source citations ("gooey 2, 3, 7.") marked by the Citations extension; "Hide sources" hides
+   them without touching the text. */
+.hide-sources .ProseMirror .citation {
+  display: none;
+}
