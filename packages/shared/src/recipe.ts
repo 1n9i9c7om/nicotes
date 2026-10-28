@@ -95,19 +95,6 @@ export function findDurations(text: string): Duration[] {
   return found;
 }
 
-/**
- * Text without research citations ("[3](https://…)", "[1–14]") and escaped tildes, for views
- * that show ingredients and steps compactly. Ordinary links with words as their text stay.
- */
-export function withoutCitations(text: string): string {
-  return text
-    .replace(/(?:\s*,?\s*\[\d+(?:\s*[,–-]\s*\d+)*\]\(https?:\/\/[^)\s]+\))+/g, '')
-    .replace(/\s*\\?\[\d+(?:\s*[,–-]\s*\d+)*\\?\](?!\()/g, '')
-    .replace(/\\~/g, '~')
-    .replace(/\s+([.,;:!?])/g, '$1')
-    .trim();
-}
-
 export interface TableIngredient {
   name: string;
   /** The amount column ("½–1 cup (115–235 g)"), empty without one. */

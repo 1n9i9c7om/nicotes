@@ -36,6 +36,7 @@ export function PageLayout({
   version,
   onChange,
   flush,
+  hideSources,
 }: {
   pageId: string;
   notebookId: string;
@@ -46,6 +47,7 @@ export function PageLayout({
   onChange: (markdown: string) => void;
   /** Saves pending edits (the AI reads the saved page). */
   flush: () => Promise<void>;
+  hideSources?: boolean;
 }) {
   const settings = useSettings();
   const stored = usePageLayout(pageId, version);
@@ -157,7 +159,16 @@ export function PageLayout({
         </span>
       </div>
       {error && <p className="error layout-error">{error.message}</p>}
-      <View pageId={pageId} notebookId={notebookId} title={title} markdown={content} blocks={blocks} spec={spec} onChange={edit} />
+      <View
+        pageId={pageId}
+        notebookId={notebookId}
+        title={title}
+        markdown={content}
+        blocks={blocks}
+        spec={spec}
+        onChange={edit}
+        hideSources={hideSources}
+      />
     </div>
   );
 }

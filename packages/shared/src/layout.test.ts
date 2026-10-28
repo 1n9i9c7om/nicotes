@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { blocksByKey, pageBlocks, tableRows, type PageBlock } from './blocks';
 import { guessLayout, specMatches } from './layout';
 import { addItem, moveItem, removeItem, setAllChecked, setItemChecked, setItemText } from './listEdits';
-import { findDurations, findServings, formatAmount, parseQuantity, scaleIngredient, tableIngredients, withoutCitations } from './recipe';
+import { findDurations, findServings, formatAmount, parseQuantity, scaleIngredient, tableIngredients } from './recipe';
+import { hasCitations, withoutCitations } from './citations';
 
 const list = (blocks: PageBlock[], n = 0) => blocks.filter((b) => b.kind === 'list')[n] as Extract<PageBlock, { kind: 'list' }>;
 
@@ -201,6 +202,11 @@ describe('lenient recipes', () => {
       ['Eggs', '2–4 (most use 2–3)'],
     ]);
     expect(scaleIngredient('½–1 cup melted (115–235 g)', 2)).toBe('1–2 cup melted (115–235 g)');
+  });
+
+  it('tells whether a page has citations', () => {
+    expect(hasCitations(research)).toBe(true);
+    expect(hasCitations('See [the guide](https://x.example/g) and [[Kladdkaka]].')).toBe(false);
   });
 
   it('removes citations but keeps ordinary links', () => {

@@ -6,6 +6,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import type { LinkBridge } from '../lib/links';
+import { Citations } from './citations';
 import { FileUploads, type Uploader } from './uploads';
 import { Wikilink } from './wikilink';
 import { WikilinkSuggest } from './WikilinkSuggest';
@@ -33,6 +34,7 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     Wikilink.configure({ bridge: env.bridge ?? null }),
     WikilinkSuggest.configure({ bridge: env.bridge ?? null }),
     FileUploads.configure({ upload: env.upload ?? null, onError: env.onUploadError ?? console.error }),
+    Citations,
     Markdown.configure({ markedOptions: { gfm: true } }),
   ];
 }

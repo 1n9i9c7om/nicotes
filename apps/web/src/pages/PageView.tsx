@@ -8,6 +8,7 @@ import {
   CloudOff,
   Code2,
   Eye,
+  EyeOff,
   FolderInput,
   History,
   LayoutTemplate,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import {
   appendSeeAlso,
+  hasCitations,
   findPhrase,
   linkFirstMention,
   linkMention,
@@ -107,6 +109,9 @@ function PageEditor({ page }: { page: Page }) {
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useLocalState('nicotes.assistantOpen', false);
+  // Purely visual: source citations ("gooey 2, 3, 7.") are hidden, the text keeps them.
+  const [hideSources, setHideSources] = useLocalState('nicotes.hideSources', false);
+  const cited = useMemo(() => hasCitations(content), [content]);
   const applyChanges = useApplyChanges(page.id);
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
   const summary = tree.byId.get(page.id);
@@ -229,6 +234,16 @@ function PageEditor({ page }: { page: Page }) {
               },
             ]}
           />
+          {cited && (viewing || mode === 'visual') && (
+            <button
+              className={`btn btn-sm sources-toggle${hideSources ? ' active' : ''}`}
+              aria-pressed={hideSources}
+              title={hideSources ? 'Show the source numbers in the text' : 'Hide the source numbers in the text (the page keeps them)'}
+              onClick={() => setHideSources(!hideSources)}
+            >
+              <EyeOff size={15} /> <span>Hide sources</span>
+            </button>
+          )}
           <button
             className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
             aria-pressed={assistantOpen}
@@ -289,7 +304,7 @@ function PageEditor({ page }: { page: Page }) {
 
       <div className="page-split">
         <div className="page-main">
-          <div ref={body} className="page-body" style={pageWidth ? { maxWidth: pageWidth } : undefined}>
+          <div ref={body} className={`page-body${hideSources ? ' hide-sources' : ''}`} style={pageWidth ? { maxWidth: pageWidth } : undefined}>
             <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />
             <textarea
               ref={titleInput}
@@ -319,6 +334,7 @@ function PageEditor({ page }: { page: Page }) {
                 version={version}
                 onChange={replaceContent}
                 flush={flush}
+                hideSources={hideSources}
               />
             ) : mode === 'visual' ? (
               <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
