@@ -124,6 +124,8 @@ function httpError(r: Route, status: number, message?: string): LlmError {
   if (status === 401) return new LlmError(`${r.label} rejected the API key`);
   if (status === 402) return new LlmError(`Your ${r.label} credits are used up`);
   if (status === 429) return new LlmError(`${r.label} rate limit reached, try again shortly`);
+  // 524 is Cloudflare's: the service did not start answering within 100 seconds.
+  if (status === 504 || status === 524) return new LlmError(`${r.label} timed out waiting for the model (HTTP ${status})`);
   return new LlmError(`${r.label} error: ${message ?? `HTTP ${status}`}`);
 }
 
@@ -134,7 +136,13 @@ async function usageOf(r: Route, model: string, raw?: CompletionResponse['usage'
   return { promptTokens, completionTokens, cost };
 }
 
+/**
+ * One chat completion. Streamed unless it searches the web (citations only arrive with the
+ * whole answer): the services sit behind Cloudflare, which cuts a request off (HTTP 524) when
+ * the answer has not started after 100 seconds, as with long notes from a reasoning model.
+ */
 export async function chat(opts: ChatOptions): Promise<{ content: string; usage: Usage; citations: Citation[] }> {
+  if (!opts.webResults) return { ...(await streamChat(opts, () => {})), citations: [] };
   const r = route(opts);
   const body = requestBody(r, opts, false);
 
@@ -170,17 +178,49 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
   };
 }
 
+/** A stream fails after this long without any data, and after MAX_STREAM_MS in total. */
+const IDLE_MS = 120_000;
+const MAX_STREAM_MS = 600_000;
+
 /**
  * A chat completion streamed token by token (`onDelta` gets each piece of text). Returns the
  * full text and the usage reported in the last event.
  */
 export async function streamChat(
-  opts: Omit<ChatOptions, 'json' | 'webResults'>,
+  opts: Omit<ChatOptions, 'webResults'>,
   onDelta: (text: string) => void,
 ): Promise<{ content: string; usage: Usage }> {
   const r = route(opts);
   const body = requestBody(r, opts, true);
-  const signal = opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000);
+  // Long answers may take minutes in total, so the limit is on silence rather than duration.
+  const idle = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const alive = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => idle.abort(new DOMException('No data from the model', 'TimeoutError')), IDLE_MS);
+  };
+  alive();
+  const signal = AbortSignal.any([idle.signal, AbortSignal.timeout(MAX_STREAM_MS), ...(opts.signal ? [opts.signal] : [])]);
+  try {
+    return await readStream(r, opts, body, signal, alive, onDelta);
+  } catch (error) {
+    if (error instanceof LlmError) throw error;
+    if (opts.signal?.aborted) throw new LlmError('Cancelled');
+    if ((error as Error).name === 'TimeoutError') throw new LlmError('The model took too long to answer');
+    throw new LlmError(`The answer was interrupted: ${(error as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readStream(
+  r: Route,
+  opts: Omit<ChatOptions, 'webResults'>,
+  body: object,
+  signal: AbortSignal,
+  alive: () => void,
+  onDelta: (text: string) => void,
+): Promise<{ content: string; usage: Usage }> {
   const send = (payload: object) =>
     fetch(ENDPOINTS[r.provider], {
       method: 'POST',
@@ -197,12 +237,19 @@ export async function streamChat(
       if (/reasoning|effort/i.test(error.error?.message ?? '')) res = await send(withoutReasoning(body));
     }
   } catch (error) {
-    if (opts.signal?.aborted) throw new LlmError('Cancelled');
+    if (opts.signal?.aborted || (error as Error).name === 'TimeoutError') throw error;
     throw new LlmError(`Cannot reach ${r.label}: ${(error as Error).message}`);
   }
   if (!res.ok || !res.body) {
     const data = (await res.json().catch(() => ({}))) as CompletionResponse;
     throw httpError(r, res.status, data.error?.message);
+  }
+  // Answered as a whole after all (a service may ignore "stream").
+  if (!res.headers.get('content-type')?.includes('event-stream')) {
+    const data = (await res.json().catch(() => ({}))) as CompletionResponse;
+    const whole = data.choices?.[0]?.message?.content ?? '';
+    if (whole) onDelta(whole);
+    return { content: whole, usage: await usageOf(r, opts.model, data.usage) };
   }
 
   let content = '';
@@ -227,19 +274,15 @@ export async function streamChat(
     }
     if (event.usage) rawUsage = event.usage;
   };
-  try {
-    for await (const bytes of res.body as unknown as AsyncIterable<Uint8Array>) {
-      buffer += decoder.decode(bytes, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) handle(line);
-    }
-    handle(buffer);
-  } catch (error) {
-    if (error instanceof LlmError) throw error;
-    if (opts.signal?.aborted) throw new LlmError('Cancelled');
-    throw new LlmError(`The answer was interrupted: ${(error as Error).message}`);
+  for await (const bytes of res.body as unknown as AsyncIterable<Uint8Array>) {
+    // Keep-alive comments count too: the model is still working.
+    alive();
+    buffer += decoder.decode(bytes, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) handle(line);
   }
+  handle(buffer);
   return { content, usage: await usageOf(r, opts.model, rawUsage) };
 }
 
