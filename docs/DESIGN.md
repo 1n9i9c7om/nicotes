@@ -323,7 +323,9 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **View mode** (next to Visual and Markdown, remembered per page) shows a page in a layout
   that fits its content: **checklist** (tick, add, edit, delete, drag & drop or arrow keys to
   reorder, hide done, undo), **recipe** (servings scale the amounts, ingredients to tick off,
-  steps with timers, full-screen cook mode with wake lock), **guide** (steps one at a time),
+  steps with timers, full-screen cook mode with wake lock; a time range opens a picker that
+  starts in the middle, adjustable with −/+ or a slider; cook mode also takes times from the
+  lines shown under "You need"), **guide** (steps one at a time),
   **reader** (read aloud with the browser's speech synthesis, sentence and word highlighting,
   position remembered) and **document** (clean read view).
 - **Blocks:** `shared/blocks.ts` splits Markdown into headings, lists (items with line ranges,

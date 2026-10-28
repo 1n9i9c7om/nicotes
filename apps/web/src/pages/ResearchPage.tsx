@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ArrowRight, BrainCircuit, FileText, Globe, Settings as SettingsIcon, Telescope } from 'lucide-react';
+import { ArrowRight, BrainCircuit, FileText, Globe, Settings as SettingsIcon, Telescope, X } from 'lucide-react';
 import {
   providerOf,
   RESEARCH_DEPTHS,
@@ -14,7 +14,7 @@ import {
 import { formatCost, JobProgress } from '../components/JobProgress';
 import { aiKeyFor, modelFor } from '../lib/ai';
 import { timeAgo } from '../lib/format';
-import { useJob, useJobs, useNotebooks, usePages, useSettings, useStartResearch } from '../lib/queries';
+import { useDeleteJob, useJob, useJobs, useNotebooks, usePages, useSettings, useStartResearch } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
 import { buildTree, displayTitle, rootKey, type PageTree } from '../lib/tree';
 
@@ -38,6 +38,7 @@ export function ResearchPage() {
   const keyCheck = aiKeyFor(settings.data, 'research', 'Research');
   const start = useStartResearch();
   const history = useJobs('research');
+  const removeJob = useDeleteJob('research');
   const [question, setQuestion] = useState('');
   const [depth, setDepth] = useLocalState<ResearchDepth>('nicotes.researchDepth', 'standard');
   const [mode, setMode] = useLocalState<ResearchMode>('nicotes.researchMode', 'web');
@@ -228,6 +229,13 @@ export function ResearchPage() {
                 job={j}
                 deleted={isDeleted(j.result as ResearchResult | null)}
                 onOpen={() => setParams({ job: j.id })}
+                onRemove={() =>
+                  removeJob.mutate(j.id, {
+                    onSuccess: () => {
+                      if (jobId === j.id) setParams({});
+                    },
+                  })
+                }
               />
             ))}
           </ul>
@@ -237,14 +245,26 @@ export function ResearchPage() {
   );
 }
 
-function RecentResearch({ job, deleted, onOpen }: { job: Job; deleted: boolean; onOpen: () => void }) {
+function RecentResearch({
+  job,
+  deleted,
+  onOpen,
+  onRemove,
+}: {
+  job: Job;
+  deleted: boolean;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
   const result = job.result as ResearchResult | null;
   const input = job.input as ResearchRequest;
+  const title = result?.title ?? input.question;
+  const active = job.status === 'queued' || job.status === 'running';
   return (
-    <li>
+    <li className="research-row">
       <button className={deleted ? 'recent-item research-item deleted' : 'recent-item research-item'} onClick={onOpen}>
         <FileText size={16} className="muted" />
-        <span className="recent-title">{result?.title ?? input.question}</span>
+        <span className="recent-title">{title}</span>
         <span className="recent-meta">
           {deleted
             ? 'deleted'
@@ -257,6 +277,16 @@ function RecentResearch({ job, deleted, onOpen }: { job: Job; deleted: boolean; 
         </span>
         <span className="recent-time">{timeAgo(job.createdAt)}</span>
       </button>
+      {!active && (
+        <button
+          className="icon-btn research-remove"
+          aria-label={`Remove “${title}” from the list`}
+          title="Remove from the list (the note stays)"
+          onClick={onRemove}
+        >
+          <X size={15} />
+        </button>
+      )}
     </li>
   );
 }

@@ -496,6 +496,18 @@ export function useStartOrganize() {
   });
 }
 
+/** Removes a finished run from a job history (its results, e.g. research notes, stay). */
+export function useDeleteJob(kind: JobKind) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/jobs/${id}`),
+    onSuccess: (_, id) => {
+      qc.setQueryData<Job[]>(keys.jobs(kind), (list) => list?.filter((j) => j.id !== id));
+      qc.removeQueries({ queryKey: keys.job(id) });
+    },
+  });
+}
+
 export function useCancelJob() {
   const qc = useQueryClient();
   return useMutation({

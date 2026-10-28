@@ -126,9 +126,43 @@
   color: var(--text-faint);
 }
 
+.research-row {
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+  background: var(--bg-elev);
+}
+
+.research-row:hover {
+  background: var(--bg-hover);
+}
+
 .research-item {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
+  background: transparent;
+}
+
+.research-item:hover {
+  background: transparent;
+}
+
+/* Shown on hover (always on touch screens). */
+.research-remove {
+  flex: none;
+  opacity: 0;
+}
+
+.research-row:hover .research-remove,
+.research-remove:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .research-remove {
+    opacity: 1;
+  }
 }
 
 .research-item.deleted .recent-title {

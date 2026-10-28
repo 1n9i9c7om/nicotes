@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BellRing, Pause, Play, Timer as TimerIcon, X } from 'lucide-react';
-import { findDurations } from '@nicotes/shared';
+import { BellRing, Minus, Pause, Play, Plus, Timer as TimerIcon, X } from 'lucide-react';
+import { findDurations, type Duration } from '@nicotes/shared';
 
 export interface Timer {
   id: number;
@@ -87,17 +87,91 @@ const clock = (seconds: number) => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 };
 
-/** Buttons for the durations a step mentions ("bake 10 minutes" → a 10-minute timer). */
+/** "45 s", "25 min", "1 h 15 min". */
+export function shortDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const minutes = s ? `${m}:${String(s).padStart(2, '0')} min` : `${m} min`;
+  return h ? (m || s ? `${h} h ${minutes}` : `${h} h`) : minutes;
+}
+
+/** Adjustment step for a range: 5 s for short ones, 1 min, or 5 min for long ones. */
+export const rangeStep = (span: number) => (span <= 120 ? 5 : span <= 3600 ? 60 : 300);
+
+/** The middle of a range, on the adjustment grid. */
+export function rangeMiddle({ seconds, max = seconds }: Duration): number {
+  const step = rangeStep(max - seconds);
+  return Math.min(max, seconds + Math.round((max - seconds) / 2 / step) * step);
+}
+
+/** A range ("10–25 minutes"): pick a time within it, starting in the middle. */
+function RangeTimer({ duration, timers }: { duration: Duration; timers: Timers }) {
+  const [value, setValue] = useState<number | null>(null);
+  const min = duration.seconds;
+  const max = duration.max!;
+  const step = rangeStep(max - min);
+  if (value === null) {
+    return (
+      <button className="timer-chip" onClick={() => setValue(rangeMiddle(duration))} title="Pick a time in this range" aria-expanded={false}>
+        <TimerIcon size={13} /> {duration.label}
+      </button>
+    );
+  }
+  const set = (v: number) => setValue(Math.min(max, Math.max(min, v)));
+  return (
+    <span className="timer-range" role="group" aria-label={`Timer within ${duration.label}`}>
+      <button className="icon-btn" aria-label="Shorter" disabled={value <= min} onClick={() => set(value - step)}>
+        <Minus size={14} />
+      </button>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label="Timer length"
+        aria-valuetext={shortDuration(value)}
+        onChange={(e) => set(Number(e.target.value))}
+      />
+      <button className="icon-btn" aria-label="Longer" disabled={value >= max} onClick={() => set(value + step)}>
+        <Plus size={14} />
+      </button>
+      <button
+        className="timer-chip"
+        onClick={() => {
+          timers.start(duration.label, value);
+          setValue(null);
+        }}
+      >
+        <Play size={13} /> {shortDuration(value)}
+      </button>
+      <button className="icon-btn" aria-label="Close" onClick={() => setValue(null)}>
+        <X size={14} />
+      </button>
+    </span>
+  );
+}
+
+/**
+ * Buttons for the durations a step mentions: "bake 10 minutes" starts a 10-minute timer,
+ * a range ("10–12 minutes") first offers to pick the time.
+ */
 export function TimerChips({ text, timers }: { text: string; timers: Timers }) {
   const found = findDurations(text);
   if (!found.length) return null;
   return (
     <span className="timer-chips">
-      {found.map((d, i) => (
-        <button key={i} className="timer-chip" onClick={() => timers.start(d.label, d.seconds)} title="Start a timer">
-          <TimerIcon size={13} /> {d.label}
-        </button>
-      ))}
+      {found.map((d, i) =>
+        d.max ? (
+          <RangeTimer key={`${i}:${d.label}`} duration={d} timers={timers} />
+        ) : (
+          <button key={`${i}:${d.label}`} className="timer-chip" onClick={() => timers.start(d.label, d.seconds)} title="Start a timer">
+            <TimerIcon size={13} /> {d.label}
+          </button>
+        ),
+      )}
     </span>
   );
 }
