@@ -1,7 +1,16 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ArrowRight, FileText, Settings as SettingsIcon, Telescope } from 'lucide-react';
-import { providerOf, RESEARCH_DEPTHS, searchLabel, type Job, type ResearchDepth, type ResearchRequest, type ResearchResult } from '@nicotes/shared';
+import { ArrowRight, BrainCircuit, FileText, Globe, Settings as SettingsIcon, Telescope } from 'lucide-react';
+import {
+  providerOf,
+  RESEARCH_DEPTHS,
+  searchLabel,
+  type Job,
+  type ResearchDepth,
+  type ResearchMode,
+  type ResearchRequest,
+  type ResearchResult,
+} from '@nicotes/shared';
 import { formatCost, JobProgress } from '../components/JobProgress';
 import { aiKeyFor, modelFor } from '../lib/ai';
 import { timeAgo } from '../lib/format';
@@ -31,6 +40,8 @@ export function ResearchPage() {
   const history = useJobs('research');
   const [question, setQuestion] = useState('');
   const [depth, setDepth] = useLocalState<ResearchDepth>('nicotes.researchDepth', 'standard');
+  const [mode, setMode] = useLocalState<ResearchMode>('nicotes.researchMode', 'web');
+  const offline = mode === 'offline';
   const [lastNotebook, setLastNotebook] = useLocalState<string | null>('nicotes.researchNotebook', null);
   const [notebookId, setNotebookId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -45,7 +56,7 @@ export function ResearchPage() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!target) return;
-    const input: ResearchRequest = { question, depth, notebookId: target.id, parentId };
+    const input: ResearchRequest = { question, depth, mode, notebookId: target.id, parentId };
     start.mutate(input, {
       onSuccess: (j) => {
         setLastNotebook(target.id);
@@ -67,7 +78,8 @@ export function ResearchPage() {
           <Telescope size={26} /> Research
         </h1>
         <p className="muted">
-          Ask a question; Nicotes searches the web, reads the best sources and writes a note with citations.
+          Ask a question; Nicotes searches the web, reads the best sources and writes a note with citations. Offline,
+          the model writes the note from its own knowledge instead.
         </p>
       </header>
 
@@ -78,7 +90,9 @@ export function ResearchPage() {
           {result && (
             <div className="import-actions">
               <span className="muted">
-                {result.sources} sources via {searchLabel(result.searchProvider)}
+                {result.searchProvider === 'offline'
+                  ? 'Written from the model’s own knowledge'
+                  : `${result.sources} sources via ${searchLabel(result.searchProvider)}`}
               </span>
               {isDeleted(result) ? (
                 <span className="muted">
@@ -115,6 +129,23 @@ export function ResearchPage() {
             }}
           />
           <div className="field">
+            <span>Sources</span>
+            <div className="chips" role="radiogroup">
+              <button type="button" role="radio" aria-checked={!offline} className={offline ? 'chip' : 'chip active'} onClick={() => setMode('web')}>
+                <Globe size={14} /> Web search
+              </button>
+              <button type="button" role="radio" aria-checked={offline} className={offline ? 'chip active' : 'chip'} onClick={() => setMode('offline')}>
+                <BrainCircuit size={14} /> Model knowledge only
+              </button>
+            </div>
+            {offline && (
+              <small className="muted">
+                Nothing is searched: the model answers from what it learned in training, which may be outdated or wrong, and
+                the note has no sources to check.
+              </small>
+            )}
+          </div>
+          <div className="field">
             <span>Depth</span>
             <div className="chips" role="radiogroup">
               {(Object.keys(RESEARCH_DEPTHS) as ResearchDepth[]).map((d) => (
@@ -126,7 +157,7 @@ export function ResearchPage() {
                   className={depth === d ? 'chip active' : 'chip'}
                   onClick={() => setDepth(d)}
                 >
-                  {RESEARCH_DEPTHS[d].label} · {RESEARCH_DEPTHS[d].sources} sources
+                  {RESEARCH_DEPTHS[d].label} · {offline ? RESEARCH_DEPTHS[d].offline : `${RESEARCH_DEPTHS[d].sources} sources`}
                 </button>
               ))}
             </div>
@@ -167,7 +198,12 @@ export function ResearchPage() {
               {ai && (
                 <>
                   {settings.data && modelFor(settings.data, 'research')} ·{' '}
-                  {ai.searxngUrl ? 'SearXNG' : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))} · limit {formatCost(ai.costLimit)}{' '}
+                  {offline
+                    ? searchLabel('offline')
+                    : ai.searxngUrl
+                      ? 'SearXNG'
+                      : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))}{' '}
+                  · limit {formatCost(ai.costLimit)}{' '}
                   <Link to="/settings" aria-label="AI settings">
                     <SettingsIcon size={13} />
                   </Link>
@@ -210,7 +246,14 @@ function RecentResearch({ job, deleted, onOpen }: { job: Job; deleted: boolean; 
         <FileText size={16} className="muted" />
         <span className="recent-title">{result?.title ?? input.question}</span>
         <span className="recent-meta">
-          {deleted ? 'deleted' : job.status === 'done' ? `${result?.sources} sources` : job.status} · {formatCost(job.cost)}
+          {deleted
+            ? 'deleted'
+            : job.status !== 'done'
+              ? job.status
+              : result?.searchProvider === 'offline'
+                ? 'offline'
+                : `${result?.sources} sources`}{' '}
+          · {formatCost(job.cost)}
         </span>
         <span className="recent-time">{timeAgo(job.createdAt)}</span>
       </button>

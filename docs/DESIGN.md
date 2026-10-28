@@ -229,6 +229,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   per-source notes (skipping irrelevant ones, replacing failures with spare candidates) →
   synthesis with `[n]` markers, turned into links, plus a generated sources list. Saved
   as a page tagged `#research`. Depths: quick 4, standard 8, deep 14 sources.
+- **Offline research** (`mode: 'offline'`): plan (title, language, labels) → one writing
+  call told it cannot search, to flag uncertain or possibly outdated facts and to invent no
+  sources; the depth sets length and reasoning effort (low/medium/high). No citations or
+  sources list; the footer says it was written without web search, and the result's
+  `searchProvider` is `offline`.
 
 ### Graph, templates and daily notes
 

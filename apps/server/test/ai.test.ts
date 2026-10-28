@@ -205,6 +205,41 @@ describe('research', () => {
     expect(calls.at(-1)).toMatchObject({ reasoning: { effort: 'low' } });
   });
 
+  it('writes an offline note from the model’s knowledge without searching', async () => {
+    const api = setup({ importAllowPrivate: true, settingsEnv: { openrouterApiKey: 'sk-test', searxngUrl: base } as never });
+    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    const nb = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    let searched = false;
+    const onRequest = () => (searched = true);
+    server.on('request', onRequest);
+
+    const calls = fakeOpenRouter((prompt) => {
+      if (prompt.includes('You plan a research note')) return '{"title":"Main bus","language":"en"}';
+      return '# Ignored title\n\nA main bus carries the basic resources [1].\n\n## Open questions\n\nRatios may have changed.';
+    });
+
+    const started = await api.call<Job>('POST', '/api/ai/research', { question: 'How to build a main bus?', depth: 'deep', mode: 'offline', notebookId: nb.id });
+    const job = await finished<ResearchResult>(api, started.body.id);
+    expect(job.error).toBeNull();
+    expect(job.result).toMatchObject({ title: 'Main bus', sources: 0, searchProvider: 'offline' });
+    server.off('request', onRequest);
+    expect(searched).toBe(false);
+    expect(calls).toHaveLength(2);
+    expect(JSON.stringify(calls[1])).toContain('cannot search the web');
+    // Deep offline notes may think longer; there are no sources to read.
+    expect(calls[1]).toMatchObject({ reasoning: { effort: 'high' }, max_tokens: 14000 });
+    expect(calls[1]).not.toHaveProperty('plugins');
+
+    const page = (await api.call<Page>('GET', `/api/pages/${job.result!.pageId}`)).body;
+    expect(page.tags).toEqual(['research']);
+    expect(page.content).toContain('> **Research question:** How to build a main bus?');
+    // Without sources, citation-like markers stay plain text and no sources list is added.
+    expect(page.content).toContain('basic resources [1].');
+    expect(page.content).not.toContain('## Sources');
+    expect(page.content).not.toContain('Ignored title');
+    expect(page.content).toMatch(/Written \d{4}-\d\d-\d\d from the model’s own knowledge, without web search · /);
+  });
+
   it('can be cancelled', async () => {
     const api = setup({ importAllowPrivate: true, settingsEnv: { openrouterApiKey: 'sk-test', searxngUrl: base } as never });
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
