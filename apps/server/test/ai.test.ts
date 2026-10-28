@@ -240,6 +240,21 @@ describe('research', () => {
     expect(page.content).toMatch(/Written \d{4}-\d\d-\d\d from the model’s own knowledge, without web search · /);
   });
 
+  it('removes a finished run from the history but keeps its note', async () => {
+    const api = setup({ settingsEnv: { openrouterApiKey: 'sk-test' } as never });
+    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    const nb = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    fakeOpenRouter((prompt) => (prompt.includes('You plan a research note') ? '{"title":"Bus"}' : 'A bus.\n\n## Open questions\n\nNone.'));
+    const started = await api.call<Job>('POST', '/api/ai/research', { question: 'What is a bus?', mode: 'offline', notebookId: nb.id });
+    const job = await finished<ResearchResult>(api, started.body.id);
+
+    expect((await api.call('DELETE', `/api/jobs/${job.id}`)).status).toBe(204);
+    expect((await api.call<Job[]>('GET', '/api/jobs?kind=research')).body).toEqual([]);
+    expect((await api.call('GET', `/api/jobs/${job.id}`)).status).toBe(404);
+    expect((await api.call('GET', `/api/pages/${job.result!.pageId}`)).status).toBe(200);
+    expect((await api.call('DELETE', `/api/jobs/${job.id}`)).status).toBe(404);
+  });
+
   it('can be cancelled', async () => {
     const api = setup({ importAllowPrivate: true, settingsEnv: { openrouterApiKey: 'sk-test', searxngUrl: base } as never });
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
@@ -255,6 +270,8 @@ describe('research', () => {
     });
     const started = await api.call<Job>('POST', '/api/ai/research', { question: 'Anything at all?', notebookId: nb.id });
     await new Promise((r) => setTimeout(r, 50));
+    // A running job cannot be removed from the history.
+    expect((await api.call('DELETE', `/api/jobs/${started.body.id}`)).status).toBe(409);
     await api.call('POST', `/api/jobs/${started.body.id}/cancel`);
     release();
     expect(await finished(api, started.body.id)).toMatchObject({ status: 'cancelled' });
