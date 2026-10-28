@@ -98,9 +98,17 @@ describe('recipe helpers', () => {
 
   it('finds timers and servings', () => {
     expect(findDurations('Bake for 10–12 minutes, then rest 1 h. Add 200 g sugar.')).toEqual([
-      { label: '10–12 minutes', seconds: 600 },
+      { label: '10–12 minutes', seconds: 600, max: 720 },
       { label: '1 h', seconds: 3600 },
     ]);
+    // Ranges with other dashes, "~", or a hyphenated unit.
+    expect(findDurations('jiggles — roughly 10–25 minutes depending on the pan')).toEqual([{ label: '10–25 minutes', seconds: 600, max: 1500 }]);
+    expect(findDurations('cook 20—30 minutes')).toEqual([{ label: '20—30 minutes', seconds: 1200, max: 1800 }]);
+    expect(findDurations('about 20 ~ 30 min')).toEqual([{ label: '20 ~ 30 min', seconds: 1200, max: 1800 }]);
+    expect(findDurations('a 20–30-minute bake')).toEqual([{ label: '20–30-minute', seconds: 1200, max: 1800 }]);
+    expect(findDurations('bake 1–1½ hours')).toEqual([{ label: '1–1½ hours', seconds: 3600, max: 5400 }]);
+    // A reversed range is just its first value.
+    expect(findDurations('30-20 minutes')).toEqual([{ label: '30-20 minutes', seconds: 1800 }]);
     expect(findDurations('30 Min. backen')).toEqual([{ label: '30 Min', seconds: 1800 }]);
     expect(findServings('Servings: 12 · Prep: 30 min')).toBe(12);
     expect(findServings('Zutaten für 4 Personen')).toBe(4);

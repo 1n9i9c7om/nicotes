@@ -2,6 +2,26 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.3.2 — 2026-10-28
+
+**New**
+
+- **Remove runs from Recent research.** Each finished entry in the Recent research list has
+  an × to remove it from the list. The research note itself stays where it is.
+- **Timers for time ranges.** A recipe step that says "bake for 20–30 minutes" now offers a
+  timer that starts in the middle of the range. Use − and +, or the slider, to pick a
+  different time within the range before starting it.
+
+**Fixes**
+
+- **Timers in cook mode's "You need" box.** Times mentioned in the lines under "You need"
+  (for example "roughly 10–25 minutes") now get a timer as well.
+- **More ways of writing times are recognised.** Ranges written with a long dash, with "~",
+  or as "a 20–30-minute bake" are now understood. Before, they gave no timer or only the
+  upper number.
+- **Sliders match the app's look.** Sliders now use the app's colours instead of the
+  browser's default style.
+
 ## 0.3.1 — 2026-10-28
 
 **Fixes**

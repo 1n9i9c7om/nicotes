@@ -71,13 +71,16 @@ const UNITS: [RegExp, number][] = [
   [/^(?:min\.?|mins?|minutes?|minuten?|minute)$/i, 60],
   [/^(?:s|secs?|seconds?|sek\.?|sekunden?)$/i, 1],
 ];
-const DURATION = new RegExp(String.raw`(${NUMBER})(?:\s*(?:-|–|to|bis)\s*(${NUMBER}))?\s*([a-zäöü.]+)`, 'gi');
+// Ranges with any dash, "~", "to" or "bis"; the unit may follow a hyphen ("a 20–30-minute bake").
+const DURATION = new RegExp(String.raw`(${NUMBER})(?:\s*(?:-|–|—|‒|−|~|to|bis)\s*(${NUMBER}))?(?:\s*|-)([a-zäöü.]+)`, 'gi');
 
 export interface Duration {
   /** The text that names it, e.g. "10–12 minutes". */
   label: string;
   /** Seconds (the lower end of a range). */
   seconds: number;
+  /** Seconds at the upper end of a range ("10–12 minutes" → 720); absent for one value. */
+  max?: number;
 }
 
 /** Durations mentioned in a step, for timers. */
@@ -89,8 +92,11 @@ export function findDurations(text: string): Duration[] {
     const unit = UNITS.find(([re]) => re.test(word) || re.test(word.replace(/\.$/, '')));
     if (!unit) continue;
     const seconds = Math.round(parseNumber(m[1]!) * unit[1]);
+    const max = m[2] ? Math.round(parseNumber(m[2]) * unit[1]) : 0;
+    if (seconds <= 0 || seconds > 48 * 3600) continue;
     // The label drops a full stop ("4 minutes." at a sentence end, or the "Min." abbreviation).
-    if (seconds > 0 && seconds <= 48 * 3600) found.push({ label: m[0].trim().replace(/\.$/, ''), seconds });
+    const label = m[0].trim().replace(/\.$/, '');
+    found.push(max > seconds && max <= 48 * 3600 ? { label, seconds, max } : { label, seconds });
   }
   return found;
 }

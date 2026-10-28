@@ -43,8 +43,8 @@ the semantic index, **related** pages.
 ### Interactive views
 
 Next to Visual and Markdown, **View** shows a page the way its content wants to be used: a
-checklist to tick and drag around, a recipe with adjustable servings, timers and a
-full-screen cook mode, a step-by-step guide, or a reader that reads stories aloud and
+checklist to tick and drag around, a recipe with adjustable servings, timers (for a range
+like "20–30 minutes" you pick the time, starting in the middle) and a full-screen cook mode, a step-by-step guide, or a reader that reads stories aloud and
 highlights the current sentence. The layout is detected automatically; with an OpenRouter
 key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
 yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
@@ -82,7 +82,8 @@ With an OpenRouter key, **Research** answers a question by searching the web, re
 best sources and writing a note with numbered citations (on pages with citations, **Hide
 sources** in the page bar hides the numbers in the text without removing them from the
 page). With **Model knowledge only** it searches nothing and the model writes the note from
-its own knowledge instead: faster and cheaper, but without sources, and possibly outdated; **Organize with AI** (notebook or
+its own knowledge instead: faster and cheaper, but without sources, and possibly outdated.
+Past runs are listed under **Recent research**; × removes one from the list (its note stays); **Organize with AI** (notebook or
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
 at a configurable limit (default $0.50). Under Settings → **AI models** every feature

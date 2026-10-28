@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import type { Job, JobKind, JobProgress, JobStatus } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
@@ -116,6 +117,16 @@ export class JobRunner {
     return this.get(userId, id);
   }
 
+  /**
+   * Removes a finished job from the history. What it made stays (a research note is an
+   * ordinary page); applied organize batches keep their undo, without the job link.
+   */
+  remove(userId: string, id: string) {
+    const job = this.get(userId, id);
+    if (job.status === 'queued' || job.status === 'running') throw new HTTPException(409, { message: 'Cancel the run first' });
+    this.db.delete(jobs).where(eq(jobs.id, id)).run();
+  }
+
   /** Stores a changed result (e.g. after suggestions were applied). */
   updateResult(id: string, result: unknown) {
     this.db.update(jobs).set({ result: JSON.stringify(result), updatedAt: Date.now() }).where(eq(jobs.id, id)).run();
@@ -214,7 +225,11 @@ export function jobRoutes(runner: JobRunner) {
   return new Hono<AppEnv>()
     .get('/', (c) => c.json(runner.list(c.var.user.id, (c.req.query('kind') as JobKind) || undefined)))
     .get('/:id', (c) => c.json(runner.get(c.var.user.id, c.req.param('id'))))
-    .post('/:id/cancel', (c) => c.json(runner.cancel(c.var.user.id, c.req.param('id'))));
+    .post('/:id/cancel', (c) => c.json(runner.cancel(c.var.user.id, c.req.param('id'))))
+    .delete('/:id', (c) => {
+      runner.remove(c.var.user.id, c.req.param('id'));
+      return c.body(null, 204);
+    });
 }
 
 /** Runs `fn` over `items` with at most `limit` in flight, keeping result order. */

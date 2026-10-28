@@ -104,7 +104,8 @@ export function StepRunner({
               ))}
             </ul>
           )}
-          <TimerChips text={[step.text, ...step.details].join(' ')} timers={timers} />
+          {/* Lines under "You need" can name times too ("bake roughly 10–25 minutes"). */}
+          <TimerChips text={[step.text, ...step.details, ...ingredients].join(' ')} timers={timers} />
           {ingredients.length > 0 && (
             <div className="runner-needs">
               <span className="muted">You need</span>
