@@ -92,16 +92,22 @@ export interface AiBatch {
 
 // ---------- Research ----------
 
+/** Web research reads `sources` pages; offline research only changes how long the note gets. */
 export const RESEARCH_DEPTHS = {
-  quick: { label: 'Quick', queries: 2, sources: 4 },
-  standard: { label: 'Standard', queries: 4, sources: 8 },
-  deep: { label: 'Deep', queries: 6, sources: 14 },
+  quick: { label: 'Quick', queries: 2, sources: 4, offline: 'Short overview' },
+  standard: { label: 'Standard', queries: 4, sources: 8, offline: 'Detailed' },
+  deep: { label: 'Deep', queries: 6, sources: 14, offline: 'In depth' },
 } as const;
 export type ResearchDepth = keyof typeof RESEARCH_DEPTHS;
+
+/** "web" searches and reads sources; "offline" answers from the model's own knowledge. */
+export const RESEARCH_MODES = ['web', 'offline'] as const;
+export type ResearchMode = (typeof RESEARCH_MODES)[number];
 
 export const researchRequestSchema = z.object({
   question: z.string().trim().min(3).max(2000),
   depth: z.enum(['quick', 'standard', 'deep']).default('standard'),
+  mode: z.enum(RESEARCH_MODES).default('web'),
   notebookId: z.string().min(1),
   parentId: z.string().min(1).nullable().default(null),
 });
@@ -111,9 +117,10 @@ export interface ResearchResult {
   pageId: string;
   title: string;
   sources: number;
-  searchProvider: 'searxng' | AiProvider;
+  /** "offline" for notes written from the model's own knowledge (no sources). */
+  searchProvider: 'searxng' | AiProvider | 'offline';
 }
 
-/** "SearXNG" or e.g. "OpenRouter web search". */
+/** "SearXNG", e.g. "OpenRouter web search", or "no web search". */
 export const searchLabel = (provider: ResearchResult['searchProvider']) =>
-  provider === 'searxng' ? 'SearXNG' : `${AI_PROVIDER_LABELS[provider]} web search`;
+  provider === 'searxng' ? 'SearXNG' : provider === 'offline' ? 'no web search' : `${AI_PROVIDER_LABELS[provider]} web search`;
