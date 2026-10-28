@@ -3,7 +3,8 @@
 Self-hosted notes that are easy to group and link — somewhere between OneNote and
 Obsidian. Web UI only, dark theme, runs as a single Docker container.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the design and roadmap.
+See [docs/DESIGN.md](docs/DESIGN.md) for the design and roadmap, and
+[CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Run with Docker
 
