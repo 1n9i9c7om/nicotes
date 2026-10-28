@@ -249,17 +249,24 @@ export async function checkOpenRouter(apiKey: string | null): Promise<Connection
 
 export async function checkRouteway(apiKey: string | null): Promise<ConnectionCheck> {
   if (!apiKey) return { ok: false, message: 'No API key configured' };
+  const headers = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' };
   try {
-    const res = await fetch('https://api.routeway.ai/v1/account/balance', {
-      headers: { authorization: `Bearer ${apiKey}` },
+    // Only account keys may read the balance, so the key is checked with a chat request
+    // without messages: Routeway authenticates it (401 for a wrong key) and then rejects the
+    // empty request (422) before any model runs, so nothing is charged.
+    const probe = await fetch('https://api.routeway.ai/v1/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [] }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (res.status === 401) return { ok: false, message: 'Routeway rejected the API key' };
-    // Keys without the account:balance scope are valid but may not read the balance.
-    if (res.status === 403) return { ok: true, message: 'The key works (it may not read the balance)' };
-    if (!res.ok) return { ok: false, message: `Routeway answered ${res.status}` };
-    const body = (await res.json()) as { balance?: number };
-    return { ok: true, message: `The key works${typeof body.balance === 'number' ? ` · $${body.balance.toFixed(2)} balance` : ''}` };
+    if (probe.status === 401 || probe.status === 403) return { ok: false, message: 'Routeway rejected the API key' };
+    if (probe.status >= 500 || probe.status === 429) return { ok: false, message: `Routeway answered ${probe.status}` };
+    // The balance, where the key may read it.
+    const balance = await fetch('https://api.routeway.ai/v1/account/balance', { headers, signal: AbortSignal.timeout(TIMEOUT_MS) })
+      .then(async (res) => (res.ok ? ((await res.json()) as { balance?: number }).balance : undefined))
+      .catch(() => undefined);
+    return { ok: true, message: `The key works${typeof balance === 'number' ? ` · $${balance.toFixed(2)} balance` : ''}` };
   } catch (error) {
     return { ok: false, message: `Cannot reach Routeway: ${(error as Error).message}` };
   }

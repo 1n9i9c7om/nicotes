@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelList, Settings } from '@nicotes/shared';
 import { chat, streamChat } from '../src/ai/llm.js';
 import { listModels } from '../src/ai/models.js';
+import { checkRouteway } from '../src/settings.js';
 import { linksInText } from '../src/ai/research.js';
 import { setup } from './helpers.js';
 
@@ -161,5 +162,39 @@ describe('Routeway settings', () => {
     const res = await api.rawPost('/api/ai/ask', { question: 'Anything new?' });
     expect(res.status).toBe(400);
     expect(await res.text()).toContain('Asking needs a Routeway API key');
+  });
+});
+
+describe('Routeway connection check', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Routeway as observed: chat requests authenticate first; the balance needs an account key. */
+  function fakeRouteway(validKey: string) {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      urls.push(url);
+      const auth = new Headers(init?.headers).get('authorization');
+      if (url.endsWith('/v1/chat/completions')) {
+        if (!auth) return new Response(null, { status: 403 });
+        if (auth !== `Bearer ${validKey}`) return Response.json({ error: { message: 'Invalid API key' } }, { status: 401 });
+        return Response.json({ error: { message: 'List should have at least 1 item' } }, { status: 422 });
+      }
+      if (url.endsWith('/v1/account/balance')) return Response.json({ error: { message: 'Invalid account key' } }, { status: 401 });
+      throw new Error(`unexpected request to ${url}`);
+    });
+    return urls;
+  }
+
+  it('accepts an ordinary API key that may not read the balance', async () => {
+    const urls = fakeRouteway('sk-good');
+    expect(await checkRouteway('sk-good')).toEqual({ ok: true, message: 'The key works' });
+    expect(urls[0]).toBe('https://api.routeway.ai/v1/chat/completions');
+  });
+
+  it('rejects a wrong key', async () => {
+    fakeRouteway('sk-good');
+    expect(await checkRouteway('sk-bad')).toEqual({ ok: false, message: 'Routeway rejected the API key' });
+    expect(await checkRouteway(null)).toEqual({ ok: false, message: 'No API key configured' });
   });
 });
