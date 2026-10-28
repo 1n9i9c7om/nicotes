@@ -11,7 +11,7 @@ import { findPage } from '../routes/pages.js';
 import type { AiConfig, SettingsStore } from '../settings.js';
 import { retrieve } from './ask.js';
 import { guessLanguage, languageName } from './language.js';
-import { addUsage, completeJson, emptyUsage, LlmError, streamChat, type Usage } from './llm.js';
+import { addUsage, completeJson, emptyUsage, hasKeyFor, LlmError, missingKeyMessage, streamChat, type Usage } from './llm.js';
 import { host, pickSources, webSearch } from './research.js';
 import { scopePageIds } from './scope.js';
 import type { SemanticIndex } from './semantic.js';
@@ -100,7 +100,7 @@ async function readWeb(
   const language = guessLanguage(request) ?? 'en';
   await step('Planning a web search…');
   const plan = await completeJson({
-    apiKey: cfg.openrouterApiKey!,
+    keys: cfg.keys,
     model,
     system: 'You plan web searches for a notes app. Reply with one JSON object only.',
     user: `The user is working on a note titled "${pageTitle || 'Untitled'}" and asks:\n${request}\n\nReply as {"queries": ["<1 or 2 web search queries that find what the request needs>"]}`,
@@ -150,10 +150,8 @@ export function assistantRoutes(db: Db, settings: SettingsStore, index: Semantic
     const userId = c.var.user.id;
     const page = findPage(db, userId, c.req.param('id'));
     const cfg = settings.effective(userId);
-    if (!cfg.openrouterApiKey) {
-      throw new HTTPException(400, { message: 'The assistant needs an OpenRouter API key — add one under Settings.' });
-    }
     const model = cfg.models.assistant;
+    if (!hasKeyFor(cfg.keys, model)) throw new HTTPException(400, { message: missingKeyMessage('The assistant', model) });
 
     return streamSSE(c, async (stream) => {
       const controller = new AbortController();
@@ -213,7 +211,7 @@ export function assistantRoutes(db: Db, settings: SettingsStore, index: Semantic
         const splitter = new ReplySplitter();
         const reply = await streamChat(
           {
-            apiKey: cfg.openrouterApiKey!,
+            keys: cfg.keys,
             model,
             // Room for rewriting the whole page (roughly 3 characters per token) plus the message.
             maxTokens: Math.min(16_000, Math.ceil(input.content.length / 2.5) + 2000),

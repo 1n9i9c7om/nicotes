@@ -196,6 +196,18 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   each resolve their own model (settings > environment variable > the default model), so
   cheap extraction and demanding writing can use different models. Settings shows
   OpenRouter's prices next to each and warns about ids missing from its model list.
+- **Services:** chat models run on OpenRouter or Routeway (`ai/llm.ts`). A model id
+  `routeway:<id>` goes to `https://api.routeway.ai/v1` with the Routeway key, anything else
+  to OpenRouter, so each feature uses the service of its model and a missing key is
+  reported per service. The services differ in options: OpenRouter gets
+  `reasoning.effort` and `usage.include` and searches via its `web` plugin; Routeway leaves
+  reasoning off unless an effort above "minimal" is asked for, reports streamed usage via
+  `stream_options.include_usage`, searches with an `@online` model suffix (links are read
+  from the reply when no citations come back) and returns no cost, so the cost is computed
+  from its price list. `GET /api/settings/models` merges both public model lists (cached
+  for an hour, `refresh=1` reloads; a service that is down is left out and reported) into
+  one list with prices, context size and tool / reasoning / free flags for the picker.
+  Embeddings stay on OpenRouter.
 
 - **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
   time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
@@ -350,6 +362,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
+| `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |

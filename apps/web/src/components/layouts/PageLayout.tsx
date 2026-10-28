@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { LayoutTemplate, Loader2, Sparkles, Undo2 } from 'lucide-react';
 import { guessLayout, LAYOUT_INFO, LAYOUT_TYPES, pageBlocks, specMatches, type LayoutSpec, type LayoutType } from '@nicotes/shared';
 import { useLayoutActions, usePageLayout, useSettings } from '../../lib/queries';
+import { aiKeyFor } from '../../lib/ai';
 import { formatCost } from '../JobProgress';
 import { ChecklistLayout } from './ChecklistLayout';
 import { DocumentLayout } from './DocumentLayout';
@@ -53,7 +54,7 @@ export function PageLayout({
   const auto = useMemo(() => guessLayout(content, tags), [content, tags]);
   const [undo, setUndo] = useState<string[]>([]);
   const asked = useRef(false);
-  const apiKeySet = !!settings.data?.openrouter.apiKeySet;
+  const apiKeySet = aiKeyFor(settings.data, 'layout', 'Layouts').ready;
   const info = stored.data ?? null;
 
   // A stored layout whose blocks are gone (the page changed a lot) keeps its type.

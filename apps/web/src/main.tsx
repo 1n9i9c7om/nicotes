@@ -13,6 +13,7 @@ import './styles/tasks.css';
 import './styles/ask.css';
 import './styles/layouts.css';
 import './styles/assistant.css';
+import './styles/models.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';

@@ -4,6 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import {
   IMPORT_PROFILES,
+  providerOf,
   importRequestSchema,
   type ImportPreview,
   type ImportProfile,
@@ -14,7 +15,7 @@ import { readJson } from '../http.js';
 import { storeAttachment } from '../routes/attachments.js';
 import type { ImportConfig, SettingsStore } from '../settings.js';
 import { extractText, extractUrl, type ExtractedPage } from './extract.js';
-import { addUsage, completeJson, emptyUsage, LlmError } from '../ai/llm.js';
+import { addUsage, completeJson, emptyUsage, hasKeyFor, LlmError } from '../ai/llm.js';
 import { FetchError, safeFetch } from './net.js';
 import { descriptions, renderMarkdown, schemas, shapes, suggestedTags, type ProfileData } from './profiles.js';
 import { findStructured, jsonLdImage, recipeFromJsonLd } from './structured.js';
@@ -45,7 +46,7 @@ async function classify(cfg: ImportConfig, page: ExtractedPage) {
   const options = IMPORT_PROFILES.map((p) => `- "${p}": ${descriptions[p]}`).join('\n');
   const excerpt: ExtractedPage = { ...page, markdown: page.markdown.slice(0, 3000) };
   return completeJson({
-    apiKey: cfg.openrouterApiKey!,
+    keys: cfg.keys,
     model: cfg.models.import,
     system: SYSTEM,
     user: `Which kind of page is this? Options:\n${options}\n\nReply as {"profile": "<option>"}.\n\n${pageContext(excerpt)}`,
@@ -102,7 +103,7 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
     }
 
     // 2. Otherwise let the model classify (if needed) and extract.
-    if (!data && cfg.openrouterApiKey) {
+    if (!data && hasKeyFor(cfg.keys, cfg.models.import)) {
       try {
         let spent = emptyUsage();
         if (!profile) {
@@ -112,7 +113,7 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
         }
         const hint = structured?.profile === profile ? structured.node : undefined;
         const result = await completeJson({
-          apiKey: cfg.openrouterApiKey,
+          keys: cfg.keys,
           model: cfg.models.import,
           system: SYSTEM,
           user: `Extract ${descriptions[profile]} as JSON with this TypeScript type:\n${shapes[profile]}\n\n${pageContext(page, hint)}`,
@@ -125,7 +126,7 @@ export function importRoutes({ db, dataDir, settings, allowPrivate }: ImportDeps
         warnings.push(`${error.message}. Imported the page text instead.`);
       }
     } else if (!data) {
-      warnings.push('No OpenRouter API key configured (Settings): imported the page text without summarising.');
+      warnings.push(`No ${providerOf(cfg.models.import) === 'routeway' ? 'Routeway' : 'OpenRouter'} API key configured (Settings): imported the page text without summarising.`);
     }
 
     const ldImage = structured && jsonLdImage(structured.node.image);

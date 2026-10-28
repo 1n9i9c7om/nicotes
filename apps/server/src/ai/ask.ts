@@ -11,7 +11,7 @@ import { pageIdsWithTag } from '../routes/tags.js';
 import type { SettingsStore } from '../settings.js';
 import { chunkPage } from './chunks.js';
 import { guessLanguage, languageName } from './language.js';
-import { LlmError, streamChat } from './llm.js';
+import { hasKeyFor, LlmError, missingKeyMessage, streamChat } from './llm.js';
 import { notebookPageIds } from './scope.js';
 import type { SemanticIndex } from './semantic.js';
 
@@ -109,9 +109,7 @@ export function askRoutes(db: Db, settings: SettingsStore, index: SemanticIndex)
     const input = await readJson(c, askRequestSchema);
     const userId = c.var.user.id;
     const cfg = settings.effective(userId);
-    if (!cfg.openrouterApiKey) {
-      throw new HTTPException(400, { message: 'Asking needs an OpenRouter API key — add one under Settings.' });
-    }
+    if (!hasKeyFor(cfg.keys, cfg.models.ask)) throw new HTTPException(400, { message: missingKeyMessage('Asking', cfg.models.ask) });
 
     return streamSSE(c, async (stream) => {
       const controller = new AbortController();
@@ -142,7 +140,7 @@ export function askRoutes(db: Db, settings: SettingsStore, index: SemanticIndex)
         const system = `${SYSTEM}\nToday is ${new Date().toISOString().slice(0, 10)}.${language ? ` Answer in ${languageName(language)}.` : ' Answer in the language of the question.'}`;
         const { usage } = await streamChat(
           {
-            apiKey: cfg.openrouterApiKey!,
+            keys: cfg.keys,
             model: cfg.models.ask,
             maxTokens: 1500,
             signal: controller.signal,
