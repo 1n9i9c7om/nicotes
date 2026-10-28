@@ -7,7 +7,7 @@ import { jobs } from '../db/schema.js';
 import { notFound } from '../http.js';
 import { newId } from '../ids.js';
 import type { AiConfig, SettingsStore } from '../settings.js';
-import { LlmError, type Usage } from './llm.js';
+import { hasKeyFor, LlmError, missingKeyMessage, type Usage } from './llm.js';
 
 export class JobCancelled extends Error {}
 
@@ -193,7 +193,8 @@ export class JobRunner {
     this.db.update(jobs).set({ status: 'running', updatedAt: Date.now() }).where(eq(jobs.id, id)).run();
     try {
       if (!handler) throw new Error(`No handler for ${row.kind}`);
-      if (!cfg.openrouterApiKey) throw new LlmError('No OpenRouter API key configured (Settings)');
+      const model = cfg.models[row.kind as JobKind];
+      if (!hasKeyFor(cfg.keys, model)) throw new LlmError(missingKeyMessage('This', model));
       const result = await handler(ctx);
       this.finish(id, 'done', { result });
     } catch (error) {

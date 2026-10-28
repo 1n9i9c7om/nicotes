@@ -25,7 +25,7 @@ import { pageIdsWithTag } from '../routes/tags.js';
 import type { AiConfig, SettingsStore } from '../settings.js';
 import { plainText } from './chunks.js';
 import { guessLanguage, languageName } from './language.js';
-import { chat, completeJson, LlmError } from './llm.js';
+import { chat, completeJson, hasKeyFor, LlmError, missingKeyMessage } from './llm.js';
 import type { SemanticIndex } from './semantic.js';
 
 const SUMMARY_INPUT_CHARS = 12_000;
@@ -33,9 +33,10 @@ const LINK_INPUT_CHARS = 8_000;
 const MAX_CANDIDATES = 120;
 const MAX_LINK_SUGGESTIONS = 8;
 
-export function requireKey(cfg: AiConfig) {
-  if (!cfg.openrouterApiKey) throw new HTTPException(400, { message: 'This needs an OpenRouter API key — add one under Settings.' });
-  return cfg.openrouterApiKey;
+/** The API keys, after checking there is one for the service that runs `model`. */
+export function requireKey(cfg: AiConfig, model: string) {
+  if (!hasKeyFor(cfg.keys, model)) throw new HTTPException(400, { message: missingKeyMessage('This', model) });
+  return cfg.keys;
 }
 
 /** LLM failures are the upstream's fault, not ours: 502 with the readable message. */
@@ -65,7 +66,7 @@ async function summarize(db: Db, cfg: AiConfig, userId: string, pageId: string):
   const language = guessLanguage(text.slice(0, 4000));
   const reply = await upstream(() =>
     chat({
-      apiKey: requireKey(cfg),
+      keys: requireKey(cfg, cfg.models.summary),
       model: cfg.models.summary,
       maxTokens: 400,
       messages: [
@@ -145,7 +146,7 @@ async function suggestLinks(db: Db, index: SemanticIndex, cfg: AiConfig, userId:
 
   const reply = await upstream(() =>
     completeJson({
-      apiKey: requireKey(cfg),
+      keys: requireKey(cfg, cfg.models.links),
       model: cfg.models.links,
       schema: linkReplySchema,
       maxTokens: 1500,

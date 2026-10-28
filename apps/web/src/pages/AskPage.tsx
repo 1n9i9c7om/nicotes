@@ -4,6 +4,7 @@ import { Check, ChevronDown, FilePlus, Library, Loader2, MessageCircleQuestion, 
 import { preferredTarget, type AskEvent, type AskRequest, type AskSource } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
 import { citedNumbers, renumberCitations } from '../lib/ask';
+import { aiKeyFor } from '../lib/ai';
 import { plainExcerpt } from '../lib/format';
 import { Markdown } from '../components/Markdown';
 import { postStream } from '../lib/api';
@@ -35,6 +36,7 @@ export function AskPage() {
   const form = useRef<HTMLFormElement>(null);
   const busy = turns.some((t) => t.status === 'searching' || t.status === 'answering');
   const semanticOn = settings.data?.semantic.enabled;
+  const keyCheck = aiKeyFor(settings.data, 'ask', 'Asking');
 
   const update = (id: number, patch: Partial<Turn> | ((t: Turn) => Partial<Turn>)) =>
     setTurns((list) => list.map((t) => (t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t)));
@@ -104,9 +106,7 @@ export function AskPage() {
         </p>
       </header>
 
-      {settings.data && !settings.data.openrouter.apiKeySet && (
-        <p className="error">Asking needs an OpenRouter API key — add one under Settings.</p>
-      )}
+      {keyCheck.message && <p className="error">{keyCheck.message}</p>}
       {settings.data && !semanticOn && (
         <p className="ask-hint">
           <Sparkles size={14} /> Answers currently use keyword search.{' '}

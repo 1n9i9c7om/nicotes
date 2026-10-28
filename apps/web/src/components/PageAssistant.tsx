@@ -11,6 +11,7 @@ import {
   type WebSource,
 } from '@nicotes/shared';
 import { postStream } from '../lib/api';
+import { aiKeyFor } from '../lib/ai';
 import { useApplyChanges, useSettings, useUpdateSettings } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
 import { displayTitle } from '../lib/tree';
@@ -55,6 +56,7 @@ export function PageAssistant({ pageId, title, content, flush, onClose }: Props)
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const scope = settings.data?.assistant.scope ?? 'page';
+  const keyCheck = aiKeyFor(settings.data, 'assistant', 'The assistant');
   const [research, setResearch] = useLocalState('nicotes.assistantResearch', false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState('');
@@ -170,9 +172,7 @@ export function PageAssistant({ pageId, title, content, flush, onClose }: Props)
         <div ref={end} />
       </div>
 
-      {settings.data && !settings.data.openrouter.apiKeySet && (
-        <p className="error assistant-note">The assistant needs an OpenRouter API key — add one under Settings.</p>
-      )}
+      {keyCheck.message && <p className="error assistant-note">{keyCheck.message}</p>}
       <form className="assistant-form" onSubmit={send}>
         <textarea
           rows={3}

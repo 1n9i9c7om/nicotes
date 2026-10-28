@@ -69,7 +69,7 @@ export async function analyzeLayout(
   const model = cfg.models.layout;
   const reply = await upstream(() =>
     completeJson({
-      apiKey: requireKey(cfg),
+      keys: requireKey(cfg, model),
       model,
       schema: replySchema,
       maxTokens: 800,
