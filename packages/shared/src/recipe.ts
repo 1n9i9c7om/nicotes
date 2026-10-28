@@ -95,12 +95,47 @@ export function findDurations(text: string): Duration[] {
   return found;
 }
 
+/**
+ * Text without research citations ("[3](https://…)", "[1–14]") and escaped tildes, for views
+ * that show ingredients and steps compactly. Ordinary links with words as their text stay.
+ */
+export function withoutCitations(text: string): string {
+  return text
+    .replace(/(?:\s*,?\s*\[\d+(?:\s*[,–-]\s*\d+)*\]\(https?:\/\/[^)\s]+\))+/g, '')
+    .replace(/\s*\\?\[\d+(?:\s*[,–-]\s*\d+)*\\?\](?!\()/g, '')
+    .replace(/\\~/g, '~')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .trim();
+}
+
+export interface TableIngredient {
+  name: string;
+  /** The amount column ("½–1 cup (115–235 g)"), empty without one. */
+  amount: string;
+}
+
+const NAME_COLUMN = /^(ingredients?|zutat(en)?|ingrédients?|ingredientes?|ingredienti|item|was)\b/i;
+const AMOUNT_COLUMN = /(amount|quantity|qty|menge|measure|how much|typical|quantité|cantidad|quantità|hoeveelheid)/i;
+
+/** Ingredients from a table: the ingredient and amount columns found by their headers. */
+export function tableIngredients(header: string[], rows: string[][]): TableIngredient[] {
+  const clean = (cell: string) => cell.replace(/[*_`]/g, '').trim();
+  let name = header.findIndex((h) => NAME_COLUMN.test(clean(h)));
+  if (name < 0) name = 0;
+  let amount = header.findIndex((h, i) => i !== name && AMOUNT_COLUMN.test(clean(h)));
+  if (amount < 0 && header.length > 1) amount = name === 0 ? 1 : 0;
+  return rows
+    .filter((row) => row[name]?.trim())
+    .map((row) => ({ name: row[name]!.trim(), amount: amount >= 0 ? (row[amount] ?? '').trim() : '' }));
+}
+
 /** "Servings: 4", "serves 6", "Portionen: 4", "für 4 Personen", "12 servings". */
 export function findServings(markdown: string): number | null {
   const text = markdown.replace(/[*_]/g, ''); // "**Servings:** 48"
   const m =
     /(?:servings|serves|yield|makes|portionen|personen|für)\s*:?\s*(\d{1,3})/i.exec(text) ??
-    /(\d{1,3})\s*(?:servings|portions|portionen|personen|stück|pieces)/i.exec(text);
+    // "6–8 serving version" counts as 6.
+    /(\d{1,3})(?:\s*[–-]\s*\d{1,3})?\s*(?:servings?|portions?|portionen|personen|stück|pieces)\b/i.exec(text);
   const n = m ? Number(m[1]) : NaN;
   return n > 0 && n < 1000 ? n : null;
 }

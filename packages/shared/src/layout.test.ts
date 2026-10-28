@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { pageBlocks, type PageBlock } from './blocks';
+import { blocksByKey, pageBlocks, tableRows, type PageBlock } from './blocks';
 import { guessLayout, specMatches } from './layout';
 import { addItem, moveItem, removeItem, setAllChecked, setItemChecked, setItemText } from './listEdits';
-import { findDurations, findServings, formatAmount, parseQuantity, scaleIngredient } from './recipe';
+import { findDurations, findServings, formatAmount, parseQuantity, scaleIngredient, tableIngredients, withoutCitations } from './recipe';
 
 const list = (blocks: PageBlock[], n = 0) => blocks.filter((b) => b.kind === 'list')[n] as Extract<PageBlock, { kind: 'list' }>;
 
@@ -104,6 +104,7 @@ describe('recipe helpers', () => {
     expect(findServings('Servings: 12 · Prep: 30 min')).toBe(12);
     expect(findServings('Zutaten für 4 Personen')).toBe(4);
     expect(findServings('**Servings:** 48 · **Prep:** 20 min')).toBe(48);
+    expect(findServings('A representative 6–8 serving version:')).toBe(6);
   });
 });
 
@@ -131,5 +132,85 @@ describe('guessLayout', () => {
     const spec = guessLayout('## Todo\n- [ ] A\n- [ ] B');
     expect(specMatches(spec, pageBlocks('## Todo\n- [ ] A\n- [x] B\n- [ ] C'))).toBe(true);
     expect(specMatches(spec, pageBlocks('## Done\n- [ ] A'))).toBe(false);
+  });
+});
+
+describe('lenient recipes', () => {
+  // Shaped like a page from the research feature: an ingredient table, steps nested under a
+  // "Method:" bullet, citation links everywhere, and more sections and tables after it.
+  const research = [
+    '> **Research question:** Please provide a recipe for Kladdkaka.',
+    '',
+    'Kladdkaka is a Swedish sticky cake [1](https://a.example/1), [10](https://a.example/10).',
+    '',
+    '## Classic recipe (consolidated)',
+    '',
+    '| Ingredient | Typical amount |',
+    '| ---------- | -------------- |',
+    '| Butter     | ½–1 cup melted (115–235 g) [1](https://a.example/1), [5](https://a.example/5) |',
+    '| Eggs       | 2–4 (most use 2–3) [3](https://a.example/3) |',
+    '',
+    'A representative 6–8 serving version:',
+    '',
+    '- **Pan:** 7–9 inch round pan [5](https://a.example/5).',
+    '- **Method:**',
+    '  1. Melt the butter [4](https://a.example/4).',
+    '  2. Bake roughly 10–25 minutes [2](https://a.example/2), [3](https://a.example/3).',
+    '',
+    '## Key tips',
+    '',
+    "- **Don't overbake.** The center should stay moist.",
+    '',
+    '## Baking temperature and time compared',
+    '',
+    '| Source | Oven temp | Bake time |',
+    '| ------ | --------- | --------- |',
+    '| [2](https://a.example/2) TasteAtlas | 200°C | 10–15 min |',
+    '',
+    '## Sources',
+    '',
+    '1. [Swedish Sticky Chocolate Cake](https://a.example/1) · The Café',
+  ].join('\n');
+
+  it('finds an ingredient table and steps nested under a "Method" item', () => {
+    const spec = guessLayout(research);
+    expect(spec).toMatchObject({
+      type: 'recipe',
+      ingredients: ['table:Classic recipe (consolidated):0'],
+      steps: ['list:Classic recipe (consolidated):0>1'],
+    });
+    expect(spec.confidence).toBeGreaterThanOrEqual(0.9);
+    expect(specMatches(spec, pageBlocks(research))).toBe(true);
+    // Choosing "Recipe" by hand gives the same parts.
+    expect(guessLayout(research, [], 'recipe')).toMatchObject({ ingredients: spec.ingredients, steps: spec.steps });
+  });
+
+  it('turns nested lists and tables into usable parts', () => {
+    const blocks = pageBlocks(research);
+    const [steps] = blocksByKey(blocks, ['list:Classic recipe (consolidated):0>1']) as Extract<PageBlock, { kind: 'list' }>[];
+    expect(steps!.heading.at(-1)).toBe('Method');
+    expect(steps!.items.map((i) => [i.depth, i.ordered, withoutCitations(i.text)])).toEqual([
+      [0, true, 'Melt the butter.'],
+      [0, true, 'Bake roughly 10–25 minutes.'],
+    ]);
+    const table = blocks.find((b) => b.kind === 'table')!;
+    const { header, rows } = tableRows('text' in table ? table.text : '');
+    expect(header).toEqual(['Ingredient', 'Typical amount']);
+    expect(tableIngredients(header, rows).map((i) => [i.name, withoutCitations(i.amount)])).toEqual([
+      ['Butter', '½–1 cup melted (115–235 g)'],
+      ['Eggs', '2–4 (most use 2–3)'],
+    ]);
+    expect(scaleIngredient('½–1 cup melted (115–235 g)', 2)).toBe('1–2 cup melted (115–235 g)');
+  });
+
+  it('removes citations but keeps ordinary links', () => {
+    expect(withoutCitations('Mix gently [7](https://x.example/7), [8](https://x.example/8).')).toBe('Mix gently.');
+    expect(withoutCitations('No single setting \[1–14\]. About \~20 seconds [3].')).toBe('No single setting. About ~20 seconds.');
+    expect(withoutCitations('See [the guide](https://x.example/guide).')).toBe('See [the guide](https://x.example/guide).');
+  });
+
+  it('takes the numbered steps, not every later section, when guessing by hand', () => {
+    const md = '- 200 g flour\n- 2 eggs\n\nSome intro.\n\n1. Mix\n2. Bake\n\n## Tips\n\n- Serve warm\n\n## Variations\n\nAdd nuts.';
+    expect(guessLayout(md, [], 'recipe')).toMatchObject({ ingredients: ['list::0'], steps: ['list::1'] });
   });
 });

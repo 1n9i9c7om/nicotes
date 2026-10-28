@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChefHat, Minus, Plus, UtensilsCrossed } from 'lucide-react';
-import { blocksByKey, parseQuantity, scaleIngredient } from '@nicotes/shared';
+import { blocksByKey, parseQuantity, scaleIngredient, tableIngredients, tableRows, withoutCitations } from '@nicotes/shared';
 import { useLocalState } from '../../lib/storage';
 import { InlineMarkdown } from '../Markdown';
 import { StepRunner, type Step } from './StepRunner';
@@ -25,12 +25,44 @@ function keywords(text: string): string[] {
   return [...new Set(plainText(rest).toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !FILLER.has(w));
 }
 
+interface Ingredient {
+  key: string;
+  /** A list item's text, amount first ("200 g flour")… */
+  text: string;
+  /** …or a table row's ingredient and amount columns. */
+  name?: string;
+  depth: number;
+}
+
+interface IngredientGroup {
+  key: string;
+  heading: string[];
+  items: Ingredient[];
+}
+
 /**
  * A recipe to cook from: servings that scale the amounts, ingredients to tick off while
  * gathering them (not saved), steps with timers, and a full-screen cook mode.
  */
 export function RecipeLayout({ pageId, notebookId, title, blocks, spec }: LayoutProps) {
-  const lists = blocksByKey(blocks, spec.ingredients).filter(isList);
+  // Ingredients come from lists or tables (one row per ingredient).
+  const groups: IngredientGroup[] = blocksByKey(blocks, spec.ingredients).flatMap((block): IngredientGroup[] => {
+    if (isList(block)) {
+      const items = block.items.map((item, n) => ({ key: `${block.key}:${n}`, text: withoutCitations(item.text), depth: item.depth }));
+      return [{ key: block.key, heading: block.heading, items }];
+    }
+    if (block.kind === 'table') {
+      const { header, rows } = tableRows(block.text);
+      const items = tableIngredients(header, rows).map((row, n) => ({
+        key: `${block.key}:${n}`,
+        name: withoutCitations(row.name),
+        text: withoutCitations(row.amount),
+        depth: 0,
+      }));
+      return [{ key: block.key, heading: block.heading, items }];
+    }
+    return [];
+  });
   const steps: Step[] = stepsFrom(blocksByKey(blocks, spec.steps));
   const base = spec.servings;
   const [servings, setServings] = useState(base ?? 1);
@@ -42,15 +74,16 @@ export function RecipeLayout({ pageId, notebookId, title, blocks, spec }: Layout
   const decimal = spec.language && COMMA.has(spec.language) ? ',' : '.';
   const scaled = (text: string) => scaleIngredient(text, factor, decimal);
 
-  const ingredients = lists.flatMap((list) => list.items.map((item, n) => ({ key: `${list.key}:${n}`, text: item.text })));
+  const label = (ing: Ingredient) => (ing.name ? `**${ing.name}**${ing.text ? ` · ${scaled(ing.text)}` : ''}` : scaled(ing.text));
+  const ingredients = groups.flatMap((group) => group.items);
   const needs = (step: Step) => {
     const text = plainText([step.text, ...step.details].join(' ')).toLowerCase();
     return ingredients
-      .filter((ing) => keywords(ing.text).some((w) => new RegExp(`(?<!\\p{L})${w}`, 'u').test(text)))
-      .map((ing) => scaled(ing.text));
+      .filter((ing) => keywords(ing.name ?? ing.text).some((w) => new RegExp(`(?<!\\p{L})${w}`, 'u').test(text)))
+      .map(label);
   };
 
-  if (!lists.length && !steps.length) {
+  if (!groups.length && !steps.length) {
     return (
       <div className="layout-empty">
         <UtensilsCrossed size={26} className="muted" />
@@ -62,7 +95,7 @@ export function RecipeLayout({ pageId, notebookId, title, blocks, spec }: Layout
   // Big batches change by a quarter (48 → 60), so amounts stay round; small ones by one.
   const unit = base ? (base > 8 ? Math.round(base / 4) : 1) : 0.5;
   const step = (n: number) => setServings((s) => Math.max(unit, s + n * unit));
-  const groupTitle = (heading: string[]) => (lists.length > 1 ? heading.at(-1) : undefined);
+  const groupTitle = (heading: string[]) => (groups.length > 1 ? heading.at(-1) : undefined);
 
   return (
     <div className="recipe">
@@ -84,15 +117,15 @@ export function RecipeLayout({ pageId, notebookId, title, blocks, spec }: Layout
       </div>
 
       <div className="recipe-grid">
-        {lists.length > 0 && (
+        {groups.length > 0 && (
           <section className="recipe-ingredients" aria-label="Ingredients">
             <h3>Ingredients</h3>
-            {lists.map((list) => (
-              <div key={list.key}>
-                {groupTitle(list.heading) && <h4>{plainText(groupTitle(list.heading)!)}</h4>}
+            {groups.map((group) => (
+              <div key={group.key}>
+                {groupTitle(group.heading) && <h4>{plainText(groupTitle(group.heading)!)}</h4>}
                 <ul>
-                  {list.items.map((item, n) => {
-                    const key = `${list.key}:${n}`;
+                  {group.items.map((item) => {
+                    const key = item.key;
                     return (
                       <li key={key} className={have.has(key) ? 'have' : undefined} style={{ marginLeft: item.depth * 18 }}>
                         <label>
@@ -109,7 +142,7 @@ export function RecipeLayout({ pageId, notebookId, title, blocks, spec }: Layout
                             }
                           />
                           <span>
-                            <InlineMarkdown text={scaled(item.text)} notebookId={notebookId} />
+                            <InlineMarkdown text={label(item)} notebookId={notebookId} />
                           </span>
                         </label>
                       </li>

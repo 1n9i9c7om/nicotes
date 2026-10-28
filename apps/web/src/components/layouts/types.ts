@@ -1,4 +1,4 @@
-import type { LayoutSpec, ListItem, PageBlock } from '@nicotes/shared';
+import { withoutCitations, type LayoutSpec, type ListItem, type PageBlock } from '@nicotes/shared';
 
 export type ListBlock = Extract<PageBlock, { kind: 'list' }>;
 export const isList = (b: PageBlock): b is ListBlock => b.kind === 'list';
@@ -26,18 +26,22 @@ export const plainText = (text: string) =>
     .replace(/(^|\s)[*_](\S[^*_]*\S|\S)[*_](?=\s|$|[.,;:!?])/g, '$1$2')
     .trim();
 
-/** Steps from step blocks: each top-level list item (with its nested items) or paragraph is one step. */
+/**
+ * Steps from step blocks: each top-level list item (with its nested items) or paragraph is one
+ * step. Citation links (pages written by Research) are left out.
+ */
 export function stepsFrom(blocks: PageBlock[]): { key: string; text: string; details: string[] }[] {
   return blocks.flatMap((block) => {
     if (block.kind === 'list') {
       const steps: { key: string; text: string; details: string[] }[] = [];
       block.items.forEach((item: ListItem, n) => {
-        if (item.depth === 0 || !steps.length) steps.push({ key: `${block.key}:${n}`, text: item.text, details: [] });
-        else steps.at(-1)!.details.push(item.text);
+        const text = withoutCitations(item.text);
+        if (item.depth === 0 || !steps.length) steps.push({ key: `${block.key}:${n}`, text, details: [] });
+        else steps.at(-1)!.details.push(text);
       });
       return steps;
     }
-    if (block.kind === 'paragraph' || block.kind === 'quote') return [{ key: block.key, text: block.text, details: [] }];
+    if (block.kind === 'paragraph' || block.kind === 'quote') return [{ key: block.key, text: withoutCitations(block.text), details: [] }];
     return [];
   });
 }

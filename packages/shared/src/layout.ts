@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { pageBlocks, type PageBlock } from './blocks';
+import { pageBlocks, SUB_LIST, subLists, tableRows, type PageBlock } from './blocks';
 import { guessLanguage } from './language';
-import { findServings } from './recipe';
+import { findServings, parseQuantity } from './recipe';
 
 /**
  * Page layouts: besides editing, a page can be shown in a view that fits its content — a
@@ -58,6 +58,8 @@ const STEPS =
 
 const under = (block: PageBlock, re: RegExp) => block.heading.some((h) => re.test(h.replace(/[*_`]/g, '').trim()));
 const keys = (blocks: PageBlock[]) => blocks.map((b) => b.key);
+const byStart = (blocks: PageBlock[]) => [...blocks].sort((a, b) => a.start - b.start);
+const plain = (text: string) => text.replace(/[*_`]/g, '').trim();
 
 export const emptySpec = (type: LayoutType, language: string | null = null): LayoutSpec => ({
   type,
@@ -82,17 +84,30 @@ export function guessLayout(markdown: string, tags: string[] = [], forced?: Layo
   const proseChars = prose.reduce((n, b) => n + ('text' in b ? b.text.length : 0), 0);
   const listChars = items.reduce((n, i) => n + i.text.length, 0);
   const language = guessLanguage(markdown.slice(0, 5000));
-  const ingredientBlocks = lists.filter((b) => under(b, INGREDIENTS));
-  const stepBlocks = blocks.filter((b) => (b.kind === 'list' || b.kind === 'paragraph') && under(b, STEPS));
+  // Lists nested under a labelled item ("- **Method:**") count when the label itself fits;
+  // tables count as ingredients under an ingredients heading or with an ingredient column.
+  const subs = subLists(blocks);
+  const labelled = (re: RegExp, chosen: PageBlock[]) =>
+    subs.filter((s) => re.test(s.heading.at(-1) ?? '') && !chosen.some((c) => s.key.startsWith(`${c.key}${SUB_LIST}`)));
+  const ingredientTables = blocks.filter(
+    (b) => b.kind === 'table' && (under(b, INGREDIENTS) || tableRows(b.text).header.some((h) => INGREDIENTS.test(h.replace(/[*_`]/g, '').trim()))),
+  );
+  const ingredientLists = lists.filter((b) => under(b, INGREDIENTS));
+  const ingredientBlocks = byStart([...ingredientLists, ...labelled(INGREDIENTS, ingredientLists), ...ingredientTables]);
+  const stepHeaded = blocks.filter((b) => (b.kind === 'list' || b.kind === 'paragraph') && under(b, STEPS));
+  const stepBlocks = byStart([...stepHeaded, ...labelled(STEPS, stepHeaded)]);
   const base = emptySpec('document', language);
 
   const recipe = (confidence: number) => {
-    // Without headings, the first list is taken as ingredients and what follows as steps.
-    const ingredients = ingredientBlocks.length ? ingredientBlocks : lists.slice(0, 1);
+    // Without headings: the list that reads most like ingredients (amounts first), then the
+    // numbered lists after it, or else the section that follows it, as steps.
+    const quantified = lists.filter((l) => l.items.filter((i) => parseQuantity(plain(i.text))).length >= l.items.length / 2);
+    const ingredients = ingredientBlocks.length ? ingredientBlocks : (quantified[0] ?? lists[0]) ? [quantified[0] ?? lists[0]!] : [];
     const after = ingredients.at(-1)?.end ?? -1;
-    const steps = stepBlocks.length
-      ? stepBlocks
-      : blocks.filter((b) => (b.kind === 'list' || b.kind === 'paragraph') && b.start > after);
+    const later = blocks.filter((b) => (b.kind === 'list' || b.kind === 'paragraph') && b.start > after);
+    const ordered = later.filter((b) => b.kind === 'list' && b.ordered);
+    const section = later.filter((b) => b.heading.join('/') === later[0]?.heading.join('/'));
+    const steps = stepBlocks.length ? stepBlocks : ordered.length ? ordered : section;
     return { ...base, type: 'recipe' as const, servings: findServings(markdown), ingredients: keys(ingredients), steps: keys(steps), confidence };
   };
   const checklist = (confidence: number) => ({
@@ -127,6 +142,6 @@ export function guessLayout(markdown: string, tags: string[] = [], forced?: Layo
 
 /** Whether every block a spec refers to still exists in the page. */
 export function specMatches(spec: LayoutSpec, blocks: PageBlock[]): boolean {
-  const present = new Set(blocks.map((b) => b.key));
+  const present = new Set([...blocks, ...subLists(blocks)].map((b) => b.key));
   return [...spec.ingredients, ...spec.steps, ...spec.lists].every((key) => present.has(key));
 }
