@@ -27,7 +27,10 @@ const samples: Record<string, string> = {
   coloredHighlight: 'Some <mark style="background: green">green</mark> text.',
   textColor: 'Some <span style="color: red">red</span> text.',
   colorsWithEmphasis: 'A <span style="color: blue">**bold** blue</span> and [==a link==](https://example.com).',
-  nestedColors: '<mark style="background: purple"><span style="color: yellow">both</span></mark> here.',
+  boldWikilink: 'See **[[Elden Ring]]** now.',
+  formattedAroundWikilink: '**before [[Games/Builds|builds]] after** and ==[[Elden Ring]]==.',
+  coloredWikilink: '<span style="color: red">[[Elden Ring]]</span> and *[[Factorio]] notes*',
+  nestedColors:'<mark style="background: purple"><span style="color: yellow">both</span></mark> here.',
 };
 
 describe('markdown round-trip', () => {
