@@ -96,6 +96,23 @@ describe('model services', () => {
     expect(streamed.usage).toMatchObject({ promptTokens: 10, completionTokens: 2 });
   });
 
+  it('streams plain completions so long answers start before Cloudflare gives up', async () => {
+    const calls = fakeServices(() => {
+      const sse = [': ROUTEWAY PROCESSING', 'data: {"choices":[{"delta":{"content":"{\\"a\\":"}}]}', 'data: {"choices":[{"delta":{"content":"1}"}}],"usage":{"prompt_tokens":5,"completion_tokens":3}}', 'data: [DONE]'];
+      return new Response(sse.join('\n\n'), { headers: { 'content-type': 'text/event-stream' } });
+    });
+    const reply = await chat({ keys, model: 'routeway:deepseek-v4.1-flash', messages: [{ role: 'user', content: 'JSON' }], maxTokens: 50, json: true, effort: 'high' });
+    expect(calls[0]!.body).toMatchObject({ stream: true, response_format: { type: 'json_object' }, reasoning_effort: 'high' });
+    expect(reply).toMatchObject({ content: '{"a":1}', citations: [], usage: { promptTokens: 5, completionTokens: 3 } });
+  });
+
+  it('explains a gateway timeout', async () => {
+    fakeServices(() => new Response('<html>A timeout occurred</html>', { status: 524 }));
+    await expect(chat({ keys, model: 'routeway:deepseek-v4.1-flash', messages: [{ role: 'user', content: 'Long' }], maxTokens: 50 })).rejects.toThrow(
+      'Routeway timed out waiting for the model (HTTP 524)',
+    );
+  });
+
   it('names the missing key and the service in errors', async () => {
     fakeServices(() => Response.json({ error: { message: 'bad key' } }, { status: 401 }));
     await expect(chat({ keys: { openrouter: 'sk-or', routeway: null }, model: 'routeway:x', messages: [], maxTokens: 1 })).rejects.toThrow(
