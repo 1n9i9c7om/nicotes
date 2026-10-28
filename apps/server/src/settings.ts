@@ -5,14 +5,17 @@ import { z } from 'zod';
 import {
   AI_TASKS,
   DEFAULT_AI_COST_LIMIT,
+  DEFAULT_ASSISTANT_SCOPE,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
   modelSetting,
+  READ_SCOPES,
   settingsUpdateSchema,
   type AiTask,
   type ConnectionCheck,
-  type ModelInfo,
+  type ModelList,
+  type ReadScope,
   type Settings,
   type SettingSource,
   type SettingsUpdate,
@@ -22,11 +25,14 @@ import type { Config } from './config.js';
 import type { Db } from './db/index.js';
 import { settings } from './db/schema.js';
 import { readJson } from './http.js';
+import { listModels } from './ai/models.js';
+import type { ProviderKeys } from './ai/llm.js';
 import type { SecretBox } from './secrets.js';
 
 const KEYS = {
   openrouterApiKey: { key: 'openrouter.apiKey', secret: true },
   openrouterModel: { key: 'openrouter.model', secret: false },
+  routewayApiKey: { key: 'routeway.apiKey', secret: true },
   crawl4aiUrl: { key: 'crawl4ai.url', secret: false },
   crawl4aiToken: { key: 'crawl4ai.token', secret: true },
   importModel: { key: 'ai.model.import', secret: false },
@@ -34,6 +40,7 @@ const KEYS = {
   // Kept under its original key, so research models saved before per-task models still apply.
   researchModel: { key: 'ai.researchModel', secret: false },
   askModel: { key: 'ai.model.ask', secret: false },
+  assistantModel: { key: 'ai.model.assistant', secret: false },
   summaryModel: { key: 'ai.model.summary', secret: false },
   linksModel: { key: 'ai.model.links', secret: false },
   layoutModel: { key: 'ai.model.layout', secret: false },
@@ -44,12 +51,16 @@ const KEYS = {
   tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
   semanticIndex: { key: 'ai.semanticIndex', secret: false },
   embeddingModel: { key: 'ai.embeddingModel', secret: false },
+  assistantScope: { key: 'ai.assistantScope', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
 /** Effective values used by import and AI features (settings > environment > default). */
 export interface ImportConfig {
+  /** OpenRouter's key; also needed for embeddings (semantic index). */
   openrouterApiKey: string | null;
+  /** Keys of all chat model services. */
+  keys: ProviderKeys;
   /** The default model. */
   model: string;
   /** The model each AI feature uses (its own, else the default). */
@@ -98,6 +109,7 @@ export class SettingsStore {
     return {
       apiKey: pick('openrouterApiKey'),
       model: pick('openrouterModel', DEFAULT_OPENROUTER_MODEL),
+      routewayKey: pick('routewayApiKey'),
       url: pick('crawl4aiUrl'),
       token: pick('crawl4aiToken'),
       tasks: Object.fromEntries(AI_TASKS.map((task) => [task, pick(modelSetting(task))])) as Record<
@@ -111,6 +123,7 @@ export class SettingsStore {
       excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
       semanticIndex: pick('semanticIndex', 'false'),
       embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
+      assistantScope: pick('assistantScope', DEFAULT_ASSISTANT_SCOPE),
     };
   }
 
@@ -124,6 +137,7 @@ export class SettingsStore {
         model: r.model.value!,
         modelSource: r.model.source,
       },
+      routeway: { apiKeySet: r.routewayKey.value !== null, apiKeySource: r.routewayKey.source },
       crawl4ai: {
         url: r.url.value,
         urlSource: r.url.source,
@@ -147,6 +161,7 @@ export class SettingsStore {
         model: r.embeddingModel.value!,
         modelSource: r.embeddingModel.source,
       },
+      assistant: { scope: readScope(r.assistantScope.value) },
     };
   }
 
@@ -154,6 +169,7 @@ export class SettingsStore {
     const r = this.resolve(userId);
     return {
       openrouterApiKey: r.apiKey.value,
+      keys: { openrouter: r.apiKey.value, routeway: r.routewayKey.value },
       model: r.model.value!,
       models: Object.fromEntries(AI_TASKS.map((task) => [task, r.tasks[task].value ?? r.model.value!])) as Record<AiTask, string>,
       crawl4aiUrl: r.url.value?.replace(/\/+$/, '') ?? null,
@@ -195,6 +211,9 @@ export class SettingsStore {
   }
 }
 
+const readScope = (value: string | null): ReadScope =>
+  (READ_SCOPES as readonly string[]).includes(value ?? '') ? (value as ReadScope) : DEFAULT_ASSISTANT_SCOPE;
+
 function parseList(value: string | null): string[] {
   try {
     const list = JSON.parse(value ?? '[]') as unknown;
@@ -228,6 +247,24 @@ export async function checkOpenRouter(apiKey: string | null): Promise<Connection
   }
 }
 
+export async function checkRouteway(apiKey: string | null): Promise<ConnectionCheck> {
+  if (!apiKey) return { ok: false, message: 'No API key configured' };
+  try {
+    const res = await fetch('https://api.routeway.ai/v1/account/balance', {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 401) return { ok: false, message: 'Routeway rejected the API key' };
+    // Keys without the account:balance scope are valid but may not read the balance.
+    if (res.status === 403) return { ok: true, message: 'The key works (it may not read the balance)' };
+    if (!res.ok) return { ok: false, message: `Routeway answered ${res.status}` };
+    const body = (await res.json()) as { balance?: number };
+    return { ok: true, message: `The key works${typeof body.balance === 'number' ? ` · $${body.balance.toFixed(2)} balance` : ''}` };
+  } catch (error) {
+    return { ok: false, message: `Cannot reach Routeway: ${(error as Error).message}` };
+  }
+}
+
 export async function checkCrawl4ai(url: string | null, token: string | null): Promise<ConnectionCheck> {
   if (!url) return { ok: false, message: 'No crawl4ai URL configured — imports use the built-in extractor' };
   try {
@@ -249,7 +286,7 @@ export async function checkCrawl4ai(url: string | null, token: string | null): P
 }
 
 export async function checkSearxng(url: string | null): Promise<ConnectionCheck> {
-  if (!url) return { ok: false, message: 'No SearXNG URL configured — research uses OpenRouter web search' };
+  if (!url) return { ok: false, message: 'No SearXNG URL configured — research uses the web search of its AI model' };
   try {
     const res = await fetch(`${url}/search?q=nicotes&format=json`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (res.status === 403) return { ok: false, message: 'SearXNG refuses JSON: enable "json" under search.formats' };
@@ -261,33 +298,6 @@ export async function checkSearxng(url: string | null): Promise<ConnectionCheck>
   }
 }
 
-type ModelKind = 'chat' | 'embedding';
-const MODEL_LISTS: Record<ModelKind, string> = {
-  chat: 'https://openrouter.ai/api/v1/models',
-  embedding: 'https://openrouter.ai/api/v1/embeddings/models',
-};
-const modelCache = new Map<ModelKind, { at: number; models: ModelInfo[] }>();
-
-/** OpenRouter's public model lists (cached for an hour), for the model pickers. */
-async function listModels(kind: ModelKind): Promise<ModelInfo[]> {
-  const cached = modelCache.get(kind);
-  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.models;
-  const res = await fetch(MODEL_LISTS[kind], { signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!res.ok) throw new HTTPException(502, { message: `OpenRouter answered ${res.status}` });
-  const body = (await res.json()) as { data: { id: string; name: string; pricing?: { prompt?: string; completion?: string } }[] };
-  const perMillion = (price?: string) => (price ? Number(price) * 1_000_000 : null);
-  const models = body.data
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      promptPrice: perMillion(m.pricing?.prompt),
-      completionPrice: kind === 'chat' ? perMillion(m.pricing?.completion) : null,
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  modelCache.set(kind, { at: Date.now(), models });
-  return models;
-}
-
 export function settingsRoutes(store: SettingsStore) {
   return new Hono<AppEnv>()
     .get('/', (c) => c.json(store.view(c.var.user.id)))
@@ -296,15 +306,21 @@ export function settingsRoutes(store: SettingsStore) {
       return c.json(store.view(c.var.user.id));
     })
     .post('/check', async (c) => {
-      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'crawl4ai', 'searxng']) }));
+      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'crawl4ai', 'searxng']) }));
       const cfg = store.effective(c.var.user.id);
       const result =
         target === 'openrouter'
           ? await checkOpenRouter(cfg.openrouterApiKey)
-          : target === 'crawl4ai'
+          : target === 'routeway'
+            ? await checkRouteway(cfg.keys.routeway)
+            : target === 'crawl4ai'
             ? await checkCrawl4ai(cfg.crawl4aiUrl, cfg.crawl4aiToken)
             : await checkSearxng(cfg.searxngUrl);
       return c.json(result);
     })
-    .get('/models', async (c) => c.json(await listModels(c.req.query('kind') === 'embedding' ? 'embedding' : 'chat')));
+    .get('/models', async (c) =>
+      c.json(
+        (await listModels(c.req.query('kind') === 'embedding' ? 'embedding' : 'chat', c.req.query('refresh') === '1')) satisfies ModelList,
+      ),
+    );
 }

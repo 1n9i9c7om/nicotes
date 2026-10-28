@@ -1,6 +1,6 @@
 import { and, eq, isNull, max } from 'drizzle-orm';
 import { z } from 'zod';
-import { RESEARCH_DEPTHS, type ResearchResult, researchRequestSchema } from '@nicotes/shared';
+import { providerOf, RESEARCH_DEPTHS, searchLabel, type ResearchResult, researchRequestSchema } from '@nicotes/shared';
 import type { Db } from '../db/index.js';
 import { notebooks, pages } from '../db/schema.js';
 import { extractUrl } from '../import/extract.js';
@@ -9,12 +9,12 @@ import { newId } from '../ids.js';
 import { setPageTags } from '../routes/tags.js';
 import type { AiConfig } from '../settings.js';
 import { guessLanguage, languageName } from './language.js';
-import { chat, completeJson, LlmError } from './llm.js';
+import { chat, completeJson, emptyUsage, LlmError, type Usage } from './llm.js';
 import { mapLimit, type JobContext } from './jobs.js';
 
 type Input = z.infer<typeof researchRequestSchema>;
 
-interface Candidate {
+export interface Candidate {
   url: string;
   title: string;
   /** Snippet or page text from the search provider, used if fetching the page fails. */
@@ -32,7 +32,7 @@ interface SourceNote {
 const SOURCE_CHARS = 15_000;
 const SKIP_URL = /\.(pdf|zip|mp4|mp3|jpe?g|png|gif)(\?|$)|youtube\.com\/watch|youtu\.be\/|tiktok\.com|instagram\.com|facebook\.com/i;
 
-const host = (url: string) => {
+export const host = (url: string) => {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
@@ -80,17 +80,50 @@ async function searchSearxng(url: string, query: string, language: string, signa
   return (body.results ?? []).map((r) => ({ url: r.url, title: r.title ?? r.url, snippet: r.content ?? '' }));
 }
 
-async function searchOpenRouter(ctx: JobContext<Input>, query: string): Promise<Candidate[]> {
+/** Links in a reply ("[title](url)" or bare URLs), for searches that return no citations. */
+export function linksInText(text: string): Candidate[] {
+  const found = new Map<string, Candidate>();
+  for (const m of text.matchAll(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()"'\]]+[^\s<>()"'\].,;:!?])/g)) {
+    const url = m[2] ?? m[3]!;
+    if (!found.has(url)) found.set(url, { url, title: m[1] ?? url, snippet: '' });
+  }
+  return [...found.values()];
+}
+
+/**
+ * Web search through the model: OpenRouter's web plugin returns the pages as citations;
+ * Routeway's "@online" models may only name them in the text.
+ */
+async function searchWithModel(cfg: AiConfig, model: string, query: string, signal: AbortSignal) {
   const reply = await chat({
-    apiKey: ctx.cfg.openrouterApiKey!,
-    model: ctx.cfg.models.research,
-    messages: [{ role: 'user', content: `Search the web for: ${query}\nList the most relevant pages in one line each.` }],
-    maxTokens: 500,
+    keys: cfg.keys,
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: `Search the web for: ${query}\nList the most relevant pages, one per line, as a Markdown link [title](url) followed by a short summary.`,
+      },
+    ],
+    maxTokens: 800,
     webResults: 6,
-    signal: ctx.signal,
+    signal,
   });
-  ctx.charge(reply.usage);
-  return reply.citations.map((c) => ({ url: c.url, title: c.title || c.url, snippet: c.content }));
+  const results = reply.citations.length
+    ? reply.citations.map((c) => ({ url: c.url, title: c.title || c.url, snippet: c.content }))
+    : linksInText(reply.content);
+  return { results, usage: reply.usage };
+}
+
+/** One web search: SearXNG when configured, else the web search of `model`'s service. */
+export async function webSearch(
+  cfg: AiConfig,
+  model: string,
+  query: string,
+  language: string,
+  signal: AbortSignal,
+): Promise<{ results: Candidate[]; usage: Usage }> {
+  if (cfg.searxngUrl) return { results: await searchSearxng(cfg.searxngUrl, query, language, signal), usage: emptyUsage() };
+  return searchWithModel(cfg, model, query, signal);
 }
 
 /** Turns "[1]" / "[2, 3]" markers into links to the numbered sources. */
@@ -128,7 +161,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     ctx.step('Planning searches…');
     const guessed = guessLanguage(input.question);
     const plan = await completeJson({
-      apiKey: cfg.openrouterApiKey!,
+      keys: cfg.keys,
       model,
       system: 'You plan web research for a notes app. Reply with one JSON object only.',
       user: `Research question:\n${input.question}\n\n${guessed ? `The question is written in ${languageName(guessed)}; title and labels must be in ${languageName(guessed)}.\n\n` : ''}Reply as {"title": "<short note title in the question's language>", "language": "<ISO 639-1 code of the question>", "queries": ["<${depth.queries} diverse web search queries, mostly in the question's language; add English ones when that finds better sources>"], "labels": {"question": "<'Research question' in that language>", "sources": "<'Sources'>", "openQuestions": "<'Open questions'>"}}`,
@@ -149,16 +182,14 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     const queries = plan.data.queries.slice(0, depth.queries);
 
     // 2. Search
-    const provider: ResearchResult['searchProvider'] = cfg.searxngUrl ? 'searxng' : 'openrouter';
+    const provider: ResearchResult['searchProvider'] = cfg.searxngUrl ? 'searxng' : providerOf(model);
     const results: Candidate[][] = [];
     for (const [i, query] of queries.entries()) {
       ctx.step(`Searching (${provider === 'searxng' ? 'SearXNG' : 'OpenRouter'}): ${query}`, i, queries.length);
       try {
-        results.push(
-          provider === 'searxng'
-            ? await searchSearxng(cfg.searxngUrl!, query, language, ctx.signal)
-            : await searchOpenRouter(ctx, query),
-        );
+        const found = await webSearch(cfg, model, query, language, ctx.signal);
+        ctx.charge(found.usage);
+        results.push(found.results);
       } catch (error) {
         if (ctx.signal.aborted) throw error;
         ctx.step(`Search failed for “${query}”: ${(error as Error).message}`);
@@ -191,7 +222,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
         if (text.length < 300) text = c.snippet;
         if (text.length < 200) return null;
         const note = await completeJson({
-          apiKey: cfg.openrouterApiKey!,
+          keys: cfg.keys,
           model,
           system: 'You take research notes from one web page. Reply with one JSON object only. Only use facts stated on the page.',
           user: `Research question: ${input.question}\nWrite in ${writeIn}.\n\nReply as {"relevant": true|false, "summary": "<2-4 sentences on what this source says about the question>", "facts": ["<specific facts, numbers, steps or claims relevant to the question>"]}\n\nSource: ${title} (${c.url})\n\n${text.slice(0, SOURCE_CHARS)}`,
@@ -216,7 +247,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
       .map((n, i) => `[${i + 1}] ${n.title} (${n.site})\nSummary: ${n.summary}\nFacts:\n${n.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n');
     const draft = await chat({
-      apiKey: cfg.openrouterApiKey!,
+      keys: cfg.keys,
       model,
       effort: 'low',
       maxTokens: 6000,
@@ -240,7 +271,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     const sourcesList = notes.map((n, i) => `${i + 1}. [${n.title.replace(/[[\]]/g, '')}](${n.url}) · ${n.site}`).join('\n');
     const date = new Date().toISOString().slice(0, 10);
     const { labels } = plan.data;
-    const content = `> **${labels.question}:** ${input.question.replace(/\n+/g, ' ')}\n\n${linkCitations(body, notes)}\n\n## ${labels.sources}\n\n${sourcesList}\n\n---\n\nResearched ${date} · ${notes.length} sources via ${provider === 'searxng' ? 'SearXNG' : 'OpenRouter web search'} · ${model}`;
+    const content = `> **${labels.question}:** ${input.question.replace(/\n+/g, ' ')}\n\n${linkCitations(body, notes)}\n\n## ${labels.sources}\n\n${sourcesList}\n\n---\n\nResearched ${date} · ${notes.length} sources via ${searchLabel(provider)} · ${model}`;
 
     // 6. Save as a page
     ctx.check();

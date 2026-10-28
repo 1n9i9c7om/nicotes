@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AI_PROVIDER_LABELS, type AiProvider } from './importing';
 
 // ---------- Jobs ----------
 
@@ -110,5 +111,9 @@ export interface ResearchResult {
   pageId: string;
   title: string;
   sources: number;
-  searchProvider: 'searxng' | 'openrouter';
+  searchProvider: 'searxng' | AiProvider;
 }
+
+/** "SearXNG" or e.g. "OpenRouter web search". */
+export const searchLabel = (provider: ResearchResult['searchProvider']) =>
+  provider === 'searxng' ? 'SearXNG' : `${AI_PROVIDER_LABELS[provider]} web search`;

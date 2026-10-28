@@ -1,11 +1,13 @@
 import type { z } from 'zod';
+import { AI_PROVIDER_LABELS, providerModelId, providerOf, type AiProvider } from '@nicotes/shared';
+import { estimateCost } from './models.js';
 
 export class LlmError extends Error {}
 
 export interface Usage {
   promptTokens: number;
   completionTokens: number;
-  /** USD as reported by OpenRouter (0 if unknown). */
+  /** USD: reported by OpenRouter, computed from the price list for Routeway (0 if unknown). */
   cost: number;
 }
 
@@ -16,6 +18,16 @@ export const addUsage = (a: Usage, b: Usage): Usage => ({
 });
 
 export const emptyUsage = (): Usage => ({ promptTokens: 0, completionTokens: 0, cost: 0 });
+
+/** API keys per service; a model's id decides which one is used (see `providerOf`). */
+export type ProviderKeys = Record<AiProvider, string | null>;
+
+/** Whether the service that runs `model` has a key. */
+export const hasKeyFor = (keys: ProviderKeys, model: string) => !!keys[providerOf(model)];
+
+/** E.g. "Asking needs a Routeway API key — add one under Settings." */
+export const missingKeyMessage = (what: string, model: string) =>
+  `${what} needs ${providerOf(model) === 'routeway' ? 'a Routeway' : 'an OpenRouter'} API key — add one under Settings.`;
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -42,7 +54,7 @@ interface CompletionResponse {
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
 
 export interface ChatOptions {
-  apiKey: string;
+  keys: ProviderKeys;
   model: string;
   messages: ChatMessage[];
   maxTokens: number;
@@ -53,64 +65,105 @@ export interface ChatOptions {
    * retried without it.
    */
   effort?: ReasoningEffort;
-  /** OpenRouter's web search plugin, returning sources as citations. */
+  /** Web search with up to this many results: OpenRouter's web plugin, Routeway's "@online". */
   webResults?: number;
   signal?: AbortSignal;
 }
 
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const ENDPOINTS: Record<AiProvider, string> = {
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  routeway: 'https://api.routeway.ai/v1/chat/completions',
+};
 
-export async function chat(opts: ChatOptions): Promise<{ content: string; usage: Usage; citations: Citation[] }> {
-  const body = {
-    model: opts.model,
+/** The service that runs a model, its key and the model id it expects. */
+function route(opts: Pick<ChatOptions, 'keys' | 'model' | 'webResults'>) {
+  const provider = providerOf(opts.model);
+  const label = AI_PROVIDER_LABELS[provider];
+  const key = opts.keys[provider];
+  if (!key) throw new LlmError(`No ${label} API key configured (Settings)`);
+  const id = providerModelId(opts.model);
+  return { provider, label, key, model: provider === 'routeway' && opts.webResults ? `${id}@online` : id };
+}
+
+type Route = ReturnType<typeof route>;
+
+/** The request body; the two services differ in reasoning, usage and web search options. */
+function requestBody(r: Route, opts: ChatOptions, stream: boolean) {
+  const common = {
+    model: r.model,
     messages: opts.messages,
     // JSON mode; schemas are described in the prompt and validated by the caller, since
     // not every model supports strict structured outputs.
     ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
     temperature: 0.2,
     max_tokens: opts.maxTokens,
-    reasoning: { effort: opts.effort ?? 'minimal', exclude: true },
-    usage: { include: true },
-    ...(opts.webResults ? { plugins: [{ id: 'web', max_results: opts.webResults }] } : {}),
   };
+  if (r.provider === 'openrouter') {
+    return {
+      ...common,
+      reasoning: { effort: opts.effort ?? 'minimal', exclude: true },
+      usage: { include: true },
+      ...(opts.webResults ? { plugins: [{ id: 'web', max_results: opts.webResults }] } : {}),
+      ...(stream ? { stream: true } : {}),
+    };
+  }
+  // Routeway leaves reasoning off unless asked for and reports usage in the last chunk on request.
+  return {
+    ...common,
+    ...(opts.effort && opts.effort !== 'minimal' ? { reasoning_effort: opts.effort } : {}),
+    ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
+  };
+}
+
+const withoutReasoning = (body: object) => {
+  const { reasoning: _a, reasoning_effort: _b, ...rest } = body as Record<string, unknown>;
+  return rest;
+};
+
+function httpError(r: Route, status: number, message?: string): LlmError {
+  if (status === 401) return new LlmError(`${r.label} rejected the API key`);
+  if (status === 402) return new LlmError(`Your ${r.label} credits are used up`);
+  if (status === 429) return new LlmError(`${r.label} rate limit reached, try again shortly`);
+  return new LlmError(`${r.label} error: ${message ?? `HTTP ${status}`}`);
+}
+
+async function usageOf(r: Route, model: string, raw?: CompletionResponse['usage']): Promise<Usage> {
+  const promptTokens = raw?.prompt_tokens ?? 0;
+  const completionTokens = raw?.completion_tokens ?? 0;
+  const cost = r.provider === 'openrouter' ? (raw?.cost ?? 0) : await estimateCost(model, promptTokens, completionTokens);
+  return { promptTokens, completionTokens, cost };
+}
+
+export async function chat(opts: ChatOptions): Promise<{ content: string; usage: Usage; citations: Citation[] }> {
+  const r = route(opts);
+  const body = requestBody(r, opts, false);
 
   const send = async (payload: object) => {
     try {
-      return await fetch(ENDPOINT, {
+      return await fetch(ENDPOINTS[r.provider], {
         method: 'POST',
         signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000),
-        headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
+        headers: { authorization: `Bearer ${r.key}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
         body: JSON.stringify(payload),
       });
     } catch (error) {
       if (opts.signal?.aborted) throw new LlmError('Cancelled');
       const timeout = (error as Error).name === 'TimeoutError';
-      throw new LlmError(timeout ? 'The model took too long to answer' : `Cannot reach OpenRouter: ${(error as Error).message}`);
+      throw new LlmError(timeout ? 'The model took too long to answer' : `Cannot reach ${r.label}: ${(error as Error).message}`);
     }
   };
 
   let res = await send(body);
   let data = (await res.json().catch(() => ({}))) as CompletionResponse;
   if (res.status === 400 && /reasoning|effort/i.test(data.error?.message ?? '')) {
-    const { reasoning: _unused, ...withoutReasoning } = body;
-    res = await send(withoutReasoning);
+    res = await send(withoutReasoning(body));
     data = (await res.json().catch(() => ({}))) as CompletionResponse;
   }
-  if (!res.ok) {
-    const reason = data.error?.message ?? `HTTP ${res.status}`;
-    if (res.status === 401) throw new LlmError('OpenRouter rejected the API key');
-    if (res.status === 402) throw new LlmError('Your OpenRouter credits are used up');
-    if (res.status === 429) throw new LlmError('OpenRouter rate limit reached, try again shortly');
-    throw new LlmError(`OpenRouter error: ${reason}`);
-  }
+  if (!res.ok) throw httpError(r, res.status, data.error?.message);
   const message = data.choices?.[0]?.message;
   return {
     content: message?.content ?? '',
-    usage: {
-      promptTokens: data.usage?.prompt_tokens ?? 0,
-      completionTokens: data.usage?.completion_tokens ?? 0,
-      cost: data.usage?.cost ?? 0,
-    },
+    usage: await usageOf(r, opts.model, data.usage),
     citations: (message?.annotations ?? [])
       .filter((a) => a.type === 'url_citation' && a.url_citation?.url)
       .map((a) => ({ url: a.url_citation!.url, title: a.url_citation!.title ?? '', content: a.url_citation!.content ?? '' })),
@@ -119,27 +172,20 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
 
 /**
  * A chat completion streamed token by token (`onDelta` gets each piece of text). Returns the
- * full text and the usage OpenRouter reports in its last event.
+ * full text and the usage reported in the last event.
  */
 export async function streamChat(
   opts: Omit<ChatOptions, 'json' | 'webResults'>,
   onDelta: (text: string) => void,
 ): Promise<{ content: string; usage: Usage }> {
-  const body = {
-    model: opts.model,
-    messages: opts.messages,
-    temperature: 0.2,
-    max_tokens: opts.maxTokens,
-    reasoning: { effort: opts.effort ?? 'minimal', exclude: true },
-    usage: { include: true },
-    stream: true,
-  };
+  const r = route(opts);
+  const body = requestBody(r, opts, true);
   const signal = opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000);
   const send = (payload: object) =>
-    fetch(ENDPOINT, {
+    fetch(ENDPOINTS[r.provider], {
       method: 'POST',
       signal,
-      headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
+      headers: { authorization: `Bearer ${r.key}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
       body: JSON.stringify(payload),
     });
 
@@ -148,25 +194,19 @@ export async function streamChat(
     res = await send(body);
     if (res.status === 400) {
       const error = (await res.clone().json().catch(() => ({}))) as CompletionResponse;
-      if (/reasoning|effort/i.test(error.error?.message ?? '')) {
-        const { reasoning: _unused, ...withoutReasoning } = body;
-        res = await send(withoutReasoning);
-      }
+      if (/reasoning|effort/i.test(error.error?.message ?? '')) res = await send(withoutReasoning(body));
     }
   } catch (error) {
     if (opts.signal?.aborted) throw new LlmError('Cancelled');
-    throw new LlmError(`Cannot reach OpenRouter: ${(error as Error).message}`);
+    throw new LlmError(`Cannot reach ${r.label}: ${(error as Error).message}`);
   }
   if (!res.ok || !res.body) {
     const data = (await res.json().catch(() => ({}))) as CompletionResponse;
-    if (res.status === 401) throw new LlmError('OpenRouter rejected the API key');
-    if (res.status === 402) throw new LlmError('Your OpenRouter credits are used up');
-    if (res.status === 429) throw new LlmError('OpenRouter rate limit reached, try again shortly');
-    throw new LlmError(`OpenRouter error: ${data.error?.message ?? `HTTP ${res.status}`}`);
+    throw httpError(r, res.status, data.error?.message);
   }
 
   let content = '';
-  let usage = emptyUsage();
+  let rawUsage: CompletionResponse['usage'];
   let buffer = '';
   const decoder = new TextDecoder();
   const handle = (line: string) => {
@@ -176,22 +216,16 @@ export async function streamChat(
     if (!data || data === '[DONE]') return;
     const event = JSON.parse(data) as {
       choices?: { delta?: { content?: string | null } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+      usage?: CompletionResponse['usage'];
       error?: { message?: string };
     };
-    if (event.error) throw new LlmError(`OpenRouter error: ${event.error.message ?? 'stream failed'}`);
+    if (event.error) throw new LlmError(`${r.label} error: ${event.error.message ?? 'stream failed'}`);
     const piece = event.choices?.[0]?.delta?.content;
     if (piece) {
       content += piece;
       onDelta(piece);
     }
-    if (event.usage) {
-      usage = {
-        promptTokens: event.usage.prompt_tokens ?? 0,
-        completionTokens: event.usage.completion_tokens ?? 0,
-        cost: event.usage.cost ?? 0,
-      };
-    }
+    if (event.usage) rawUsage = event.usage;
   };
   try {
     for await (const bytes of res.body as unknown as AsyncIterable<Uint8Array>) {
@@ -206,7 +240,7 @@ export async function streamChat(
     if (opts.signal?.aborted) throw new LlmError('Cancelled');
     throw new LlmError(`The answer was interrupted: ${(error as Error).message}`);
   }
-  return { content, usage };
+  return { content, usage: await usageOf(r, opts.model, rawUsage) };
 }
 
 /** Pulls the JSON object out of a reply, tolerating code fences or chatter around it. */
@@ -227,7 +261,7 @@ export function parseJsonReply(content: string): unknown {
  * fix invalid output.
  */
 export async function completeJson<S extends z.ZodType>(opts: {
-  apiKey: string;
+  keys: ProviderKeys;
   model: string;
   system: string;
   user: string;
@@ -244,7 +278,7 @@ export async function completeJson<S extends z.ZodType>(opts: {
   let problem = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     const reply = await chat({
-      apiKey: opts.apiKey,
+      keys: opts.keys,
       model: opts.model,
       messages,
       maxTokens: opts.maxTokens ?? 4000,

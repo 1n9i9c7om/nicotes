@@ -177,8 +177,67 @@ export function pageBlocks(markdown: string): PageBlock[] {
   });
 }
 
-/** Blocks for the given keys, in page order; unknown keys are skipped. */
+type ListBlock = Extract<PageBlock, { kind: 'list' }>;
+
+/** Separates a list's key from an item number: `list:Recipe:0>2` is the list nested under item 2. */
+export const SUB_LIST = '>';
+
+/** A list item's text as a label: "**Method:**" → "Method". */
+export const itemLabel = (text: string) =>
+  text
+    .replace(/[*_`]/g, '')
+    .replace(/[:：]\s*$/, '')
+    .trim();
+
+/**
+ * The lists nested under list items ("- **Method:**" with the steps indented below it), as
+ * list blocks of their own keyed `<list key>>N`, so layouts can use them like any list. Their
+ * heading path ends with the item's label; items keep their line numbers.
+ */
+export function subLists(blocks: PageBlock[]): ListBlock[] {
+  const out: ListBlock[] = [];
+  for (const block of blocks) {
+    if (block.kind !== 'list') continue;
+    block.items.forEach((item, n) => {
+      const children: ListItem[] = [];
+      for (let j = n + 1; j < block.items.length && block.items[j]!.depth > item.depth; j++) children.push(block.items[j]!);
+      if (!children.length) return;
+      const base = children[0]!.depth;
+      out.push({
+        kind: 'list',
+        key: `${block.key}${SUB_LIST}${n}`,
+        heading: [...block.heading, itemLabel(item.text)],
+        start: children[0]!.line,
+        end: item.end,
+        ordered: children[0]!.ordered,
+        items: children.map((c) => ({ ...c, depth: c.depth - base })),
+      });
+    });
+  }
+  return out;
+}
+
+/** Blocks and nested lists for the given keys, in page order; unknown keys are skipped. */
 export function blocksByKey(blocks: PageBlock[], keys: string[]): PageBlock[] {
   const wanted = new Set(keys);
-  return blocks.filter((b) => wanted.has(b.key));
+  const all = keys.some((k) => k.includes(SUB_LIST)) ? [...blocks, ...subLists(blocks)] : blocks;
+  return all.filter((b) => wanted.has(b.key)).sort((a, b) => a.start - b.start);
+}
+
+const splitRow = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim());
+
+/** A Markdown table's header cells and body rows (the alignment row is dropped). */
+export function tableRows(text: string): { header: string[]; rows: string[][] } {
+  const rows = text
+    .split('\n')
+    .filter((line) => /^\s*\|/.test(line))
+    .map(splitRow)
+    .filter((cells) => !cells.every((c) => /^:?-+:?$/.test(c.replace(/\s/g, ''))));
+  return { header: rows[0] ?? [], rows: rows.slice(1) };
 }

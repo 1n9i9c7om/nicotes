@@ -319,14 +319,24 @@ export class SemanticIndex {
   }
 
   /** The best matching passages for a query, at most `perPage` from each page. */
-  async passages(userId: string, query: string, limit = 10, perPage = 3, cutoff: Cutoff = RETRIEVAL_CUTOFF): Promise<Passage[] | null> {
+  async passages(
+    userId: string,
+    query: string,
+    limit = 10,
+    perPage = 3,
+    cutoff: Cutoff = RETRIEVAL_CUTOFF,
+    /** Only passages of these pages (a read scope); all pages when null. */
+    allowed: Set<string> | null = null,
+  ): Promise<Passage[] | null> {
     const cfg = this.ready(userId);
     if (!cfg) return null;
     const cache = this.load(userId, cfg.embeddingModel);
     if (!cache) return [];
     const q = await this.embedQuery(cfg, query);
     if (q.length !== cache.dims) return [];
-    const scored = cache.chunkIds.map((_, i) => ({ i, score: dot(q, cache.vectors, i * cache.dims) }));
+    const scored = cache.chunkIds
+      .map((_, i) => ({ i, score: dot(q, cache.vectors, i * cache.dims) }))
+      .filter((s) => !allowed || allowed.has(cache.pageOf[s.i]!));
     scored.sort((a, b) => b.score - a.score);
     const top = cut(scored, cutoff).slice(0, limit * 4);
     const live = this.liveIds(userId, [...new Set(top.map((s) => cache.pageOf[s.i]!))]);

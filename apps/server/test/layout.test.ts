@@ -52,6 +52,26 @@ describe('page layouts', () => {
     expect((await layout(page.id))!.stale).toBe(true);
   });
 
+  it('offers tables and nested lists to the AI and accepts them', async () => {
+    const content = [
+      '## Recipe', // b1
+      '| Ingredient | Amount |', // b2
+      '| --- | --- |',
+      '| Butter | 115 g [1](https://a.example/1) |',
+      '',
+      '- **Pan:** 20 cm', // b3, item 1
+      '- **Method:**', // item 2
+      '  1. Melt the butter', // b3.2
+      '  2. Bake',
+    ].join('\n');
+    fake(() => ({ type: 'recipe', ingredients: ['b2', 'b3'], steps: ['b3.2', 'b3.9'], reason: 'A recipe.' }));
+    const page = await create('Cake', content);
+    const res = await api.call<PageLayoutInfo>('POST', `/api/ai/layout/${page.id}`, {});
+    expect(res.body.spec).toMatchObject({ ingredients: ['table:Recipe:0', 'list:Recipe:0'], steps: ['list:Recipe:0>1'] });
+    expect(prompts[0]).toContain('b2 | table, 1 rows | Recipe | columns: Ingredient / Amount; Butter / 115 g');
+    expect(prompts[0]).toContain('b3.2 | numbered list, 2 items nested under item 2 "Method" | Recipe | Melt the butter; Bake');
+  });
+
   it('fills parts the AI left out from the heuristic, and keeps a forced type', async () => {
     fake(() => ({ type: 'document', reason: 'Unsure.' }));
     const page = await create('List', '## Packing\n- Socks\n- Jacket');

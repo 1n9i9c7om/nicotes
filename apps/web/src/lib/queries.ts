@@ -20,11 +20,12 @@ import type {
   ImportPreview,
   ImportRequest,
   MentionsResult,
-  ModelInfo,
+  ModelList,
   Notebook,
   NotebookCreate,
   NotebookUpdate,
   Page,
+  PageChanges,
   PageCreate,
   PageMove,
   PageSummary,
@@ -359,19 +360,27 @@ export function useUpdateSettings() {
 
 export const useCheckConnection = () =>
   useMutation({
-    mutationFn: (target: 'openrouter' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
+    mutationFn: (target: 'openrouter' | 'routeway' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
   });
 
-/** OpenRouter's model list for the picker; loaded on demand. */
-/** OpenRouter's chat or embedding models (for pickers and prices). */
+/** Chat models of both services, or OpenRouter's embedding models (pickers and prices). */
 export const useModels = (enabled: boolean, kind: 'chat' | 'embedding' = 'chat') =>
   useQuery({
     queryKey: [...keys.models, kind],
-    queryFn: () => api.get<ModelInfo[]>(`/settings/models?kind=${kind}`),
+    queryFn: () => api.get<ModelList>(`/settings/models?kind=${kind}`),
     enabled,
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
+
+/** Reloads a model list from the services, bypassing the server's hourly cache. */
+export function useRefreshModels(kind: 'chat' | 'embedding') {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.get<ModelList>(`/settings/models?kind=${kind}&refresh=1`),
+    onSuccess: (list) => qc.setQueryData([...keys.models, kind], list),
+  });
+}
 
 export const useImportPreview = () =>
   useMutation({ mutationFn: (input: ImportRequest) => api.post<ImportPreview>('/import/preview', input) });
@@ -392,11 +401,18 @@ export const useVersion = (pageId: string, versionId: string | null) =>
     staleTime: Infinity,
   });
 
-export function useRestoreVersion() {
+/**
+ * Replaces a page's content with text the user reviewed as a diff (accepted AI changes, a
+ * partial restore). The server keeps the current text as a version first.
+ */
+export function useApplyChanges(pageId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ pageId, versionId }: { pageId: string; versionId: string }) =>
-      api.post<Page>(`/pages/${pageId}/versions/${versionId}/restore`),
+    mutationFn: ({ content, reason }: { content: string; reason: PageChanges['reason'] }) => {
+      const saved = qc.getQueryData<Page>(keys.page(pageId));
+      if (!saved) throw new Error('The page is not loaded');
+      return api.post<Page>(`/pages/${pageId}/changes`, { content, baseVersion: saved.version, reason } satisfies PageChanges);
+    },
     onSuccess: (page) => {
       // The open editor adopts the newer server copy (see useAutosave).
       qc.setQueryData(keys.page(page.id), page);

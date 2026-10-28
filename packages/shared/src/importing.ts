@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { READ_SCOPES, type ReadScope } from './assistant';
 import { normalizeTag } from './tags';
 
 // ---------- Settings ----------
@@ -12,7 +13,7 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
-export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'summary', 'links', 'layout'] as const;
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
@@ -32,6 +33,10 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
     label: 'Ask your notes',
     hint: 'Answers from your notes with citations. Needs a model that sticks to the given sources.',
   },
+  assistant: {
+    label: 'Page assistant',
+    hint: 'Chats about the open page and proposes edits to it. Rewrites the whole page per change, so it needs a model that keeps text it was not asked to change.',
+  },
   summary: { label: 'Summaries', hint: 'One to three sentences per page. Any cheap model works.' },
   links: { label: 'Link suggestions', hint: 'Finds words in a page that should link to other pages.' },
   layout: {
@@ -39,6 +44,18 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
     hint: 'Recognises recipes, checklists, guides and stories for the interactive view. One short call per page.',
   },
 };
+
+/** Services that run the chat models. Embeddings (semantic index) always use OpenRouter. */
+export const AI_PROVIDERS = ['openrouter', 'routeway'] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+export const AI_PROVIDER_LABELS: Record<AiProvider, string> = { openrouter: 'OpenRouter', routeway: 'Routeway' };
+
+/** Routeway models are stored as "routeway:<id>"; every other model id is an OpenRouter one. */
+export const ROUTEWAY_PREFIX = 'routeway:';
+export const providerOf = (model: string): AiProvider => (model.startsWith(ROUTEWAY_PREFIX) ? 'routeway' : 'openrouter');
+/** The id the provider itself uses (without the "routeway:" prefix). */
+export const providerModelId = (model: string) =>
+  model.startsWith(ROUTEWAY_PREFIX) ? model.slice(ROUTEWAY_PREFIX.length) : model;
 
 /** Default spending limit per AI job (research run, organize run), in USD. */
 export const DEFAULT_AI_COST_LIMIT = 0.5;
@@ -53,6 +70,10 @@ export interface Settings {
     apiKeySource: SettingSource;
     model: string;
     modelSource: SettingSource;
+  };
+  routeway: {
+    apiKeySet: boolean;
+    apiKeySource: SettingSource;
   };
   crawl4ai: {
     url: string | null;
@@ -85,6 +106,10 @@ export interface Settings {
     model: string;
     modelSource: SettingSource;
   };
+  assistant: {
+    /** Which other pages the page assistant may read. */
+    scope: ReadScope;
+  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
@@ -105,12 +130,14 @@ export const modelSetting = (task: AiTask) => `${task}Model` as const;
 export const settingsUpdateSchema = z.object({
   openrouterApiKey: optionalSecret,
   openrouterModel: modelId,
+  routewayApiKey: optionalSecret,
   crawl4aiUrl: optionalUrl,
   crawl4aiToken: optionalSecret,
   importModel: modelId,
   organizeModel: modelId,
   researchModel: modelId,
   askModel: modelId,
+  assistantModel: modelId,
   summaryModel: modelId,
   linksModel: modelId,
   layoutModel: modelId,
@@ -126,6 +153,7 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
+  assistantScope: z.enum(READ_SCOPES).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
@@ -135,12 +163,28 @@ export interface ConnectionCheck {
 }
 
 export interface ModelInfo {
+  /** The id as stored in settings ("routeway:" prefixed for Routeway). */
   id: string;
   name: string;
+  provider: AiProvider;
   /** USD per million input tokens. */
   promptPrice: number | null;
   /** USD per million output tokens (null for embedding models). */
   completionPrice: number | null;
+  /** Tokens. */
+  contextLength: number | null;
+  /** Supports tool / function calling. */
+  tools: boolean;
+  /** Has a reasoning mode. */
+  reasoning: boolean;
+  free: boolean;
+}
+
+/** GET /api/settings/models: the models of every reachable service. */
+export interface ModelList {
+  models: ModelInfo[];
+  /** Services whose list could not be loaded. */
+  errors: string[];
 }
 
 // ---------- Import ----------

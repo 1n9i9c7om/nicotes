@@ -41,6 +41,9 @@ highlights the current sentence. The layout is detected automatically; with an O
 key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
 yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
 
+In every mode, drag either edge of the page to make it wider or narrower (double-click the
+edge to reset); the width is remembered per browser.
+
 ### Ask your notes (optional)
 
 With an OpenRouter key, **Ask** answers questions from your own notes with numbered
@@ -48,19 +51,44 @@ sources, and the page menu can **summarize** a page or **suggest links** to othe
 Switch on the **semantic index** (Settings) to find notes by meaning — related pages,
 "By meaning" results in search, better answers. It sends the text of your notes to
 OpenRouter for embeddings (with the default model a few cents for thousands of pages).
+**Ask** searches all notebooks by default; the picker next to the question box limits it to
+some of them.
+
+### Page assistant (optional)
+
+**Assistant** in the page bar opens a chat beside the page: ask about it or tell it what to
+change ("add a section on costs", "fix the spelling", "translate to German"). It only ever
+changes the open page, and only what you approve: proposals arrive as a diff where every
+change can be ticked off on its own, like staging hunks in git, and the text before is kept
+in the version history ("Before AI changes"). What else it may read is your choice — this
+page only (the default), its section, its notebook or all notebooks — and **Web research**
+lets it search the web and read a few sources first.
+
+The **version history** shows a version's changes compared with the current text or with
+the version before, and can restore only some of the changes.
 
 ### Research & organize (optional)
 
 With an OpenRouter key, **Research** answers a question by searching the web, reading the
-best sources and writing a note with numbered citations; **Organize with AI** (notebook or
+best sources and writing a note with numbered citations (on pages with citations, **Hide
+sources** in the page bar hides the numbers in the text without removing them from the
+page); **Organize with AI** (notebook or
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
 at a configurable limit (default $0.50). Under Settings → **AI models** every feature
-(import, organize, research, Ask, summaries, link suggestions) can use its own model, with
-prices shown; unset ones use the default model.
+(import, organize, research, Ask, the page assistant, summaries, link suggestions, layouts)
+can use its own model, picked from a searchable list with prices, context size and filters;
+unset ones use the default model.
+
+The AI features run on [OpenRouter](https://openrouter.ai) or
+[Routeway](https://routeway.ai) (an OpenAI-compatible gateway), or both: add the key of
+each service you want under Settings, and every feature uses the service of the model you
+pick for it (Routeway models are stored as `routeway:<id>`). The semantic index always
+uses OpenRouter for embeddings.
 
 Research searches via [SearXNG](https://docs.searxng.org) if `SEARXNG_URL` is set (the JSON
-format must be enabled), otherwise via OpenRouter's web search. For a local instance, set
+format must be enabled), otherwise via the web search of the research model's service
+(OpenRouter's web plugin or Routeway's `@online`). For a local instance, set
 `SEARXNG_SECRET` in `.env` and run:
 
 ```bash
@@ -108,7 +136,8 @@ Obsidian-compatible vault), handy for reading them without Nicotes.
 
 Import turns web pages into notes. It works out of the box for pages with embedded recipe
 data and as a plain page clip; summaries and structure need an
-[OpenRouter](https://openrouter.ai/keys) API key (default model `z-ai/glm-5.3-flashx`).
+[OpenRouter](https://openrouter.ai/keys) API key (default model `z-ai/glm-5.3-flashx`) or a
+[Routeway](https://routeway.ai) key with a Routeway model chosen for import.
 Keys, model and crawl4ai can be set under **Settings** or via `.env`.
 
 [crawl4ai](https://github.com/unclecode/crawl4ai) is optional and renders JavaScript-heavy

@@ -186,7 +186,7 @@ export function organizeJob(db: Db) {
         })
         .join('\n');
       const reply = await completeJson({
-        apiKey: cfg.openrouterApiKey!,
+        keys: cfg.keys,
         model: cfg.models.organize,
         system: SYSTEM,
         user: `${instructions(input)}\nWrite all reasons in ${reasonLanguage}.\n\nEXISTING TAGS: ${vocabText}\n\nPARENT OPTIONS (id | path):\n${parentOptions}\n\nPAGES TO REVIEW (id | path | tags | beginning):\n${list}`,

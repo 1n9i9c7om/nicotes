@@ -170,6 +170,13 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   always snapshot first. Retention: everything from the last 24 h, then the newest per day
   for 90 days, max 200 per page. Restoring replaces the content (not the title, so links
   stay valid) and keeps the replaced text as a version.
+- **Diffs:** `packages/shared/src/diff.ts` splits a line diff (`diff` package) into hunks —
+  contiguous changes — and applies any subset of them (all hunks give the target, none the
+  original). The history dialog compares a version with the current text (each hunk can be
+  ticked off, so only some changes are restored) or with the version before. Reviewed
+  results go through `POST /api/pages/:id/changes` (`content`, `baseVersion`, `reason`),
+  which snapshots the current text with that reason and replaces it; a stale
+  `baseVersion` is a 409. The AI page assistant uses the same review and endpoint.
 - **Trash:** soft-deleted subtrees share one `deleted_at` and appear as one item; pages of a
   deleted notebook come back with it. Restored pages go back under their old parent if it
   still exists, else to the top level. Items are purged after 30 days (hourly job);
@@ -189,6 +196,18 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   each resolve their own model (settings > environment variable > the default model), so
   cheap extraction and demanding writing can use different models. Settings shows
   OpenRouter's prices next to each and warns about ids missing from its model list.
+- **Services:** chat models run on OpenRouter or Routeway (`ai/llm.ts`). A model id
+  `routeway:<id>` goes to `https://api.routeway.ai/v1` with the Routeway key, anything else
+  to OpenRouter, so each feature uses the service of its model and a missing key is
+  reported per service. The services differ in options: OpenRouter gets
+  `reasoning.effort` and `usage.include` and searches via its `web` plugin; Routeway leaves
+  reasoning off unless an effort above "minimal" is asked for, reports streamed usage via
+  `stream_options.include_usage`, searches with an `@online` model suffix (links are read
+  from the reply when no citations come back) and returns no cost, so the cost is computed
+  from its price list. `GET /api/settings/models` merges both public model lists (cached
+  for an hour, `refresh=1` reloads; a service that is down is left out and reported) into
+  one list with prices, context size and tool / reasoning / free flags for the picker.
+  Embeddings stay on OpenRouter.
 
 - **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
   time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
@@ -265,6 +284,20 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   the cost. The model may only use the numbered passages and cites them as `[n]`;
   follow-ups send the last turns along. Answers render through a small Markdown renderer
   that builds React elements (no HTML injection) and can be saved as notes.
+- **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
+  `section` (the parent page's subtree; a top-level page's own subtree), `notebook` or
+  `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
+  **Ask** searches everything unless the request names `notebookIds`.
+- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
+  the context it read (notes within the user's read scope setting, optionally a few web
+  sources found via SearXNG/OpenRouter and read like Research does), the message, and —
+  when it changes the page — the whole rewritten page as a `proposal`. The model writes the
+  page after its message between `<<<PAGE` / `PAGE>>>` lines; the server streams only the
+  message part and sends the page separately. The request carries the page as the user
+  sees it (unsaved edits included). The assistant never writes: the client diffs the
+  proposal against the current text, the user picks hunks, and the result is applied via
+  `/changes` with reason `assistant`. Notes and web content are marked as data, not
+  instructions, in the prompt.
 - **Summaries:** 1–3 sentences per page (`page_summaries`), shown above the text and marked
   as outdated once the page version changes.
 - **AI link suggestions:** the model gets the page and up to 120 candidates (nearest by
@@ -290,6 +323,13 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   sees one line per block with numbered ids and answers with the type and ids, which the server
   checks and turns into keys; missing parts come from the heuristic. Users can pick a type by
   hand (`PUT`) or go back to automatic (`DELETE`); choices live in `page_layouts`.
+- **Lenient recipes:** pages written by Research or copied from elsewhere rarely follow the
+  "## Ingredients / ## Steps" shape. Tables count as ingredients (under an ingredients
+  heading or with an ingredient column; the amount column is found by its header and scales),
+  lists nested under a labelled item ("- **Method:**") are parts of their own
+  (`list:Recipe:0>1`, see `subLists`), the hand-picked fallback takes numbered lists after
+  the ingredients instead of everything below them, and citation links (`[3](https://…)`)
+  are hidden in recipe and guide steps. The AI sees tables and nested lists (`b5.2`) as well.
 - **Two-way:** views never render HTML from the model. Their actions are line edits
   (`shared/listEdits.ts`: tick, set text, add, remove, move with nested items) applied to the
   editor's text, so they autosave, show up in version history and can be undone in the view.
@@ -329,10 +369,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
+| `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
@@ -372,4 +413,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    (`npm run e2e`), a model per AI feature.
 9. ✅ **Interactive views** — checklist, recipe with cook mode, guide, reader with
    read-aloud, chosen by heuristics or the AI and editing the page's Markdown.
-10. **Later** — GitLab CI → registry, multi-user.
+10. ✅ **Page assistant & reviewable changes** — chat beside a page that proposes edits to
+    that page only, approved hunk by hunk; read scopes for the assistant and Ask; version
+    history with diffs against the previous version and partial restore. GitLab CI builds
+    images into the registry.
+11. **Later** — multi-user.

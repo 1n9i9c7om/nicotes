@@ -1,11 +1,12 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
-import { TEMPLATE_TAG } from '@nicotes/shared';
+import { READ_SCOPE_INFO, READ_SCOPES, TEMPLATE_TAG, type ReadScope } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { formatDuration, formatSize, timeAgo } from '../lib/format';
 import {
   AI_TASK_INFO,
   AI_TASKS,
+  DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   modelSetting,
   type ConnectionCheck,
@@ -15,6 +16,7 @@ import {
   type SettingsUpdate,
 } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
+import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
 import {
   exportUrl,
@@ -22,6 +24,7 @@ import {
   useBatches,
   useCheckConnection,
   useModels,
+  useRefreshModels,
   useNotebooks,
   usePages,
   useSemanticAction,
@@ -128,12 +131,77 @@ function SettingField({
   );
 }
 
+/** A model setting: the picker saves right away; "Clear" goes back to the environment/default. */
+function ModelField({
+  label,
+  hint,
+  source,
+  value,
+  placeholder,
+  unsetLabel,
+  allowDefault,
+  filters,
+  list,
+  kind,
+  pending,
+  onSave,
+}: {
+  label: string;
+  hint?: ReactNode;
+  source: SettingSource;
+  value: string | null;
+  placeholder: string;
+  unsetLabel?: string;
+  allowDefault?: boolean;
+  filters?: boolean;
+  list: ReturnType<typeof useModels>;
+  kind: 'chat' | 'embedding';
+  pending: boolean;
+  onSave: (value: string | null) => void;
+}) {
+  const inputId = useId();
+  const refresh = useRefreshModels(kind);
+  return (
+    <div className="setting">
+      <div className="setting-head">
+        <label className="setting-label" htmlFor={inputId}>
+          {label}
+        </label>
+        <Source source={source} unset={unsetLabel} />
+      </div>
+      <div className="setting-row">
+        <ModelPicker
+          id={inputId}
+          label={label}
+          value={value}
+          placeholder={placeholder}
+          models={list.data?.models}
+          loading={list.isPending}
+          allowDefault={allowDefault}
+          filters={filters}
+          disabled={pending}
+          onChange={(id) => id !== value && onSave(id)}
+          onRefresh={() => refresh.mutate()}
+          refreshing={refresh.isPending}
+        />
+        {source === 'settings' && (
+          <button type="button" className="btn" disabled={pending} onClick={() => onSave(null)}>
+            Clear
+          </button>
+        )}
+      </div>
+      {hint && <p className="setting-hint">{hint}</p>}
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const auth = useAuthStatus();
   const settings = useSettings();
   const update = useUpdateSettings();
   const signOut = useSignOut();
   const checkOpenRouter = useCheckConnection();
+  const checkRouteway = useCheckConnection();
   const checkCrawl4ai = useCheckConnection();
   const checkSearxng = useCheckConnection();
   const batches = useBatches();
@@ -143,12 +211,10 @@ export function SettingsPage() {
   const undo = useUndoBatch();
   const models = useModels(true);
   const embeddingModels = useModels(true, 'embedding');
-  const modelList = useId();
-  const embeddingList = useId();
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, crawl4ai, ai, daily, tasks, semantic } = settings.data;
+  const { openrouter, routeway, crawl4ai, ai, daily, tasks, semantic, assistant } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -162,7 +228,10 @@ export function SettingsPage() {
         <h2>
           <PlugZap size={18} /> OpenRouter
         </h2>
-        <p className="muted">Used to turn imported pages into structured notes. Without a key, imports still work as plain page clips.</p>
+        <p className="muted">
+          Runs the AI features with OpenRouter's models and computes the embeddings for the semantic index. Without any
+          AI key, imports still work as plain page clips.
+        </p>
 
         <SettingField
           key={`key-${openrouter.apiKeySource}`}
@@ -187,44 +256,81 @@ export function SettingsPage() {
         </div>
       </section>
 
+      <section className="settings-card" id="routeway">
+        <h2>
+          <PlugZap size={18} /> Routeway
+        </h2>
+        <p className="muted">
+          Optional second service: an OpenAI-compatible gateway with its own models and prices. Its models appear in the
+          model pickers below, marked Routeway; each feature uses the service of the model you pick for it.
+        </p>
+        <SettingField
+          key={`rw-key-${routeway.apiKeySource}`}
+          label="API key"
+          secret
+          source={routeway.apiKeySource}
+          current={null}
+          placeholder="sk-…"
+          pending={update.isPending}
+          onSave={(v) => save({ routewayApiKey: v })}
+          hint={
+            <a href="https://routeway.ai" target="_blank" rel="noreferrer">
+              Create a key at routeway.ai <ExternalLink size={12} />
+            </a>
+          }
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkRouteway.isPending} onClick={() => checkRouteway.mutate('routeway')}>
+            {checkRouteway.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkRouteway.data} />
+        </div>
+      </section>
+
       <section className="settings-card models-card" id="models">
         <h2>
           <Cpu size={18} /> AI models
         </h2>
         <p className="muted">
-          Each AI feature can use its own OpenRouter model; empty ones use the default model. Prices are per million
-          tokens, input / output.
+          Each AI feature can use its own model from OpenRouter or Routeway; unset ones use the default model. Prices
+          are per million tokens, input / output.
         </p>
-        <SettingField
-          key={`model-${openrouter.model}`}
+        <ModelField
           label="Default model"
           source={openrouter.modelSource}
-          current={openrouter.model}
+          value={openrouter.model}
           placeholder={DEFAULT_OPENROUTER_MODEL}
-          listId={modelList}
+          list={models}
+          kind="chat"
           pending={update.isPending}
           onSave={(v) => save({ openrouterModel: v })}
-          hint={<ModelHint id={openrouter.model} models={models.data} text={`Clear to go back to ${DEFAULT_OPENROUTER_MODEL}.`} />}
+          hint={<ModelHint id={openrouter.model} models={models.data?.models} text={`Clear to go back to ${DEFAULT_OPENROUTER_MODEL}.`} />}
         />
         {AI_TASKS.map((task) => {
           const own = settings.data!.models[task];
           return (
-            <SettingField
-              key={`${task}-${own.model}`}
+            <ModelField
+              key={task}
               label={AI_TASK_INFO[task].label}
               source={own.source}
-              current={own.model}
-              placeholder={`Default · ${openrouter.model}`}
+              value={own.model}
+              placeholder={`Default · ${models.data?.models.find((m) => m.id === openrouter.model)?.name ?? openrouter.model}`}
               unsetLabel="Uses default"
-              listId={modelList}
+              allowDefault
+              list={models}
+              kind="chat"
               pending={update.isPending}
               onSave={(v) => save({ [modelSetting(task)]: v } as SettingsUpdate)}
-              hint={<ModelHint id={own.model} models={models.data} text={AI_TASK_INFO[task].hint} />}
+              hint={<ModelHint id={own.model} models={models.data?.models} text={AI_TASK_INFO[task].hint} />}
             />
           );
         })}
-        <ModelList id={modelList} models={models.data} />
-        {models.error && <p className="setting-hint">OpenRouter's model list is unavailable, so prices are not shown.</p>}
+        {models.error && <p className="setting-hint">The model lists are unavailable, so models and prices are not shown.</p>}
+        {models.data?.errors.map((e) => (
+          <p key={e} className="setting-hint">
+            {e} — its models are missing from the lists.
+          </p>
+        ))}
       </section>
 
       <section className="settings-card">
@@ -267,8 +373,8 @@ export function SettingsPage() {
           <Telescope size={18} /> Research &amp; AI
         </h2>
         <p className="muted">
-          Research searches the web via SearXNG when configured, otherwise via OpenRouter's web search (about $0.01 per
-          search). Every AI run stops once it reaches the cost limit.
+          Research searches the web via SearXNG when configured, otherwise via the web search of the research model's
+          service (OpenRouter's web plugin, about $0.01 per search, or Routeway's “@online”). Every AI run stops once it reaches the cost limit.
         </p>
         <SettingField
           key={`sx-${ai.searxngUrl}`}
@@ -288,6 +394,20 @@ export function SettingsPage() {
           pending={update.isPending}
           onSave={(v) => save({ aiCostLimit: v === null ? null : Number(v.replace(',', '.')) })}
         />
+        <label className="field">
+          <span>The page assistant may read</span>
+          <select value={assistant.scope} onChange={(e) => save({ assistantScope: e.target.value as ReadScope })}>
+            {READ_SCOPES.map((s) => (
+              <option key={s} value={s}>
+                {READ_SCOPE_INFO[s].label}
+              </option>
+            ))}
+          </select>
+          <small className="muted">
+            {READ_SCOPE_INFO[assistant.scope].hint} It only ever changes the open page, and only with your approval. Also
+            switchable in the assistant panel.
+          </small>
+        </label>
         <div className="setting-actions">
           <button className="btn" disabled={checkSearxng.isPending} onClick={() => checkSearxng.mutate('searxng')}>
             {checkSearxng.isPending ? 'Testing…' : 'Test SearXNG'}
@@ -324,8 +444,7 @@ export function SettingsPage() {
         apiKeySet={openrouter.apiKeySet}
         pending={update.isPending}
         save={save}
-        models={embeddingModels.data}
-        listId={embeddingList}
+        list={embeddingModels}
       />
 
       {update.error && <p className="error">{update.error.message}</p>}
@@ -501,15 +620,13 @@ function SemanticCard({
   apiKeySet,
   pending,
   save,
-  models,
-  listId,
+  list,
 }: {
   semantic: Settings['semantic'];
   apiKeySet: boolean;
   pending: boolean;
   save: (input: SettingsUpdate) => void;
-  models?: ModelInfo[];
-  listId: string;
+  list: ReturnType<typeof useModels>;
 }) {
   const status = useSemanticStatus(semantic.enabled);
   const action = useSemanticAction();
@@ -555,23 +672,24 @@ function SemanticCard({
           )}
         </div>
       )}
-      <SettingField
-        key={`emb-${semantic.model}`}
+      <ModelField
         label="Embedding model"
         source={semantic.modelSource}
-        current={semantic.model}
-        listId={listId}
+        value={semantic.model}
+        placeholder={DEFAULT_EMBEDDING_MODEL}
+        filters={false}
+        list={list}
+        kind="embedding"
         pending={pending}
         onSave={(v) => save({ embeddingModel: v })}
         hint={
           <ModelHint
             id={semantic.model}
-            models={models}
-            text="Changing it rebuilds the index. Multilingual models match notes across languages."
+            models={list.data?.models}
+            text="An OpenRouter model. Changing it rebuilds the index. Multilingual models match notes across languages."
           />
         }
       />
-      <ModelList id={listId} models={models} />
       {semantic.enabled && (
         <div className="setting-actions">
           <button className="btn" disabled={action.isPending} onClick={() => action.mutate('rebuild')}>
@@ -599,20 +717,7 @@ function ModelHint({ id, models, text }: { id: string | null; models?: ModelInfo
           {info.completionPrice !== null && ` / ${price(info.completionPrice)}`}
         </span>
       )}
-      {id && models && !info && <span className="model-unknown"> · Not in OpenRouter's model list — check the id.</span>}
+      {id && models && !info && <span className="model-unknown"> · Not in the model lists — check the id.</span>}
     </>
-  );
-}
-
-function ModelList({ id, models }: { id: string; models?: ModelInfo[] }) {
-  return (
-    <datalist id={id}>
-      {models?.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.name}
-          {m.promptPrice !== null ? ` · ${price(m.promptPrice)}/M in` : ''}
-        </option>
-      ))}
-    </datalist>
   );
 }

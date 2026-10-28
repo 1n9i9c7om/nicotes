@@ -2,11 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import {
   AlertTriangle,
+  Bot,
   Check,
   ChevronRight,
   CloudOff,
   Code2,
   Eye,
+  EyeOff,
   FolderInput,
   History,
   LayoutTemplate,
@@ -19,6 +21,7 @@ import {
 } from 'lucide-react';
 import {
   appendSeeAlso,
+  hasCitations,
   findPhrase,
   linkFirstMention,
   linkMention,
@@ -29,7 +32,9 @@ import {
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
 import { Connections } from '../components/Connections';
+import { PageAssistant } from '../components/PageAssistant';
 import { PageSummary } from '../components/PageSummary';
+import { PageWidthHandles } from '../components/PageWidthHandles';
 import { LocalGraph } from '../components/graph/LocalGraph';
 import { HistoryDialog } from '../components/HistoryDialog';
 import { PageLayout } from '../components/layouts/PageLayout';
@@ -39,7 +44,16 @@ import { TagEditor } from '../components/TagEditor';
 import { ApiError, uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
 import { useLocalState } from '../lib/storage';
-import { useNotebooks, usePage, usePages, useRenamePage, useSuggestLinks, useSummarize, useTags } from '../lib/queries';
+import {
+  useApplyChanges,
+  useNotebooks,
+  usePage,
+  usePages,
+  useRenamePage,
+  useSuggestLinks,
+  useSummarize,
+  useTags,
+} from '../lib/queries';
 import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 import { NotFound } from './NotFound';
@@ -88,9 +102,17 @@ function PageEditor({ page }: { page: Page }) {
   const [title, setTitle] = useState(page.title);
   const editor = useRef<EditorHandle>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  // Per device, as the right width depends on the screen; null = the default width.
+  const [pageWidth, setPageWidth] = useLocalState<number | null>('nicotes.pageWidth', null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useLocalState('nicotes.assistantOpen', false);
+  // Purely visual: source citations ("gooey 2, 3, 7.") are hidden, the text keeps them.
+  const [hideSources, setHideSources] = useLocalState('nicotes.hideSources', false);
+  const cited = useMemo(() => hasCitations(content), [content]);
+  const applyChanges = useApplyChanges(page.id);
   const tree = useMemo(() => buildTree(pages.data ?? []), [pages.data]);
   const summary = tree.byId.get(page.id);
   // The page may be moved while open ("Move to…"); the tree has its current notebook.
@@ -212,6 +234,24 @@ function PageEditor({ page }: { page: Page }) {
               },
             ]}
           />
+          {cited && (viewing || mode === 'visual') && (
+            <button
+              className={`btn btn-sm sources-toggle${hideSources ? ' active' : ''}`}
+              aria-pressed={hideSources}
+              title={hideSources ? 'Show the source numbers in the text' : 'Hide the source numbers in the text (the page keeps them)'}
+              onClick={() => setHideSources(!hideSources)}
+            >
+              <EyeOff size={15} /> <span>Hide sources</span>
+            </button>
+          )}
+          <button
+            className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
+            aria-pressed={assistantOpen}
+            title="Chat about this page and let AI propose changes"
+            onClick={() => setAssistantOpen(!assistantOpen)}
+          >
+            <Bot size={15} /> <span>Assistant</span>
+          </button>
           <div className="segmented" role="group" aria-label="Editor mode">
             <button
               className={!viewing && mode === 'visual' ? 'active' : ''}
@@ -262,53 +302,68 @@ function PageEditor({ page }: { page: Page }) {
         </div>
       )}
 
-      <div className="page-body">
-        <textarea
-          ref={titleInput}
-          className="page-title"
-          rows={1}
-          placeholder="Untitled"
-          value={title}
-          maxLength={300}
-          aria-label="Page title"
-          onChange={(e) => setTitle(e.target.value.replace(/\n/g, ''))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || (e.key === 'ArrowDown' && e.currentTarget.selectionStart === title.length)) {
-              e.preventDefault();
-              editor.current?.focus();
-            }
-          }}
-        />
-        <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
-        <PageSummary pageId={page.id} version={version} summarize={summarize} />
-        {viewing ? (
-          <PageLayout
+      <div className="page-split">
+        <div className="page-main">
+          <div ref={body} className={`page-body${hideSources ? ' hide-sources' : ''}`} style={pageWidth ? { maxWidth: pageWidth } : undefined}>
+            <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />
+            <textarea
+              ref={titleInput}
+              className="page-title"
+              rows={1}
+              placeholder="Untitled"
+              value={title}
+              maxLength={300}
+              aria-label="Page title"
+              onChange={(e) => setTitle(e.target.value.replace(/\n/g, ''))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || (e.key === 'ArrowDown' && e.currentTarget.selectionStart === title.length)) {
+                  e.preventDefault();
+                  editor.current?.focus();
+                }
+              }}
+            />
+            <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
+            <PageSummary pageId={page.id} version={version} summarize={summarize} />
+            {viewing ? (
+              <PageLayout
+                pageId={page.id}
+                notebookId={notebookId}
+                title={title}
+                content={content}
+                tags={summary?.tags ?? page.tags}
+                version={version}
+                onChange={replaceContent}
+                flush={flush}
+                hideSources={hideSources}
+              />
+            ) : mode === 'visual' ? (
+              <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
+            ) : (
+              <Suspense fallback={null}>
+                <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} {...env} />
+              </Suspense>
+            )}
+            <Connections
+              pageId={page.id}
+              notebookId={notebookId}
+              version={version}
+              onLinkHere={linkHere}
+              onSeeAlso={(target) => replaceContent(appendSeeAlso(content, target))}
+              ai={{ run: suggest, requested: suggestRuns }}
+              onLinkPhrases={linkPhrases}
+            />
+            <LocalGraph pageId={page.id} notebookId={notebookId} />
+          </div>
+        </div>
+        {assistantOpen && (
+          <PageAssistant
             pageId={page.id}
-            notebookId={notebookId}
             title={title}
             content={content}
-            tags={summary?.tags ?? page.tags}
-            version={version}
-            onChange={replaceContent}
             flush={flush}
+            onClose={() => setAssistantOpen(false)}
           />
-        ) : mode === 'visual' ? (
-          <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
-        ) : (
-          <Suspense fallback={null}>
-            <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} {...env} />
-          </Suspense>
         )}
-        <Connections
-          pageId={page.id}
-          notebookId={notebookId}
-          version={version}
-          onLinkHere={linkHere}
-          onSeeAlso={(target) => replaceContent(appendSeeAlso(content, target))}
-          ai={{ run: suggest, requested: suggestRuns }}
-          onLinkPhrases={linkPhrases}
-        />
-        <LocalGraph pageId={page.id} notebookId={notebookId} />
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
@@ -316,7 +371,10 @@ function PageEditor({ page }: { page: Page }) {
         <HistoryDialog
           pageId={page.id}
           currentContent={content}
-          beforeRestore={flush}
+          onApply={async (text) => {
+            await flush();
+            await applyChanges.mutateAsync({ content: text, reason: 'restore' });
+          }}
           onClose={() => setHistoryOpen(false)}
         />
       )}

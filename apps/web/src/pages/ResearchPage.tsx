@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowRight, FileText, Settings as SettingsIcon, Telescope } from 'lucide-react';
-import { RESEARCH_DEPTHS, type Job, type ResearchDepth, type ResearchRequest, type ResearchResult } from '@nicotes/shared';
+import { providerOf, RESEARCH_DEPTHS, searchLabel, type Job, type ResearchDepth, type ResearchRequest, type ResearchResult } from '@nicotes/shared';
 import { formatCost, JobProgress } from '../components/JobProgress';
+import { aiKeyFor, modelFor } from '../lib/ai';
 import { timeAgo } from '../lib/format';
 import { useJob, useJobs, useNotebooks, usePages, useSettings, useStartResearch } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
@@ -25,6 +26,7 @@ export function ResearchPage() {
   const notebooks = useNotebooks();
   const pages = usePages();
   const settings = useSettings();
+  const keyCheck = aiKeyFor(settings.data, 'research', 'Research');
   const start = useStartResearch();
   const history = useJobs('research');
   const [question, setQuestion] = useState('');
@@ -76,7 +78,7 @@ export function ResearchPage() {
           {result && (
             <div className="import-actions">
               <span className="muted">
-                {result.sources} sources via {result.searchProvider === 'searxng' ? 'SearXNG' : 'OpenRouter web search'}
+                {result.sources} sources via {searchLabel(result.searchProvider)}
               </span>
               {isDeleted(result) ? (
                 <span className="muted">
@@ -164,7 +166,8 @@ export function ResearchPage() {
             <span className="muted research-meta">
               {ai && (
                 <>
-                  {settings.data?.models.research.model ?? settings.data?.openrouter.model} · {ai.searxngUrl ? 'SearXNG' : 'OpenRouter web search'} · limit {formatCost(ai.costLimit)}{' '}
+                  {settings.data && modelFor(settings.data, 'research')} ·{' '}
+                  {ai.searxngUrl ? 'SearXNG' : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))} · limit {formatCost(ai.costLimit)}{' '}
                   <Link to="/settings" aria-label="AI settings">
                     <SettingsIcon size={13} />
                   </Link>
@@ -175,9 +178,7 @@ export function ResearchPage() {
               <Telescope size={16} /> Start research
             </button>
           </div>
-          {!settings.data?.openrouter.apiKeySet && (
-            <p className="error">Research needs an OpenRouter API key — add one under Settings.</p>
-          )}
+          {keyCheck.message && <p className="error">{keyCheck.message}</p>}
         </form>
       )}
 

@@ -397,3 +397,60 @@ a.cite:hover {
 .connections-tab svg {
   color: var(--accent);
 }
+
+/* Notebook scope picker (NotebookScope) */
+.ask-scope {
+  position: relative;
+  margin-right: auto;
+}
+
+.ask-scope summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.ask-scope summary::-webkit-details-marker {
+  display: none;
+}
+
+.ask-scope-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+  box-shadow: var(--shadow);
+}
+
+.ask-scope-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ask-scope-menu label:hover {
+  background: var(--bg-hover);
+}
+
+.ask-scope-menu hr {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.ask-scope-menu .error {
+  margin: 4px 6px 0;
+  font-size: 12px;
+}

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Check, FilePlus, Loader2, MessageCircleQuestion, RotateCcw, Send, Sparkles, Square } from 'lucide-react';
+import { Check, ChevronDown, FilePlus, Library, Loader2, MessageCircleQuestion, RotateCcw, Send, Sparkles, Square } from 'lucide-react';
 import { preferredTarget, type AskEvent, type AskRequest, type AskSource } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
 import { citedNumbers, renumberCitations } from '../lib/ask';
+import { aiKeyFor } from '../lib/ai';
 import { plainExcerpt } from '../lib/format';
 import { Markdown } from '../components/Markdown';
 import { postStream } from '../lib/api';
@@ -29,10 +30,13 @@ export function AskPage() {
   const settings = useSettings();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState('');
+  // Notebooks to search; null searches all of them.
+  const [scope, setScope] = useLocalState<string[] | null>('nicotes.askScope', null);
   const controller = useRef<AbortController | null>(null);
   const form = useRef<HTMLFormElement>(null);
   const busy = turns.some((t) => t.status === 'searching' || t.status === 'answering');
   const semanticOn = settings.data?.semantic.enabled;
+  const keyCheck = aiKeyFor(settings.data, 'ask', 'Asking');
 
   const update = (id: number, patch: Partial<Turn> | ((t: Turn) => Partial<Turn>)) =>
     setTurns((list) => list.map((t) => (t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t)));
@@ -51,7 +55,7 @@ export function AskPage() {
     try {
       await postStream<AskEvent>(
         '/ai/ask',
-        { question: q, history } satisfies AskRequest,
+        { question: q, history, ...(scope ? { notebookIds: scope } : {}) } satisfies AskRequest,
         (event) => {
           if (event.type === 'sources') update(id, { sources: event.sources, retrieval: event.retrieval, status: 'answering' });
           else if (event.type === 'delta') update(id, (t) => ({ answer: t.answer + event.text }));
@@ -102,9 +106,7 @@ export function AskPage() {
         </p>
       </header>
 
-      {settings.data && !settings.data.openrouter.apiKeySet && (
-        <p className="error">Asking needs an OpenRouter API key — add one under Settings.</p>
-      )}
+      {keyCheck.message && <p className="error">{keyCheck.message}</p>}
       {settings.data && !semanticOn && (
         <p className="ask-hint">
           <Sparkles size={14} /> Answers currently use keyword search.{' '}
@@ -134,6 +136,7 @@ export function AskPage() {
           }}
         />
         <div className="ask-form-actions">
+          <NotebookScope value={scope} onChange={setScope} />
           {turns.length > 0 && !busy && (
             <button type="button" className="btn btn-sm" onClick={() => setTurns([])}>
               <RotateCcw size={14} /> New conversation
@@ -144,7 +147,7 @@ export function AskPage() {
               <Square size={13} /> Stop
             </button>
           ) : (
-            <button className="btn btn-primary btn-sm" disabled={!question.trim()}>
+            <button className="btn btn-primary btn-sm" disabled={!question.trim() || scope?.length === 0}>
               <Send size={14} /> Ask
             </button>
           )}
@@ -226,6 +229,50 @@ function AnswerTurn({ turn, onSaved }: { turn: Turn; onSaved: (pageId: string) =
         </div>
       )}
     </article>
+  );
+}
+
+/** Which notebooks "Ask" searches: all (the default) or a chosen few. */
+function NotebookScope({ value, onChange }: { value: string[] | null; onChange: (value: string[] | null) => void }) {
+  const notebooks = useNotebooks();
+  const list = notebooks.data ?? [];
+  // Notebooks deleted since they were chosen no longer count.
+  const chosen = value?.filter((id) => list.some((n) => n.id === id)) ?? null;
+  const label =
+    chosen === null
+      ? 'All notebooks'
+      : chosen.length === 0
+        ? 'No notebook'
+        : chosen.length === 1
+        ? (list.find((n) => n.id === chosen[0])?.title ?? '1 notebook')
+        : `${chosen.length} notebooks`;
+  const toggle = (id: string) => {
+    const current = chosen ?? list.map((n) => n.id);
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    onChange(next.length === list.length ? null : next);
+  };
+
+  return (
+    <details className="ask-scope">
+      <summary className="btn btn-sm" title="Notebooks to search">
+        <Library size={14} /> {label} <ChevronDown size={13} />
+      </summary>
+      <div className="ask-scope-menu" role="group" aria-label="Notebooks to search">
+        <label>
+          <input type="checkbox" checked={chosen === null} onChange={() => onChange(chosen === null ? [] : null)} />
+          All notebooks
+        </label>
+        <hr />
+        {list.map((n) => (
+          <label key={n.id}>
+            <input type="checkbox" checked={chosen === null || chosen.includes(n.id)} onChange={() => toggle(n.id)} />
+            <span className="notebook-dot" style={{ background: n.color ?? 'var(--accent)' }} />
+            {n.title}
+          </label>
+        ))}
+        {chosen?.length === 0 && <p className="error">Choose at least one notebook.</p>}
+      </div>
+    </details>
   );
 }
 

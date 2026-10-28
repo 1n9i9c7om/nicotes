@@ -40,6 +40,7 @@ export const config = {
   env: {
     openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
     openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
+    routewayApiKey: process.env.ROUTEWAY_API_KEY?.trim() || undefined,
     crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
     crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
     // Per-feature models; unset ones use OPENROUTER_MODEL.
@@ -47,6 +48,7 @@ export const config = {
     organizeModel: process.env.OPENROUTER_ORGANIZE_MODEL?.trim() || undefined,
     researchModel: process.env.OPENROUTER_RESEARCH_MODEL?.trim() || undefined,
     askModel: process.env.OPENROUTER_ASK_MODEL?.trim() || undefined,
+    assistantModel: process.env.OPENROUTER_ASSISTANT_MODEL?.trim() || undefined,
     summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
     linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
     layoutModel: process.env.OPENROUTER_LAYOUT_MODEL?.trim() || undefined,

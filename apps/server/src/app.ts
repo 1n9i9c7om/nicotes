@@ -11,6 +11,7 @@ import { researchJob } from './ai/research.js';
 import type { Embedder } from './ai/embeddings.js';
 import { SemanticIndex, semanticRoutes } from './ai/semantic.js';
 import { askRoutes } from './ai/ask.js';
+import { assistantRoutes } from './ai/assistant.js';
 import { insightRoutes } from './ai/insight.js';
 import { layoutRoutes } from './ai/layout.js';
 import { requireAuth } from './auth.js';
@@ -152,6 +153,7 @@ export function createApp({
   app.route('/api/backups', backupRoutes(backups));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
+  app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));
   app.route('/api/ai', insightRoutes(db, settings, semantic));
   app.route('/api/ai', layoutRoutes(db, settings));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
