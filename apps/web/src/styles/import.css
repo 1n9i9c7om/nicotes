@@ -206,12 +206,6 @@
   color: var(--text-muted);
 }
 
-.check-row input {
-  accent-color: var(--accent);
-  width: 16px;
-  height: 16px;
-}
-
 .import-actions {
   display: flex;
   justify-content: space-between;

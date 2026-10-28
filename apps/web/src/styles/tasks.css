@@ -198,38 +198,12 @@
   background: var(--bg-hover);
 }
 
-.task-check {
-  appearance: none;
-  flex: none;
-  display: grid;
-  place-items: center;
+/* Base look in theme.css; task rows use a slightly larger, transparent box. */
+input.task-check {
   width: 18px;
   height: 18px;
   margin: 3px 0 0;
-  border-radius: 5px;
-  border: 1.5px solid var(--border-strong);
   background: transparent;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.task-check:hover {
-  border-color: var(--accent);
-}
-
-.task-check:checked {
-  background: var(--gradient);
-  border-color: transparent;
-}
-
-.task-check:checked::after {
-  content: '';
-  width: 9px;
-  height: 5px;
-  margin-top: -2px;
-  border-left: 2px solid #04121f;
-  border-bottom: 2px solid #04121f;
-  transform: rotate(-45deg);
 }
 
 .task-main {

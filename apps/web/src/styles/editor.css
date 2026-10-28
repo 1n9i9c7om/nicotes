@@ -302,34 +302,6 @@
   flex: 1;
 }
 
-.prose ul[data-type='taskList'] input[type='checkbox'] {
-  appearance: none;
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  border-radius: 5px;
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg);
-  cursor: pointer;
-}
-
-.prose ul[data-type='taskList'] input[type='checkbox']:checked {
-  background: var(--gradient);
-  border-color: transparent;
-}
-
-.prose ul[data-type='taskList'] input[type='checkbox']:checked::after {
-  content: '';
-  width: 9px;
-  height: 5px;
-  margin-top: -2px;
-  border-left: 2px solid #04121f;
-  border-bottom: 2px solid #04121f;
-  transform: rotate(-45deg);
-}
-
 .prose ul[data-type='taskList'] li[data-checked='true'] > div {
   color: var(--text-faint);
   text-decoration: line-through;
