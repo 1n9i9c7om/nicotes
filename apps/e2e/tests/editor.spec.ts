@@ -129,3 +129,29 @@ test('"Hide sources" hides citation numbers without changing the page', async ({
   await toggle.click();
   await expect(visualEditor(page).locator('.citation').first()).toBeVisible();
 });
+
+test('colours the selected text from the toolbar palette and shows it in View', async ({ page }) => {
+  const nb = await createNotebook(page, uniq('Colour NB'));
+  const doc = await createPage(page, { notebookId: nb.id, title: uniq('Colours'), content: 'Mark this word please.' });
+
+  await page.goto(`/p/${doc.id}`);
+  await visualEditor(page).getByText('Mark this word please.').dblclick({ position: { x: 50, y: 8 } });
+  await page.getByRole('button', { name: 'Highlight and text colour' }).click();
+  await page.getByRole('button', { name: 'Green highlight' }).click();
+  await page.getByRole('button', { name: 'Red text' }).click();
+  await waitForSave(page);
+  await expect
+    .poll(async () => (await getPage(page, doc.id)).content)
+    .toMatch(/<mark style="background: green"><span style="color: red">\w+<\/span><\/mark>/);
+
+  // The default highlight is the short form, and "None" removes it again.
+  await page.getByRole('button', { name: 'Yellow highlight' }).click();
+  await waitForSave(page);
+  await expect.poll(async () => (await getPage(page, doc.id)).content).toContain('==<span style="color: red">');
+  await page.getByRole('button', { name: 'No text colour' }).click();
+  await waitForSave(page);
+  await expect.poll(async () => (await getPage(page, doc.id)).content).toMatch(/==\w+==/);
+
+  await page.getByRole('group', { name: 'Editor mode' }).getByRole('button', { name: 'View' }).click();
+  await expect(page.locator('.page-body mark.hl-yellow')).toHaveCount(1);
+});

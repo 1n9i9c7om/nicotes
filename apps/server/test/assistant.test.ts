@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AskEvent, AssistantEvent, Notebook, Page, PageVersionSummary, Settings } from '@nicotes/shared';
+import type { AskEvent, AssistantEvent, Notebook, Page, PageVersionSummary } from '@nicotes/shared';
 import { PAGE_END, PAGE_START, ReplySplitter, tidyProposal } from '../src/ai/assistant.js';
 import { setup } from './helpers.js';
 
@@ -160,15 +160,6 @@ describe('applying reviewed changes', () => {
 
 describe('read scopes', () => {
   afterEach(() => vi.unstubAllGlobals());
-
-  it('stores the assistant scope as a setting', async () => {
-    const api = setup();
-    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
-    expect((await api.call<Settings>('GET', '/api/settings')).body.assistant).toEqual({ scope: 'page' });
-    await api.call('PATCH', '/api/settings', { assistantScope: 'notebook' });
-    expect((await api.call<Settings>('GET', '/api/settings')).body.assistant).toEqual({ scope: 'notebook' });
-    expect((await api.call('PATCH', '/api/settings', { assistantScope: 'everything' })).status).toBe(400);
-  });
 
   it('limits Ask to the chosen notebooks', async () => {
     const api = setup({ settingsEnv: { openrouterApiKey: 'sk-test' } as never });

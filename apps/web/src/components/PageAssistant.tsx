@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Bot, Check, Globe, Loader2, RotateCcw, Send, Square, X } from 'lucide-react';
 import {
+  DEFAULT_ASSISTANT_SCOPE,
   READ_SCOPE_INFO,
   READ_SCOPES,
   type AskSource,
@@ -12,7 +13,7 @@ import {
 } from '@nicotes/shared';
 import { postStream } from '../lib/api';
 import { aiKeyFor } from '../lib/ai';
-import { useApplyChanges, useSettings, useUpdateSettings } from '../lib/queries';
+import { useApplyChanges, useSettings } from '../lib/queries';
 import { useLocalState } from '../lib/storage';
 import { displayTitle } from '../lib/tree';
 import { DiffReview, hunkStats, useHunkReview } from './DiffReview';
@@ -54,8 +55,8 @@ interface Props {
  */
 export function PageAssistant({ pageId, title, content, flush, onClose }: Props) {
   const settings = useSettings();
-  const updateSettings = useUpdateSettings();
-  const scope = settings.data?.assistant.scope ?? 'page';
+  // Chosen per conversation: every time the panel opens, the assistant reads only this page.
+  const [scope, setScope] = useState<ReadScope>(DEFAULT_ASSISTANT_SCOPE);
   const keyCheck = aiKeyFor(settings.data, 'assistant', 'The assistant');
   const [research, setResearch] = useLocalState('nicotes.assistantResearch', false);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -133,7 +134,7 @@ export function PageAssistant({ pageId, title, content, flush, onClose }: Props)
           <select
             value={scope}
             aria-label="Notes the assistant may read"
-            onChange={(e) => updateSettings.mutate({ assistantScope: e.target.value as ReadScope })}
+            onChange={(e) => setScope(e.target.value as ReadScope)}
           >
             {READ_SCOPES.map((s) => (
               <option key={s} value={s}>

@@ -5,6 +5,7 @@ export * from './ai';
 export * from './assistant';
 export * from './blocks';
 export * from './citations';
+export * from './colors';
 export * from './diff';
 export * from './backups';
 export * from './tags';

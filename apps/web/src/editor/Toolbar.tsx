@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
+import { COLOR_LABELS, COLORS, type Color } from '@nicotes/shared';
 import type { Uploader } from './uploads';
 import { isImage } from './uploads';
 import {
@@ -8,6 +9,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Highlighter,
   Italic,
   Link2,
   List,
@@ -21,6 +23,7 @@ import {
   Strikethrough,
   Table,
   Undo2,
+  X,
 } from 'lucide-react';
 
 function ToolButton({
@@ -53,6 +56,50 @@ function ToolButton({
   );
 }
 
+/** Swatches for one colour kind; "None" removes it. */
+function ColorRow({
+  label,
+  kind,
+  current,
+  onPick,
+}: {
+  label: string;
+  kind: 'hl' | 'tc';
+  current: Color | null;
+  onPick: (color: Color | null) => void;
+}) {
+  return (
+    <div className="color-row" role="group" aria-label={label}>
+      <span className="color-row-label">{label}</span>
+      {COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          className={`swatch ${kind}-${color}${current === color ? ' active' : ''}`}
+          aria-label={`${COLOR_LABELS[color]} ${kind === 'hl' ? 'highlight' : 'text'}`}
+          aria-pressed={current === color}
+          title={COLOR_LABELS[color]}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onPick(color)}
+        >
+          A
+        </button>
+      ))}
+      <button
+        type="button"
+        className="swatch none"
+        aria-label={`No ${kind === 'hl' ? 'highlight' : 'text colour'}`}
+        title="None"
+        disabled={!current}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onPick(null)}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 interface ToolbarProps {
   editor: Editor;
   upload?: Uploader;
@@ -61,6 +108,7 @@ interface ToolbarProps {
 
 export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
   const [linkOpen, setLinkOpen] = useState(false);
+  const [colorsOpen, setColorsOpen] = useState(false);
   const [href, setHref] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -96,6 +144,8 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
       quote: e.isActive('blockquote'),
       codeBlock: e.isActive('codeBlock'),
       link: e.isActive('link'),
+      highlight: e.isActive('highlight') ? (e.getAttributes('highlight').color as Color) : null,
+      textColor: e.isActive('textColor') ? (e.getAttributes('textColor').color as Color) : null,
       table: e.isActive('table'),
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
@@ -106,6 +156,7 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
 
   const openLink = () => {
     setHref((editor.getAttributes('link').href as string | undefined) ?? '');
+    setColorsOpen(false);
     setLinkOpen(true);
   };
 
@@ -153,6 +204,16 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
         </ToolButton>
         <ToolButton label="Link" active={state.link} onClick={openLink}>
           <Link2 size={16} />
+        </ToolButton>
+        <ToolButton
+          label="Highlight and text colour"
+          active={colorsOpen || !!state.highlight || !!state.textColor}
+          onClick={() => {
+            setLinkOpen(false);
+            setColorsOpen((open) => !open);
+          }}
+        >
+          <Highlighter size={16} />
         </ToolButton>
       </div>
       <div className="tool-group">
@@ -208,6 +269,23 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
           <button type="button" className="tool-text danger" onClick={() => chain().deleteTable().run()}>
             Delete table
           </button>
+        </div>
+      )}
+
+      {colorsOpen && (
+        <div className="color-popover" onKeyDown={(e) => e.key === 'Escape' && setColorsOpen(false)}>
+          <ColorRow
+            label="Highlight"
+            kind="hl"
+            current={state.highlight}
+            onPick={(color) => (color ? chain().setHighlight(color).run() : chain().unsetHighlight().run())}
+          />
+          <ColorRow
+            label="Text"
+            kind="tc"
+            current={state.textColor}
+            onPick={(color) => (color ? chain().setTextColor(color).run() : chain().unsetTextColor().run())}
+          />
         </div>
       )}
 

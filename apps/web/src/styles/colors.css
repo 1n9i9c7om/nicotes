@@ -1,0 +1,106 @@
+/* ---------- Text colours and highlights ----------
+   Pages store palette names (see @nicotes/shared colors.ts); these are their tones on the
+   dark theme. Highlights keep the text colour and only tint the background. */
+
+:root {
+  --tc-yellow: #fde047;
+  --tc-orange: #fdba74;
+  --tc-red: #fca5a5;
+  --tc-purple: #d8b4fe;
+  --tc-blue: #93c5fd;
+  --tc-green: #86efac;
+  --hl-yellow: rgb(250 204 21 / 0.3);
+  --hl-orange: rgb(251 146 60 / 0.3);
+  --hl-red: rgb(248 113 113 / 0.3);
+  --hl-purple: rgb(192 132 252 / 0.3);
+  --hl-blue: rgb(96 165 250 / 0.3);
+  --hl-green: rgb(74 222 128 / 0.28);
+}
+
+.tc-yellow { color: var(--tc-yellow); }
+.tc-orange { color: var(--tc-orange); }
+.tc-red { color: var(--tc-red); }
+.tc-purple { color: var(--tc-purple); }
+.tc-blue { color: var(--tc-blue); }
+.tc-green { color: var(--tc-green); }
+
+mark[class^='hl-'] {
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.hl-yellow { background: var(--hl-yellow); }
+.hl-orange { background: var(--hl-orange); }
+.hl-red { background: var(--hl-red); }
+.hl-purple { background: var(--hl-purple); }
+.hl-blue { background: var(--hl-blue); }
+.hl-green { background: var(--hl-green); }
+
+/* ---------- Toolbar palette ---------- */
+
+.color-popover {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  width: 100%;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.color-row-label {
+  min-width: 58px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.swatch:hover:not(:disabled) {
+  border-color: var(--text-faint);
+}
+
+.swatch.active {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.swatch.none {
+  color: var(--text-muted);
+}
+
+.swatch.none:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 800px) {
+  .color-popover {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    padding: 8px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+  }
+}

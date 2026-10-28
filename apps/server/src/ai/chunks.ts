@@ -4,6 +4,8 @@
  * dropped; wikilinks keep their visible text.
  */
 
+import { withoutColors } from '@nicotes/shared';
+
 export interface Chunk {
   ord: number;
   /** Heading path above the passage, e.g. "Builds › Strength". */
@@ -18,7 +20,7 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 /** Markdown reduced to the text a reader sees. */
 export function plainText(markdown: string): string {
-  return markdown
+  return withoutColors(markdown)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')

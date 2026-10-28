@@ -1,11 +1,20 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { resolveWikilink } from '@nicotes/shared';
+import { HIGHLIGHT_SOURCE, MARK_SOURCE, resolveWikilink, SPAN_SOURCE } from '@nicotes/shared';
 import { useLinkContext } from '../lib/links';
 import { parseBlocks } from '../lib/markdown';
 
-const INLINE =
-  /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|(?<![\w*])\*(?!\s)(.+?)\*(?!\w)|(?<!\w)_(?!\s)(.+?)_(?!\w)|\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]|\[(\d+(?:\s*,\s*\d+)*)\](?!\()|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g;
+const INLINE = new RegExp(
+  [
+    /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|(?<![\w*])\*(?!\s)(.+?)\*(?!\w)|(?<!\w)_(?!\s)(.+?)_(?!\w)|\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]|\[(\d+(?:\s*,\s*\d+)*)\](?!\()|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/
+      .source,
+    // Highlights and coloured text (palette names only): groups 11, 12–13 and 14–15.
+    HIGHLIGHT_SOURCE,
+    MARK_SOURCE,
+    SPAN_SOURCE,
+  ].join('|'),
+  'g',
+);
 
 interface InlineEnv {
   linkTo: (target: string) => string | null;
@@ -43,6 +52,18 @@ function inline(text: string, env: InlineEnv, keyPrefix = ''): ReactNode[] {
         <a key={key} href={m[10]} target="_blank" rel="noopener noreferrer">
           {m[9]}
         </a>,
+      );
+    } else if (m[11] !== undefined || m[13] !== undefined) {
+      out.push(
+        <mark key={key} className={`hl-${m[12] ?? 'yellow'}`}>
+          {inline(m[11] ?? m[13]!, env, `${key}-`)}
+        </mark>,
+      );
+    } else if (m[15] !== undefined) {
+      out.push(
+        <span key={key} className={`tc-${m[14]}`}>
+          {inline(m[15], env, `${key}-`)}
+        </span>,
       );
     }
     last = m.index + m[0].length;
@@ -86,7 +107,8 @@ export function InlineMarkdown({ text, notebookId }: { text: string; notebookId?
 
 /**
  * Renders the Markdown subset that AI answers use (paragraphs, headings, lists, quotes, code,
- * emphasis, links, [[wikilinks]] and [n] citations) as React elements, so it can never inject HTML.
+ * emphasis, links, [[wikilinks]], [n] citations and palette colours) as React elements, so it can
+ * never inject HTML.
  */
 export function Markdown({
   text,

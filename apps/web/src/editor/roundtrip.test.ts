@@ -23,6 +23,11 @@ const samples: Record<string, string> = {
   table: '| Item | Qty |\n| ---- | --- |\n| Egg  | 2   |',
   wikilink: 'Links to [[Elden Ring]] and [[Games/Builds|builds]].',
   image: '![map shot](/api/attachments/abc/map%20shot.png)',
+  highlight: 'Some ==highlighted== text.',
+  coloredHighlight: 'Some <mark style="background: green">green</mark> text.',
+  textColor: 'Some <span style="color: red">red</span> text.',
+  colorsWithEmphasis: 'A <span style="color: blue">**bold** blue</span> and [==a link==](https://example.com).',
+  nestedColors: '<mark style="background: purple"><span style="color: yellow">both</span></mark> here.',
 };
 
 describe('markdown round-trip', () => {
@@ -31,4 +36,29 @@ describe('markdown round-trip', () => {
       expect(roundtrip(md).trim()).toBe(md);
     });
   }
+});
+
+describe('colours', () => {
+  const marks = (markdown: string) => {
+    const editor = new Editor({ extensions: editorExtensions(), content: markdown, contentType: 'markdown' });
+    const json = JSON.stringify(editor.getJSON());
+    editor.destroy();
+    return json;
+  };
+
+  it('parses palette colours into marks', () => {
+    expect(marks('==a==')).toContain('{"type":"highlight","attrs":{"color":"yellow"}}');
+    expect(marks('<mark style="background: blue">a</mark>')).toContain('{"type":"highlight","attrs":{"color":"blue"}}');
+    expect(marks('<span style="color: green;">a</span>')).toContain('{"type":"textColor","attrs":{"color":"green"}}');
+  });
+
+  it('leaves other HTML and spaced equals signs alone', () => {
+    expect(marks('<span style="color: #ff0000">a</span>')).not.toContain('textColor');
+    expect(marks('x == y == z')).not.toContain('highlight');
+    expect(marks('`==code==`')).not.toContain('highlight');
+  });
+
+  it('saves a yellow highlight in the short form', () => {
+    expect(roundtrip('<mark style="background: yellow">a</mark>').trim()).toBe('==a==');
+  });
 });
