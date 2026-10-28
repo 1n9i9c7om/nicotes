@@ -7,6 +7,7 @@ import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import type { LinkBridge } from '../lib/links';
 import { Citations } from './citations';
+import { Highlight, TextColor } from './colors';
 import { FileUploads, type Uploader } from './uploads';
 import { Wikilink } from './wikilink';
 import { WikilinkSuggest } from './WikilinkSuggest';
@@ -30,6 +31,8 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: { resizable: false } }),
     Image.configure({ allowBase64: false }),
+    Highlight,
+    TextColor,
     Placeholder.configure({ placeholder: env.placeholder ?? 'Start writing… Type [[ to link a page.' }),
     Wikilink.configure({ bridge: env.bridge ?? null }),
     WikilinkSuggest.configure({ bridge: env.bridge ?? null }),

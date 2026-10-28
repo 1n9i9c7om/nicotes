@@ -5,17 +5,14 @@ import { z } from 'zod';
 import {
   AI_TASKS,
   DEFAULT_AI_COST_LIMIT,
-  DEFAULT_ASSISTANT_SCOPE,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
   modelSetting,
-  READ_SCOPES,
   settingsUpdateSchema,
   type AiTask,
   type ConnectionCheck,
   type ModelList,
-  type ReadScope,
   type Settings,
   type SettingSource,
   type SettingsUpdate,
@@ -51,7 +48,6 @@ const KEYS = {
   tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
   semanticIndex: { key: 'ai.semanticIndex', secret: false },
   embeddingModel: { key: 'ai.embeddingModel', secret: false },
-  assistantScope: { key: 'ai.assistantScope', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -123,7 +119,6 @@ export class SettingsStore {
       excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
       semanticIndex: pick('semanticIndex', 'false'),
       embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
-      assistantScope: pick('assistantScope', DEFAULT_ASSISTANT_SCOPE),
     };
   }
 
@@ -161,7 +156,6 @@ export class SettingsStore {
         model: r.embeddingModel.value!,
         modelSource: r.embeddingModel.source,
       },
-      assistant: { scope: readScope(r.assistantScope.value) },
     };
   }
 
@@ -211,8 +205,6 @@ export class SettingsStore {
   }
 }
 
-const readScope = (value: string | null): ReadScope =>
-  (READ_SCOPES as readonly string[]).includes(value ?? '') ? (value as ReadScope) : DEFAULT_ASSISTANT_SCOPE;
 
 function parseList(value: string | null): string[] {
   try {

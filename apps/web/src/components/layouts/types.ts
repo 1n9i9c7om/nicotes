@@ -1,4 +1,4 @@
-import { withoutCitations, type LayoutSpec, type ListItem, type PageBlock } from '@nicotes/shared';
+import { withoutCitations, withoutColors, type LayoutSpec, type ListItem, type PageBlock } from '@nicotes/shared';
 
 export type ListBlock = Extract<PageBlock, { kind: 'list' }>;
 export const isList = (b: PageBlock): b is ListBlock => b.kind === 'list';
@@ -19,7 +19,7 @@ export interface LayoutProps {
 
 /** Item text without Markdown syntax, for labels and speech. */
 export const plainText = (text: string) =>
-  text
+  withoutColors(text)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
