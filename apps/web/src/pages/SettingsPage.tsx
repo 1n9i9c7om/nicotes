@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
-import { READ_SCOPE_INFO, READ_SCOPES, TEMPLATE_TAG, type ReadScope } from '@nicotes/shared';
+import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { formatDuration, formatSize, timeAgo } from '../lib/format';
 import {
@@ -214,7 +214,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, routeway, crawl4ai, ai, daily, tasks, semantic, assistant } = settings.data;
+  const { openrouter, routeway, crawl4ai, ai, daily, tasks, semantic } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -394,20 +394,6 @@ export function SettingsPage() {
           pending={update.isPending}
           onSave={(v) => save({ aiCostLimit: v === null ? null : Number(v.replace(',', '.')) })}
         />
-        <label className="field">
-          <span>The page assistant may read</span>
-          <select value={assistant.scope} onChange={(e) => save({ assistantScope: e.target.value as ReadScope })}>
-            {READ_SCOPES.map((s) => (
-              <option key={s} value={s}>
-                {READ_SCOPE_INFO[s].label}
-              </option>
-            ))}
-          </select>
-          <small className="muted">
-            {READ_SCOPE_INFO[assistant.scope].hint} It only ever changes the open page, and only with your approval. Also
-            switchable in the assistant panel.
-          </small>
-        </label>
         <div className="setting-actions">
           <button className="btn" disabled={checkSearxng.isPending} onClick={() => checkSearxng.mutate('searxng')}>
             {checkSearxng.isPending ? 'Testing…' : 'Test SearXNG'}

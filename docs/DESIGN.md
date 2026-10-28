@@ -107,8 +107,16 @@ and tsup respectively).
   - *Visual* — TipTap with `@tiptap/markdown` (formatted as you type).
   - *Source* — CodeMirror 6 with Markdown highlighting.
   The toggle is remembered per browser. Markdown dialect: GFM (tables, task lists,
-  strikethrough) + `[[wikilinks]]` + callouts. Round-tripping between views must be
-  lossless for that dialect; this is covered by tests.
+  strikethrough) + `[[wikilinks]]` + callouts + colours. Round-tripping between views must
+  be lossless for that dialect; this is covered by tests.
+- **Colours** (`packages/shared/src/colors.ts`, `editor/colors.ts`): a fixed palette
+  (yellow, orange, red, purple, blue, green) stored as Obsidian writes it — `==text==` for
+  the default (yellow) highlight, `<mark style="background: green">` for other highlights,
+  `<span style="color: red">` for text colour. Only exactly these tags with palette names
+  are recognised; other HTML stays plain text. The names map to theme tones in
+  `styles/colors.css`; the read-only renderer shows them too, and plain-text uses
+  (excerpts, read-aloud, semantic index) strip them. The full-text index still contains the
+  tag words.
 - **Autosave** with debounce and a visible status (saved / saving / conflict / offline).
 - **Theme:** dark, blue/cyan accents, defined as CSS custom properties.
 - **Responsive:** sidebar collapses into a drawer on narrow screens.
@@ -229,6 +237,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   per-source notes (skipping irrelevant ones, replacing failures with spare candidates) →
   synthesis with `[n]` markers, turned into links, plus a generated sources list. Saved
   as a page tagged `#research`. Depths: quick 4, standard 8, deep 14 sources.
+- **Offline research** (`mode: 'offline'`): plan (title, language, labels) → one writing
+  call told it cannot search, to flag uncertain or possibly outdated facts and to invent no
+  sources; the depth sets length and reasoning effort (low/medium/high). No citations or
+  sources list; the footer says it was written without web search, and the result's
+  `searchProvider` is `offline`.
 
 ### Graph, templates and daily notes
 
@@ -289,7 +302,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
   **Ask** searches everything unless the request names `notebookIds`.
 - **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
-  the context it read (notes within the user's read scope setting, optionally a few web
+  the context it read (notes within the read scope picked in the panel, which starts at `page`
+  every time it opens; optionally a few web
   sources found via SearXNG/OpenRouter and read like Research does), the message, and —
   when it changes the page — the whole rewritten page as a `proposal`. The model writes the
   page after its message between `<<<PAGE` / `PAGE>>>` lines; the server streams only the

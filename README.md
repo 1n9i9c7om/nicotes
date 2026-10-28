@@ -15,6 +15,13 @@ docker compose up -d --build
 Open http://localhost:3000. Data lives in the `nicotes-data` volume (SQLite database,
 attachments and the key that encrypts stored API keys).
 
+### Writing
+
+Pages are Markdown, edited either formatted (**Visual**) or as source (**Markdown**). The
+toolbar's highlighter button colours the selected text or its background from a small
+palette; colours are stored the way Obsidian writes them (`==highlight==`,
+`<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
+
 ### Graph, journal and templates
 
 The **Graph** shows how pages connect through `[[links]]`, subpages and tags, filterable
@@ -60,8 +67,9 @@ some of them.
 change ("add a section on costs", "fix the spelling", "translate to German"). It only ever
 changes the open page, and only what you approve: proposals arrive as a diff where every
 change can be ticked off on its own, like staging hunks in git, and the text before is kept
-in the version history ("Before AI changes"). What else it may read is your choice — this
-page only (the default), its section, its notebook or all notebooks — and **Web research**
+in the version history ("Before AI changes"). What else it may read you choose in the panel
+for each conversation — this page only (where it always starts), its section, its notebook or
+all notebooks — and **Web research**
 lets it search the web and read a few sources first.
 
 The **version history** shows a version's changes compared with the current text or with
@@ -72,7 +80,8 @@ the version before, and can restore only some of the changes.
 With an OpenRouter key, **Research** answers a question by searching the web, reading the
 best sources and writing a note with numbered citations (on pages with citations, **Hide
 sources** in the page bar hides the numbers in the text without removing them from the
-page); **Organize with AI** (notebook or
+page). With **Model knowledge only** it searches nothing and the model writes the note from
+its own knowledge instead: faster and cheaper, but without sources, and possibly outdated; **Organize with AI** (notebook or
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
 at a configurable limit (default $0.50). Under Settings → **AI models** every feature

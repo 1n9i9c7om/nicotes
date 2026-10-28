@@ -1,9 +1,50 @@
-import { InputRule, Node, mergeAttributes, nodePasteRule } from '@tiptap/core';
+import { InputRule, Node, mergeAttributes, nodePasteRule, type JSONContent } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { MarkdownManager } from '@tiptap/markdown';
 import type { LinkBridge } from '../lib/links';
 
 const WIKILINK = /^\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/;
 const WIKILINK_INPUT = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]$/;
+
+const wikilinkMarkdown = ({ target, label }: WikilinkAttrs) => `[[${target}${label ? `|${label}` : ''}]]`;
+
+/**
+ * @tiptap/markdown only formats text: bold or a highlight around a `[[wikilink]]` would be
+ * dropped when a page loads ("**[[Elden Ring]]**" → "[[Elden Ring]]") and the next save would
+ * lose it. Two private methods are extended for wikilinks: parsing also gives them the marks
+ * around them, and saving writes a formatted wikilink as if it were text, so the formatting
+ * spans it ("**a [[b]] c**"); the placeholder text is replaced by the link afterwards.
+ */
+function keepWikilinkFormatting() {
+  type Manager = {
+    applyMarkToContent(type: string, content: JSONContent[], attrs?: Record<string, unknown>): JSONContent[];
+    renderNodesWithMarkBoundaries(nodes: JSONContent[], parent: unknown, separator?: string, level?: number): string;
+  };
+  const proto = MarkdownManager.prototype as unknown as Manager;
+  const applyMark = proto.applyMarkToContent;
+  proto.applyMarkToContent = function (type, content, attrs) {
+    const mark = attrs ? { type, attrs } : { type };
+    return applyMark.call(
+      this,
+      type,
+      content.map((node) => (node.type === 'wikilink' ? { ...node, marks: [...(node.marks ?? []), mark] } : node)),
+      attrs,
+    );
+  };
+
+  const renderNodes = proto.renderNodesWithMarkBoundaries;
+  proto.renderNodesWithMarkBoundaries = function (nodes, parent, separator, level) {
+    const links: string[] = [];
+    const swapped = nodes.map((node) => {
+      if (node.type !== 'wikilink' || !node.marks?.length) return node;
+      links.push(wikilinkMarkdown(node.attrs as WikilinkAttrs));
+      return { type: 'text', text: `${links.length - 1}`, marks: node.marks };
+    });
+    const out = renderNodes.call(this, swapped, parent, separator, level);
+    return links.length ? out.replace(/(\d+)/g, (_m, i: string) => links[Number(i)]!) : out;
+  };
+}
+keepWikilinkFormatting();
 
 export interface WikilinkAttrs {
   /** Target page title (optionally `Notebook/Title`). */
@@ -147,7 +188,6 @@ export const Wikilink = Node.create<WikilinkOptions>({
   },
 
   renderMarkdown(node) {
-    const { target, label } = node.attrs as WikilinkAttrs;
-    return `[[${target}${label ? `|${label}` : ''}]]`;
+    return wikilinkMarkdown(node.attrs as WikilinkAttrs);
   },
 });

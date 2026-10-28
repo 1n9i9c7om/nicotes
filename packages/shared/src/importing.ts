@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { READ_SCOPES, type ReadScope } from './assistant';
 import { normalizeTag } from './tags';
 
 // ---------- Settings ----------
@@ -106,10 +105,6 @@ export interface Settings {
     model: string;
     modelSource: SettingSource;
   };
-  assistant: {
-    /** Which other pages the page assistant may read. */
-    scope: ReadScope;
-  };
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
@@ -153,7 +148,6 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
-  assistantScope: z.enum(READ_SCOPES).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

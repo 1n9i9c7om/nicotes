@@ -76,6 +76,11 @@
   flex: 1;
   min-width: 0;
   height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text-strong);
   font-size: 13px;
 }
 
@@ -179,7 +184,20 @@
 .assistant-form textarea {
   flex: 1;
   resize: none;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--text-strong);
   font-size: 14px;
+  line-height: 1.5;
+}
+
+.assistant-scope select:focus,
+.assistant-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------- Proposal review ---------- */
@@ -240,10 +258,6 @@
   cursor: pointer;
 }
 
-.diff-hunk-head input {
-  margin: 0;
-  accent-color: var(--accent);
-}
 
 .diff-hunk-stats {
   display: inline-flex;
@@ -285,7 +299,18 @@
 
 .history-compare {
   height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text-strong);
   font-size: 13px;
+}
+
+.history-compare:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------- Mobile: the panel covers the page ---------- */

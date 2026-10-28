@@ -1,6 +1,6 @@
 import { and, eq, isNull, max } from 'drizzle-orm';
 import { z } from 'zod';
-import { providerOf, RESEARCH_DEPTHS, searchLabel, type ResearchResult, researchRequestSchema } from '@nicotes/shared';
+import { AI_PROVIDER_LABELS, providerOf, RESEARCH_DEPTHS, searchLabel, type ResearchDepth, type ResearchResult, researchRequestSchema } from '@nicotes/shared';
 import type { Db } from '../db/index.js';
 import { notebooks, pages } from '../db/schema.js';
 import { extractUrl } from '../import/extract.js';
@@ -9,7 +9,7 @@ import { newId } from '../ids.js';
 import { setPageTags } from '../routes/tags.js';
 import type { AiConfig } from '../settings.js';
 import { guessLanguage, languageName } from './language.js';
-import { chat, completeJson, emptyUsage, LlmError, type Usage } from './llm.js';
+import { chat, completeJson, emptyUsage, LlmError, type ReasoningEffort, type Usage } from './llm.js';
 import { mapLimit, type JobContext } from './jobs.js';
 
 type Input = z.infer<typeof researchRequestSchema>;
@@ -138,6 +138,95 @@ export function linkCitations(markdown: string, sources: { url: string }[]): str
   });
 }
 
+const labelsFallback = { question: 'Research question', sources: 'Sources', openQuestions: 'Open questions' };
+const labelsSchema = z
+  .object({ question: z.string().min(1), sources: z.string().min(1), openQuestions: z.string().min(1) })
+  .catch(labelsFallback);
+
+/**
+ * Offline research has no sources to read, so the depth decides how long the note gets and
+ * how much the model may think about it.
+ */
+const OFFLINE_WRITING: Record<ResearchDepth, { length: string; effort: ReasoningEffort; maxTokens: number }> = {
+  quick: { length: 'a short overview of a few paragraphs', effort: 'low', maxTokens: 4000 },
+  standard: { length: 'a detailed note', effort: 'medium', maxTokens: 8000 },
+  deep: { length: 'a comprehensive, in-depth note', effort: 'high', maxTokens: 14000 },
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** Offline research: the model answers from its own knowledge, without any web search. */
+async function offlineNote(ctx: JobContext<Input>, model: string) {
+  const { input, cfg } = ctx;
+  const writing = OFFLINE_WRITING[input.depth];
+  ctx.step('Planning the note…');
+  const guessed = guessLanguage(input.question);
+  const plan = await completeJson({
+    keys: cfg.keys,
+    model,
+    system: 'You plan a research note for a notes app. Reply with one JSON object only.',
+    user: `Research question:\n${input.question}\n\n${guessed ? `The question is written in ${languageName(guessed)}; title and labels must be in ${languageName(guessed)}.\n\n` : ''}Reply as {"title": "<short note title in the question's language>", "language": "<ISO 639-1 code of the question>", "labels": {"question": "<'Research question' in that language>", "sources": "<'Sources'>", "openQuestions": "<'Open questions'>"}}`,
+    schema: z.object({ title: z.string().min(1), language: z.string().default('en'), labels: labelsSchema }),
+    maxTokens: 400,
+    signal: ctx.signal,
+  });
+  ctx.charge(plan.usage);
+  const writeIn = languageName(guessed ?? plan.data.language);
+  const date = today();
+
+  ctx.step('Writing the note from the model’s own knowledge…', 0, 1);
+  const draft = await chat({
+    keys: cfg.keys,
+    model,
+    effort: writing.effort,
+    maxTokens: writing.maxTokens,
+    signal: ctx.signal,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You write well-structured research notes in Markdown for a personal notes app, from your own knowledge only: you cannot search the web or read any sources. Be accurate rather than complete: say plainly where you are unsure, where facts may have changed since your training data ends, or where experts disagree. Never invent sources, links, quotes or precise numbers you do not actually know. Do not add a title; it is added automatically.',
+      },
+      {
+        role: 'user',
+        content: `Question: ${input.question}\nToday is ${date}.\nWrite ${writing.length}, the whole note in ${writeIn}, including headings.\n\nStructure: a short summary paragraph first, then sections with "## " headings covering the answer (lists and tables where they help), and finally "## ${plan.data.labels.openQuestions}" with what is uncertain, disputed or possibly outdated, and what would be worth checking in current sources.`,
+      },
+    ],
+  });
+  ctx.charge(draft.usage);
+  const body = draft.content.trim().replace(/^#\s+.*\n+/, '');
+  if (!body) throw new LlmError('The model returned an empty note');
+  const content = `> **${plan.data.labels.question}:** ${input.question.replace(/\n+/g, ' ')}\n\n${body}\n\n---\n\nWritten ${date} from the model’s own knowledge, without web search · ${model}`;
+  return { title: plan.data.title, content };
+}
+
+/** Saves a research note as the last page of its notebook (or parent page), tagged #research. */
+function saveNote(db: Db, userId: string, notebookId: string, parentPageId: string | null, title: string, content: string): string {
+  const id = newId();
+  const now = Date.now();
+  db.transaction((tx) => {
+    const parent = parentPageId
+      ? tx
+          .select({ id: pages.id })
+          .from(pages)
+          .where(and(eq(pages.id, parentPageId), eq(pages.notebookId, notebookId), isNull(pages.deletedAt)))
+          .get()
+      : undefined;
+    const parentId = parent?.id ?? null;
+    const last = tx
+      .select({ v: max(pages.sortOrder) })
+      .from(pages)
+      .where(and(eq(pages.notebookId, notebookId), parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId), isNull(pages.deletedAt)))
+      .get();
+    tx.insert(pages)
+      .values({ id, userId, notebookId, parentId, title: title.slice(0, 200), content, sortOrder: (last?.v ?? -1) + 1, createdAt: now, updatedAt: now })
+      .run();
+    indexPageLinks(tx, userId, id, content);
+    setPageTags(tx, userId, id, ['research']);
+  });
+  return id;
+}
+
 const noteSchema = z.object({
   relevant: z.boolean(),
   summary: z.string().default(''),
@@ -156,6 +245,14 @@ export function researchJob(db: Db, allowPrivate: boolean) {
       .get();
     if (!notebook) throw new LlmError('The target notebook no longer exists');
 
+    if (input.mode === 'offline') {
+      const note = await offlineNote(ctx, model);
+      ctx.check();
+      const pageId = saveNote(db, ctx.userId, notebook.id, input.parentId, note.title, note.content);
+      ctx.step('Done', 1, 1);
+      return { pageId, title: note.title, sources: 0, searchProvider: 'offline' };
+    }
+
     // 1. Plan. The model sometimes misjudges the language, so a confident local guess is
     // stated explicitly and wins over the model's answer.
     ctx.step('Planning searches…');
@@ -169,9 +266,7 @@ export function researchJob(db: Db, allowPrivate: boolean) {
         title: z.string().min(1),
         language: z.string().default('en'),
         queries: z.array(z.string().min(2)).min(1),
-        labels: z
-          .object({ question: z.string().min(1), sources: z.string().min(1), openQuestions: z.string().min(1) })
-          .catch({ question: 'Research question', sources: 'Sources', openQuestions: 'Open questions' }),
+        labels: labelsSchema,
       }),
       maxTokens: 800,
       signal: ctx.signal,
@@ -182,10 +277,10 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     const queries = plan.data.queries.slice(0, depth.queries);
 
     // 2. Search
-    const provider: ResearchResult['searchProvider'] = cfg.searxngUrl ? 'searxng' : providerOf(model);
+    const provider = cfg.searxngUrl ? 'searxng' : providerOf(model);
     const results: Candidate[][] = [];
     for (const [i, query] of queries.entries()) {
-      ctx.step(`Searching (${provider === 'searxng' ? 'SearXNG' : 'OpenRouter'}): ${query}`, i, queries.length);
+      ctx.step(`Searching (${provider === 'searxng' ? 'SearXNG' : AI_PROVIDER_LABELS[provider]}): ${query}`, i, queries.length);
       try {
         const found = await webSearch(cfg, model, query, language, ctx.signal);
         ctx.charge(found.usage);
@@ -269,34 +364,13 @@ export function researchJob(db: Db, allowPrivate: boolean) {
     if (!body) throw new LlmError('The model returned an empty note');
 
     const sourcesList = notes.map((n, i) => `${i + 1}. [${n.title.replace(/[[\]]/g, '')}](${n.url}) · ${n.site}`).join('\n');
-    const date = new Date().toISOString().slice(0, 10);
+    const date = today();
     const { labels } = plan.data;
     const content = `> **${labels.question}:** ${input.question.replace(/\n+/g, ' ')}\n\n${linkCitations(body, notes)}\n\n## ${labels.sources}\n\n${sourcesList}\n\n---\n\nResearched ${date} · ${notes.length} sources via ${searchLabel(provider)} · ${model}`;
 
     // 6. Save as a page
     ctx.check();
-    const id = newId();
-    const now = Date.now();
-    db.transaction((tx) => {
-      const parent = input.parentId
-        ? tx
-            .select({ id: pages.id })
-            .from(pages)
-            .where(and(eq(pages.id, input.parentId), eq(pages.notebookId, notebook.id), isNull(pages.deletedAt)))
-            .get()
-        : undefined;
-      const parentId = parent?.id ?? null;
-      const last = tx
-        .select({ v: max(pages.sortOrder) })
-        .from(pages)
-        .where(and(eq(pages.notebookId, notebook.id), parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId), isNull(pages.deletedAt)))
-        .get();
-      tx.insert(pages)
-        .values({ id, userId: ctx.userId, notebookId: notebook.id, parentId, title: plan.data.title.slice(0, 200), content, sortOrder: (last?.v ?? -1) + 1, createdAt: now, updatedAt: now })
-        .run();
-      indexPageLinks(tx, ctx.userId, id, content);
-      setPageTags(tx, ctx.userId, id, ['research']);
-    });
+    const id = saveNote(db, ctx.userId, notebook.id, input.parentId, plan.data.title, content);
     ctx.step('Done', depth.sources, depth.sources);
     return { pageId: id, title: plan.data.title, sources: notes.length, searchProvider: provider };
   };

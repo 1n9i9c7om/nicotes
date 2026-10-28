@@ -1,3 +1,5 @@
+import { withoutColors } from '@nicotes/shared';
+
 // English like the rest of the UI (the browser locale would mix languages).
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
@@ -20,7 +22,9 @@ export function timeAgo(timestamp: number): string {
 
 /** Drops Markdown syntax from an excerpt so it reads like plain text. */
 export function plainExcerpt(text: string): string {
-  return text
+  return withoutColors(text)
+    // Colour tags cut off at either end of a search excerpt.
+    .replace(/^[^<>]*?">|<\/?(?:mark|span)\b[^>]*>?/g, '')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target: string, label?: string) => label ?? target)
     .replace(/(^|\s)#{1,6}\s/g, '$1')
