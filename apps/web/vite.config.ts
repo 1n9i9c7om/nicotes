@@ -8,8 +8,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // A separate registerSW.js file keeps the CSP free of inline scripts.
-      injectRegister: 'script',
+      // Registered from main.tsx (virtual:pwa-register), which also reloads the page once an
+      // updated version takes over; a bare registerSW.js would keep running the old code.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Nicotes',
@@ -39,6 +40,10 @@ export default defineConfig({
         // language modes, font subsets) are cached the first time they are used. Data
         // always comes from the server.
         globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg', 'icons/*.png'],
+        // A new version takes over at once instead of waiting until every Nicotes tab is
+        // closed (the old app code would otherwise keep talking to the new server).
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
