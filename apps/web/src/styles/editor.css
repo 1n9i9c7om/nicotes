@@ -298,6 +298,11 @@
   user-select: none;
 }
 
+/* A block box: inline, it would sit on the label's text baseline, below the first line. */
+.prose ul[data-type='taskList'] input[type='checkbox'] {
+  display: grid;
+}
+
 .prose ul[data-type='taskList'] li > div {
   flex: 1;
 }

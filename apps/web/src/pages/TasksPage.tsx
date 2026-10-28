@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { CalendarDays, ListChecks, Plus, Search, X } from 'lucide-react';
 import { resolveWikilink, type PageTask, type TaskStatus } from '@nicotes/shared';
@@ -181,7 +181,7 @@ function TaskRow({
 }) {
   const bucket = task.done ? 'done' : dueBucket(task.due, today);
   return (
-    <li className={task.done ? 'task-row done' : 'task-row'} style={{ paddingLeft: Math.min(task.depth, 4) * 20 }}>
+    <li className={task.done ? 'task-row done' : 'task-row'} style={{ '--depth': Math.min(task.depth, 4) } as CSSProperties}>
       <input
         type="checkbox"
         className="task-check"
