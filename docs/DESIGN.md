@@ -323,6 +323,13 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   sees one line per block with numbered ids and answers with the type and ids, which the server
   checks and turns into keys; missing parts come from the heuristic. Users can pick a type by
   hand (`PUT`) or go back to automatic (`DELETE`); choices live in `page_layouts`.
+- **Lenient recipes:** pages written by Research or copied from elsewhere rarely follow the
+  "## Ingredients / ## Steps" shape. Tables count as ingredients (under an ingredients
+  heading or with an ingredient column; the amount column is found by its header and scales),
+  lists nested under a labelled item ("- **Method:**") are parts of their own
+  (`list:Recipe:0>1`, see `subLists`), the hand-picked fallback takes numbered lists after
+  the ingredients instead of everything below them, and citation links (`[3](https://…)`)
+  are hidden in recipe and guide steps. The AI sees tables and nested lists (`b5.2`) as well.
 - **Two-way:** views never render HTML from the model. Their actions are line edits
   (`shared/listEdits.ts`: tick, set text, add, remove, move with nested items) applied to the
   editor's text, so they autosave, show up in version history and can be undone in the view.
