@@ -187,7 +187,8 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 10px 12px 10px 14px;
+  /* --depth: nesting level of the checkbox in its page (0–4). */
+  padding: 10px 12px 10px calc(14px + var(--depth, 0) * 20px);
 }
 
 .task-row + .task-row {
