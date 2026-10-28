@@ -103,6 +103,48 @@ button:disabled {
   opacity: 0.45;
 }
 
+/* Every checkbox has the task-list look: a rounded box, filled with the accent gradient
+   and a check mark when ticked. */
+input[type='checkbox'] {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg);
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+input[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input[type='checkbox']:checked {
+  background: var(--gradient);
+  border-color: transparent;
+}
+
+input[type='checkbox']:checked::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid #04121f;
+  border-bottom: 2px solid #04121f;
+  transform: rotate(-45deg);
+}
+
+input[type='checkbox']:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);

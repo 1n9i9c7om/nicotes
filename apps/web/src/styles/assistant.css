@@ -258,10 +258,6 @@
   cursor: pointer;
 }
 
-.diff-hunk-head input {
-  margin: 0;
-  accent-color: var(--accent);
-}
 
 .diff-hunk-stats {
   display: inline-flex;
