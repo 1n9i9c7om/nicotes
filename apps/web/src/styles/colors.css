@@ -75,6 +75,15 @@ mark[class^='hl-'] {
   font-weight: 600;
 }
 
+/* A text-colour swatch shows its colour. .tc-* above weighs the same as .swatch and comes
+   first, so on its own it loses and every "A" would be plain white. */
+.swatch.tc-yellow { color: var(--tc-yellow); }
+.swatch.tc-orange { color: var(--tc-orange); }
+.swatch.tc-red { color: var(--tc-red); }
+.swatch.tc-purple { color: var(--tc-purple); }
+.swatch.tc-blue { color: var(--tc-blue); }
+.swatch.tc-green { color: var(--tc-green); }
+
 .swatch:hover:not(:disabled) {
   border-color: var(--text-faint);
 }
