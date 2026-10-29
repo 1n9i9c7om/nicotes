@@ -137,6 +137,8 @@ test('colours the selected text from the toolbar palette and shows it in View', 
   await page.goto(`/p/${doc.id}`);
   await visualEditor(page).getByText('Mark this word please.').dblclick({ position: { x: 50, y: 8 } });
   await page.getByRole('button', { name: 'Highlight and text colour' }).click();
+  // Each text swatch shows its colour (--tc-red), not the plain text colour.
+  await expect(page.getByRole('button', { name: 'Red text' })).toHaveCSS('color', 'rgb(252, 165, 165)');
   await page.getByRole('button', { name: 'Green highlight' }).click();
   await page.getByRole('button', { name: 'Red text' }).click();
   await waitForSave(page);
