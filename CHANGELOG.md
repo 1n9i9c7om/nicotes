@@ -2,6 +2,14 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.3.3 — 2026-10-29
+
+**Fixes**
+
+- **Text colour buttons show their colours.** In the editor's colour palette, the buttons
+  under "Text" were all white, so you could only tell them apart by hovering. Each one now
+  shows the colour it applies.
+
 ## 0.3.2 — 2026-10-28
 
 **New**
