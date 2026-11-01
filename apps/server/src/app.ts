@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
@@ -16,6 +17,10 @@ import { insightRoutes } from './ai/insight.js';
 import { layoutRoutes } from './ai/layout.js';
 import { AttachmentReader, type ImageReader } from './attachmentText.js';
 import { requireAuth } from './auth.js';
+import { resetChat, runChat } from './chat/agent.js';
+import { chatRoutes } from './chat/routes.js';
+import { transcribe } from './ai/transcribe.js';
+import { users } from './db/schema.js';
 import { bearerToken, tokenRoutes, tokenSignIn } from './tokens.js';
 import { backupRoutes } from './backup/routes.js';
 import { BackupService, type BackupOptions } from './backup/service.js';
@@ -94,6 +99,19 @@ export function createApp({
   const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
   const reminders = new ReminderService(db, settings, reminderOptions);
   const attachmentText = new AttachmentReader(db, dataDir, settings, readImage);
+  // The linked Telegram chat talks to the chat assistant (a conversation of its own).
+  const chatDeps = { db, settings, jobs, semantic };
+  reminders.useChat({
+    ask: async (userId, text) => {
+      const username = db.select({ username: users.username }).from(users).where(eq(users.id, userId)).get()?.username ?? 'you';
+      return (await runChat(chatDeps, { userId, username, channel: 'telegram', text })).content;
+    },
+    reset: (userId) => resetChat(db, userId, 'telegram'),
+    transcribe: async (userId, audio) => {
+      const service = settings.transcription(userId);
+      return service ? transcribe(service, audio) : null;
+    },
+  });
   const backups = new BackupService(
     db,
     dataDir,
@@ -167,7 +185,7 @@ export function createApp({
   // Read-only links: the token in the address is the key, no account needed.
   app.route('/api/public/shares', publicShareRoutes(db, dataDir));
   app.route('/api/auth', authRoutes(db, secureCookies, secrets));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system', 'chat']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
@@ -198,6 +216,7 @@ export function createApp({
   app.route('/api/security', securityRoutes(db, secrets));
   app.route('/api/shares', shareRoutes(db, secrets));
   app.route('/api/reminders', reminderRoutes(reminders));
+  app.route('/api/chat', chatRoutes(chatDeps));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));

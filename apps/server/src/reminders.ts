@@ -13,6 +13,8 @@ import {
 import type { Db } from './db/index.js';
 import { pages, pushSubscriptions, remindersSent, users } from './db/schema.js';
 import { newId } from './ids.js';
+import { BOT_COMMANDS, TelegramBot, type BotChat, type TelegramApi, type TelegramUpdate } from './telegram.js';
+import { localTime } from './time.js';
 import { Pending } from './pending.js';
 import { listTasks } from './routes/tasks.js';
 import type { SettingsStore } from './settings.js';
@@ -30,8 +32,9 @@ export type PushSender = (
   options: { vapidDetails: { subject: string; publicKey: string; privateKey: string }; TTL: number; urgency: 'high'; timeout: number },
 ) => Promise<{ statusCode: number }>;
 
-/** Calls a Telegram Bot API method and returns its `result`. */
-export type TelegramApi = (token: string, method: string, body: object, signal?: AbortSignal) => Promise<unknown>;
+export type { TelegramApi };
+
+export { localTime };
 
 export class TelegramError extends Error {
   constructor(
@@ -61,24 +64,6 @@ export interface ReminderOptions {
   now?: () => number;
 }
 
-/** "YYYY-MM-DD" and "HH:MM" at `time` in a time zone. */
-export function localTime(time: number, timeZone: string): { date: string; time: string } {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(time)
-      .map((p) => [p.type, p.value]),
-  );
-  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
-}
-
 const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const clip = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
@@ -102,6 +87,8 @@ export class ReminderService {
   private sendPush: PushSender;
   private telegram: TelegramApi;
   private now: () => number;
+  /** Answers the linked chat: commands, buttons, and the chat assistant. */
+  private telegramBot: TelegramBot;
 
   constructor(
     private db: Db,
@@ -111,6 +98,7 @@ export class ReminderService {
     this.sendPush = options.sendPush ?? ((sub, payload, opts) => webpush.sendNotification(sub, payload, opts));
     this.telegram = options.telegram ?? telegramApi;
     this.now = options.now ?? Date.now;
+    this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now);
     settings.onUpdate((userId, input) => {
       // Another bot cannot write to the chat the old one was linked to.
       if (input.telegramBotToken !== undefined) settings.setInternal(userId, 'telegram.chatId', null);
@@ -118,6 +106,7 @@ export class ReminderService {
   }
 
   start() {
+    this.pollLinked();
     this.timer = setInterval(() => void this.tick(), MINUTE);
     this.timer.unref();
     setTimeout(() => void this.tick(), 10_000).unref();
@@ -229,19 +218,52 @@ export class ReminderService {
     this.settings.setInternal(userId, 'telegram.chatId', null);
   }
 
+  /** Lets linked Telegram chats talk to the chat assistant; they are listened to from now on. */
+  useChat(chat: BotChat) {
+    this.telegramBot.chat = chat;
+    this.pollLinked();
+  }
+
+  private pollLinked() {
+    if (!this.telegramBot.chat) return;
+    const tokens = new Set(
+      this.db
+        .select({ id: users.id })
+        .from(users)
+        .all()
+        .filter(({ id }) => this.settings.internal(id, 'telegram.chatId') !== null)
+        .map(({ id }) => this.settings.reminders(id).telegramToken)
+        .filter((t): t is string => !!t),
+    );
+    for (const token of tokens) void this.poll(token);
+  }
+
+  /** The account whose linked chat this is (for this bot). */
+  private chatOwner(token: string, chatId: number): string | null {
+    return (
+      this.db
+        .select({ id: users.id })
+        .from(users)
+        .all()
+        .find(({ id }) => this.settings.internal(id, 'telegram.chatId') === String(chatId) && this.settings.reminders(id).telegramToken === token)?.id ??
+      null
+    );
+  }
+
   /**
-   * Long polling while a link code waits: no public address (webhook) needed. Stops once no
-   * code for this bot is left.
+   * Long polling (no public address, as a webhook would need) while a link code waits and,
+   * with the chat assistant, as long as a chat is linked to this bot.
    */
   private async poll(token: string) {
     if (this.polling.has(token)) return;
     this.polling.add(token);
     let offset = 0;
+    if (this.telegramBot.chat) void this.telegram(token, 'setMyCommands', { commands: BOT_COMMANDS }).catch(() => {});
     try {
-      while (!this.stopped && this.waitingFor(token)) {
-        let updates: { update_id: number; message?: { chat: { id: number }; text?: string } }[];
+      while (!this.stopped && this.wanted(token)) {
+        let updates: TelegramUpdate[];
         try {
-          updates = (await this.telegram(token, 'getUpdates', { offset, timeout: 25, allowed_updates: ['message'] }, AbortSignal.timeout(35_000))) as typeof updates;
+          updates = (await this.telegram(token, 'getUpdates', { offset, timeout: 25, allowed_updates: ['message', 'callback_query'] }, AbortSignal.timeout(35_000))) as TelegramUpdate[];
         } catch {
           await new Promise((r) => setTimeout(r, 5000));
           continue;
@@ -250,7 +272,13 @@ export class ReminderService {
           offset = update.update_id + 1;
           const message = update.message;
           const code = /^\/start\s+(\S+)/.exec(message?.text ?? '')?.[1];
-          if (!message || !code) continue;
+          if (!code) {
+            const chatId = message?.chat.id ?? update.callback_query?.message?.chat.id;
+            const owner = chatId !== undefined && this.telegramBot.chat ? this.chatOwner(token, chatId) : null;
+            if (owner) await this.telegramBot.handle(token, owner, update).catch((err) => console.error('Telegram chat failed:', err));
+            continue;
+          }
+          if (!message) continue;
           const link = this.links.take(code);
           if (!link || link.token !== token) {
             await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: 'Open the link from Nicotes (Settings → Reminders) to connect this chat.' }).catch(() => {});
@@ -258,7 +286,8 @@ export class ReminderService {
           }
           this.settings.setInternal(link.userId, 'telegram.chatId', String(message.chat.id));
           this.settings.setInternal(link.userId, 'telegram.linkCode', null);
-          await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: 'Connected to Nicotes ✓ Reminders will arrive here.' }).catch(() => {});
+          const more = this.telegramBot.chat ? ' You can also write to me, e.g. “What is due this week?”, or try /todo and /calendar.' : '';
+          await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: `Connected to Nicotes ✓ Reminders will arrive here.${more}` }).catch(() => {});
         }
       }
       // Confirms what was read (the next call with an offset does that), so it is not
@@ -267,6 +296,11 @@ export class ReminderService {
     } finally {
       this.polling.delete(token);
     }
+  }
+
+  private wanted(token: string): boolean {
+    if (this.waitingFor(token)) return true;
+    return !!this.telegramBot.chat && this.db.select({ id: users.id }).from(users).all().some(({ id }) => this.settings.reminders(id).telegramToken === token && this.settings.internal(id, 'telegram.chatId') !== null);
   }
 
   private waitingFor(token: string): boolean {

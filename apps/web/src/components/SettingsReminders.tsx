@@ -158,7 +158,8 @@ export function SettingsReminders({ reminders, save, telegramToken }: Props) {
           <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">
             @BotFather
           </a>{' '}
-          in Telegram for a new bot (<code>/newbot</code>), paste its token here, then connect your chat with it.
+          in Telegram for a new bot (<code>/newbot</code>), paste its token here, then connect your chat with it. Besides
+          reminders, you can talk to the chat assistant there (/todo and /calendar have buttons).
         </p>
         {telegramToken}
         {telegram?.error && (

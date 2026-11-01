@@ -159,6 +159,7 @@ describe('reminders', () => {
     // Another bot cannot write to that chat: changing the token disconnects it.
     await api.call('PATCH', '/api/settings', { telegramBotToken: '123:other' });
     expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected).toBe(false);
+    api.reminders.stop();
   });
 
   it('is only open to the signed-in owner', async () => {
