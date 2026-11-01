@@ -12,7 +12,7 @@
 [![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)](#phone-app)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Quick start](#quick-start) · [Features](#features) · [Changelog](CHANGELOG.md) · [Design & roadmap](docs/DESIGN.md)
+[Website](https://pages.nico.software/1n9i9c7om/nicotes/) · [Quick start](#quick-start) · [Features](#features) · [Releases](https://git.nico.software/1n9i9c7om/nicotes/-/releases) · [Changelog](CHANGELOG.md) · [Design & roadmap](docs/DESIGN.md)
 
 <img src="docs/images/editor.png" alt="A page in Nicotes: notebooks and pages on the left, a formatted page with a table, tasks and links on the right" width="900">
 
@@ -208,8 +208,8 @@ does, in Firefox, Chrome and Edge. It shows the normal app (in its phone layout)
 own sign-in.
 
 1. Allow it on the server: set `NICOTES_BROWSER_EXTENSION=true` in `.env` and restart Nicotes.
-2. Download it from the project's **Releases** page (each release links the extension), or
-   take `extension/` from the repository.
+2. Download it from the [releases on git.nico.software](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
+   (each release links the extension), or take `extension/` from the repository.
 3. Install it:
    - **Firefox:** release Firefox only installs signed extensions. Open the release's signed
      `.xpi` in Firefox; it then updates itself from GitLab Pages (see below). Without one,
@@ -355,6 +355,10 @@ To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0`
 Bug reports, ideas and merge requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains
 how to set things up and where changes go. Please report security problems privately, as
 described in [SECURITY.md](SECURITY.md).
+
+Nicotes is developed on [git.nico.software](https://git.nico.software/1n9i9c7om/nicotes);
+[GitHub](https://github.com/1n9i9c7om/nicotes) has a read-only mirror of the code. Releases,
+the browser extension and the Docker image are published on git.nico.software.
 
 ## License
 
