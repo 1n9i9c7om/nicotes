@@ -765,7 +765,7 @@ function SemanticCard({
         <Sparkles size={18} /> Semantic index
       </h2>
       <p className="muted">
-        Finds notes by meaning: related pages under each page, “By meaning” results in search and “Ask your notes”.
+        Finds notes by meaning: related pages under each page, “By meaning” results in search and in the chat.
         While it is on, the text of your notes is sent to the service of the embedding model to compute embeddings:
         OpenRouter (with the default model about $0.02 per million words, a few cents for thousands of pages), or your
         own server for free. Switching it off deletes the index.

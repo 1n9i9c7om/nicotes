@@ -233,6 +233,86 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
   };
 }
 
+/** A function the model may call, its parameters described by a JSON schema. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: object;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  /** JSON, as the model wrote it (may be invalid). */
+  arguments: string;
+}
+
+/** A conversation with tools: the model's calls, and their results sent back. */
+export type ToolMessage =
+  | ChatMessage
+  | { role: 'assistant'; content: string | null; tool_calls: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
+
+interface ToolCompletion {
+  choices?: { message?: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments?: string } }[] } }[];
+  usage?: CompletionResponse['usage'];
+  error?: { message?: string };
+}
+
+/**
+ * One completion that may call tools. Not streamed: calls arrive as a whole, and the caller
+ * runs them and asks again with their results.
+ */
+export async function chatWithTools(
+  opts: Omit<ChatOptions, 'messages' | 'json' | 'webResults'> & {
+    messages: ToolMessage[];
+    tools: ToolSpec[];
+    /** "none": answer now, no more calls (the tools stay listed, as earlier calls refer to them). */
+    toolChoice?: 'auto' | 'none';
+  },
+): Promise<{ content: string; toolCalls: ToolCall[]; usage: Usage }> {
+  const r = route(opts);
+  const body = {
+    ...requestBody(r, { ...opts, messages: opts.messages as ChatMessage[] }, false),
+    tools: opts.tools.map((t) => ({ type: 'function', function: t })),
+    tool_choice: opts.toolChoice ?? 'auto',
+  };
+  const send = async (payload: object) => {
+    try {
+      return await fetch(r.url, {
+        method: 'POST',
+        signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000),
+        headers: headersFor(r),
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (opts.signal?.aborted) throw new LlmError('Cancelled');
+      const timeout = (error as Error).name === 'TimeoutError';
+      throw new LlmError(timeout ? 'The model took too long to answer' : `Cannot reach ${r.label}: ${(error as Error).message}`);
+    }
+  };
+  let res = await send(body);
+  let data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  const simpler = res.status === 400 ? fallbackBody(body, data.error?.message) : null;
+  if (simpler) {
+    res = await send(simpler);
+    data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  }
+  if (!res.ok) {
+    // OpenRouter answers 404 when no provider of the model supports tools.
+    if (/tool/i.test(data.error?.message ?? '') && (res.status === 400 || res.status === 404)) {
+      throw new LlmError(`The model ${opts.model} cannot use tools, which the chat needs: choose another one for Chat under Settings → AI models`);
+    }
+    throw httpError(r, res.status, data.error?.message);
+  }
+  const message = data.choices?.[0]?.message;
+  return {
+    content: message?.content ?? '',
+    toolCalls: (message?.tool_calls ?? []).map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments ?? '{}' })),
+    usage: await usageOf(r, opts.model, data.usage),
+  };
+}
+
 /** A stream fails after this long without any data, and after MAX_STREAM_MS in total. */
 const IDLE_MS = 120_000;
 const MAX_STREAM_MS = 600_000;

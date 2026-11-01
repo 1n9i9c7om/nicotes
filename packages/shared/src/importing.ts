@@ -32,8 +32,8 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
     hint: 'Plans searches, reads sources and writes a cited note: several calls per run, the most demanding task.',
   },
   ask: {
-    label: 'Ask your notes',
-    hint: 'Answers from your notes with citations. Needs a model that sticks to the given sources.',
+    label: 'Chat',
+    hint: 'The chat (in Nicotes and Telegram) looks things up and makes changes with tools, a few calls per message. Needs a model that can use tools (marked “tools”).',
   },
   assistant: {
     label: 'Page assistant',

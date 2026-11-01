@@ -53,6 +53,26 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** The chat's conversations: one per channel (the web app, Telegram), until reset. */
+export const chatMessages = sqliteTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'web' or 'telegram'. */
+    channel: text('channel').notNull(),
+    /** 'user' or 'assistant'. */
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    /** JSON list of what the assistant did on the way (searched, created a task, …). */
+    actions: text('actions'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('chat_messages_user_idx').on(t.userId, t.channel, t.createdAt)],
+);
+
 /** Browsers and installed apps that receive reminders as push notifications. */
 export const pushSubscriptions = sqliteTable(
   'push_subscriptions',

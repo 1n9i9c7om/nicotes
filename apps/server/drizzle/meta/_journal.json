@@ -106,6 +106,13 @@
       "when": 1793558842022,
       "tag": "0014_attachment_text",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1793561645768,
+      "tag": "0015_chat",
+      "breakpoints": true
     }
   ]
 }

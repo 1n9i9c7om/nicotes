@@ -163,16 +163,27 @@ text. A link can expire after a day, a week or 30 days, and can be turned off at
 Shared pages show a **Shared** button, and Settings → **Shared links** lists every link
 with how often it was opened. Shared pages stay out of search engines.
 
-### Ask your notes (optional)
+### Chat (optional)
 
-With an AI service set up (see below), **Ask** answers questions from your own notes with numbered
-sources, and the page menu can **summarize** a page or **suggest links** to other pages.
-Switch on the **semantic index** (Settings) to find notes by meaning — related pages,
-"By meaning" results in search, better answers. It sends the text of your notes to
-OpenRouter for embeddings (with the default model a few cents for thousands of pages), or
-to your own model server if you pick one of its embedding models.
-**Ask** searches all notebooks by default; the picker next to the question box limits it to
-some of them.
+**Chat**, right below search, is an assistant that uses Nicotes for you. Ask it about your
+notes or tell it what to do, in your own words: *"What's due this week?"*, *"Remind me to
+call the dentist tomorrow at 9"*, *"Note in my journal that the heating was fixed"*,
+*"What did I write about the car?"*, *"Research heat pumps for old houses"*. It searches
+and reads pages, writes pages and the journal, adds, ticks off and moves tasks, shows the
+calendar and starts research; each step shows up in the chat and links to the page it
+touched. **New chat** makes it forget the conversation. It needs an AI service (see below)
+and a model that can use tools, chosen under Settings → AI models → Chat.
+
+The same assistant answers in **Telegram** once a chat is connected under Settings →
+Reminders: write or send voice messages (with a transcription service set up), use
+`/todo` for open tasks with buttons to tick them off, `/calendar` for the week, `/today`
+and `/new` to start over. Telegram keeps a conversation of its own.
+
+The page menu can also **summarize** a page or **suggest links** to other pages. Switch on
+the **semantic index** (Settings) to find notes by meaning: related pages, "By meaning"
+results in search and in the chat. It sends the text of your notes to OpenRouter for
+embeddings (with the default model a few cents for thousands of pages), or to your own
+model server if you pick one of its embedding models.
 
 ### Page assistant (optional)
 
@@ -199,7 +210,7 @@ Past runs are listed under **Recent research**; × removes one from the list (it
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
 at a configurable limit (default $0.50). Under Settings → **AI models** every feature
-(import, organize, research, Ask, the page assistant, summaries, link suggestions, layouts)
+(import, organize, research, chat, the page assistant, summaries, link suggestions, layouts, reading images)
 can use its own model, picked from a searchable list with prices, context size and filters;
 unset ones use the default model.
 

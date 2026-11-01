@@ -11,6 +11,7 @@ import './styles/graph.css';
 import './styles/journal.css';
 import './styles/tasks.css';
 import './styles/ask.css';
+import './styles/chat.css';
 import './styles/layouts.css';
 import './styles/assistant.css';
 import './styles/models.css';

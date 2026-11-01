@@ -427,15 +427,38 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   Switching the index off deletes it.
 - **Related pages:** nearest pages by mean passage vector, minus pages already connected
   (links both ways, parent, children); "Link" adds the page to a "See also" section.
-- **Ask your notes:** `POST /api/ai/ask` streams server-sent events: the retrieved
-  passages (semantic, or FTS keyword fallback), then the answer as it is generated, then
-  the cost. The model may only use the numbered passages and cites them as `[n]`;
-  follow-ups send the last turns along. Answers render through a small Markdown renderer
-  that builds React elements (no HTML injection) and can be saved as notes.
+- **Chat** (`chat/agent.ts`, `chat/tools.ts`, `chat/routes.ts`, table `chat_messages`):
+  an agent with OpenAI-style tool calling (`chatWithTools` in `ai/llm.ts`, not streamed;
+  the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
+  `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
+  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
+  `create_page`, `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
+  `pageId:line`), `add_task` (today's journal unless a page is named; due date and `⏰`
+  reminder), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
+  per day, journal days), `start_research`, `research_status`. Arguments are validated
+  with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
+  `{error}` and show as failed steps. Up to 8 rounds per message, the last with
+  `tool_choice: "none"`, and the per-run cost limit applies. The system prompt has the
+  date and time in the account's time zone. History: the channel's messages (web and
+  Telegram are separate) up to 24k characters; tool traffic is kept only within a turn,
+  the steps are stored with the answer for display. `POST /api/chat` streams `user`,
+  `action` and `answer` events; `DELETE /api/chat` forgets the conversation.
+- **Telegram chat** (`telegram.ts`): once a chat is linked, the reminder service long-polls
+  the bot (messages and button presses) and hands updates of the linked chat to
+  `TelegramBot`: `/todo` lists open tasks (overdue, today, next 7 days, undated) with a
+  button per task (`d:pageId:line:hash of the line`, so a changed task is not ticked by
+  mistake), `/calendar` a Monday–Sunday week with « / » buttons (`w:date`, edited in place),
+  `/new` resets, voice messages are fetched (`getFile`) and transcribed. Other text goes to
+  the chat (channel `telegram`, "typing…" while it works); its Markdown is converted to
+  Telegram's HTML (bold, italics, code, lists, links; `[[links]]` point to the app's
+  address) and split into 4000-character messages. Other chats are ignored.
+- **Ask your notes** (API only since the chat replaced its page): `POST /api/ai/ask`
+  streams the retrieved passages (semantic, or FTS keyword fallback), the answer and the
+  cost; the model may only use the numbered passages and cites them as `[n]`.
 - **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
   `section` (the parent page's subtree; a top-level page's own subtree), `notebook` or
   `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
-  **Ask** searches everything unless the request names `notebookIds`.
+  `/api/ai/ask` searches everything unless the request names `notebookIds`.
 - **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
   the context it read (notes within the read scope picked in the panel, which starts at `page`
   every time it opens; optionally a few web
@@ -576,6 +599,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
     links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
-    PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw); next: a
-    chatbot for every feature (web and Telegram), adapters that log data from other services.
+    PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw), ✅ a chat
+    assistant with tools for every feature (web and Telegram); next: adapters that log data
+    from other services, charts in page views.
 12. **Later** — multi-user.

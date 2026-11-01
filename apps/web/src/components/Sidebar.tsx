@@ -15,7 +15,7 @@ import {
   Hash,
   House,
   LogOut,
-  MessageCircleQuestion,
+  MessagesSquare,
   Palette,
   Pencil,
   PenTool,
@@ -188,6 +188,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
             <Search size={16} /> Search
             <kbd>Ctrl K</kbd>
           </button>
+          <NavLink to="/chat" className="nav-item">
+            <MessagesSquare size={16} /> Chat
+          </NavLink>
           <NavLink to="/" end className="nav-item">
             <House size={16} /> Home
           </NavLink>
@@ -200,9 +203,6 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/tasks" className="nav-item">
             <ListChecks size={16} /> Tasks
             <DueCount />
-          </NavLink>
-          <NavLink to="/ask" className="nav-item">
-            <MessageCircleQuestion size={16} /> Ask
           </NavLink>
           <NavLink to="/graph" className="nav-item">
             <Waypoints size={16} /> Graph
