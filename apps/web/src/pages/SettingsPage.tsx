@@ -19,6 +19,7 @@ import {
 import { formatCost } from '../components/JobProgress';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
+import { SettingsTokens } from '../components/SettingsTokens';
 import {
   exportUrl,
   useAuthStatus,
@@ -548,6 +549,8 @@ export function SettingsPage() {
       </section>
 
       <SettingsBackups />
+
+      <SettingsTokens />
 
       <section className="settings-card">
         <h2>

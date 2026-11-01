@@ -97,6 +97,14 @@ and tsup respectively).
   offers a one-time setup screen while no user exists. The server refuses to start
   rather than create that account with the example password `change-me` or one shorter
   than 8 characters.
+- **API tokens** (`tokens.ts`, table `api_tokens`): `nct_` + 32 random bytes, shown once,
+  stored as SHA-256 with their last four characters for the list. Sent as
+  `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
+  to GET/HEAD. `/api/settings`, `/api/backups` and `/api/tokens` only accept the session
+  (403 for a token), so a token can neither read stored AI keys nor the key file, nor make
+  more tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
+  `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
   `409` so two tabs never silently overwrite each other.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new

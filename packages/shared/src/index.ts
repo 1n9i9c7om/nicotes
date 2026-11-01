@@ -20,6 +20,7 @@ export * from './recipe';
 export * from './sections';
 export * from './system';
 export * from './tasks';
+export * from './tokens';
 export * from './wikilinks';
 
 // ---------- Auth ----------

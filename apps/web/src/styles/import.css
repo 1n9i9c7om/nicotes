@@ -16,6 +16,9 @@
 
 .field select,
 .setting input,
+.token-form input,
+.token-form select,
+.token-created input,
 .import-url,
 .import-text {
   width: 100%;
@@ -29,6 +32,9 @@
 
 .field select,
 .setting input,
+.token-form input,
+.token-form select,
+.token-created input,
 .import-url {
   height: 40px;
   padding: 0 12px;
@@ -42,6 +48,9 @@
 
 .field select:focus,
 .setting input:focus,
+.token-form input:focus,
+.token-form select:focus,
+.token-created input:focus,
 .import-url:focus,
 .import-text:focus {
   outline: none;
@@ -398,5 +407,61 @@
   .about-list > div {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+}
+
+/* ---------- API tokens ---------- */
+
+.token-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px 140px auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.token-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.token-created {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgb(34 211 238 / 0.35);
+  border-radius: var(--radius);
+  background: var(--accent-softer);
+}
+
+.token-created p {
+  margin: 0;
+}
+
+.token-created input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.token-created .link-btn {
+  align-self: flex-start;
+}
+
+.token-confirm {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .token-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .token-form label:first-child,
+  .token-form .btn {
+    grid-column: 1 / -1;
   }
 }
