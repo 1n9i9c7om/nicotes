@@ -559,3 +559,72 @@
 .setting .reminder-digest input[type='time'] {
   width: auto;
 }
+
+/* ---------- Vault import ---------- */
+
+.vault-import h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 17px;
+}
+
+.vault-import h2 svg {
+  color: var(--accent);
+}
+
+.vault-import > p {
+  margin: 0;
+}
+
+.vault-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vault-preview p {
+  margin: 0;
+}
+
+.vault-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vault-modes input[type='radio'] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.vault-notebooks,
+.vault-skipped ul {
+  margin: 0;
+  padding-left: 46px;
+  font-size: 14px;
+}
+
+.vault-skipped {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.vault-skipped summary {
+  cursor: pointer;
+}
+
+.vault-skipped ul {
+  max-height: 200px;
+  margin-top: 6px;
+  padding-left: 20px;
+  overflow-y: auto;
+}
+
+.vault-done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}

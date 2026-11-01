@@ -37,6 +37,14 @@ export function setup(options: Partial<AppOptions> = {}) {
     return { status: res.status, body: (await res.json()) as { url: string; mime: string; size: number } };
   }
 
+  /** Multipart upload of one file to any route, e.g. a vault zip. */
+  async function postFile<T = unknown>(path: string, file: File) {
+    const form = new FormData();
+    form.set('file', file);
+    const res = await app.request(path, { method: 'POST', headers: { cookie, 'x-requested-with': 'nicotes' }, body: form });
+    return { status: res.status, body: (await res.json()) as T };
+  }
+
   const raw = (path: string) => app.request(path, { headers: { cookie } });
   /** POSTs JSON and returns the raw response (e.g. a server-sent event stream). */
   const rawPost = (path: string, body: unknown) =>
@@ -53,6 +61,7 @@ export function setup(options: Partial<AppOptions> = {}) {
     reminders: app.reminders,
     call,
     upload,
+    postFile,
     raw,
     rawPost,
     request,

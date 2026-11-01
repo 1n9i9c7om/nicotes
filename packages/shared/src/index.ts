@@ -24,6 +24,7 @@ export * from './sharing';
 export * from './system';
 export * from './tasks';
 export * from './tokens';
+export * from './vault';
 export * from './wikilinks';
 
 // ---------- Auth ----------

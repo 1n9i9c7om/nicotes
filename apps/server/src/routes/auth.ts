@@ -27,7 +27,8 @@ import { users } from '../db/schema.js';
 import { clientIp, readJson } from '../http.js';
 import { authenticationOptions, hasPasskeys, relyingParty, verifyPasskey, type RelyingParty } from '../passkeys.js';
 import type { SecretBox } from '../secrets.js';
-import { checkTotp, isRecoveryCode, Pending, totpEnabled, useRecoveryCode } from '../twoFactor.js';
+import { Pending } from '../pending.js';
+import { checkTotp, isRecoveryCode, totpEnabled, useRecoveryCode } from '../twoFactor.js';
 
 // A fixed hash so unknown usernames cost as much time as wrong passwords.
 const DUMMY_HASH =

@@ -13,9 +13,9 @@ import {
 import type { Db } from './db/index.js';
 import { pages, pushSubscriptions, remindersSent, users } from './db/schema.js';
 import { newId } from './ids.js';
+import { Pending } from './pending.js';
 import { listTasks } from './routes/tasks.js';
 import type { SettingsStore } from './settings.js';
-import { Pending } from './twoFactor.js';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;

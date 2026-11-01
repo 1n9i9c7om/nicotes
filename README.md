@@ -228,6 +228,16 @@ docker compose -f compose.crawl4ai.yml up -d
 Point Nicotes at it with `CRAWL4AI_URL=http://localhost:11235` (dev) or, if both run in one
 compose project, `http://crawl4ai:11235`.
 
+**From Obsidian:** zip your vault's folder and choose the zip under Import → **Obsidian vault
+or Markdown folder**. Before anything is created you see how many notes, files and tags it
+holds and which notebooks it becomes: one per top-level folder, or everything in one
+notebook. Notes become pages and subfolders parent pages (a folder note, `Folder.md` next to
+or inside `Folder/`, becomes that parent page). `[[Links]]`, aliases in links, `#tags` and
+tags in the properties come along; other properties are kept as a line at the top of the
+page, and the images and files your notes use become attachments. Settings in `.obsidian`
+are ignored. A Nicotes export (Settings → Export) can be imported the same way. This needs
+no AI key.
+
 ## Phone and browser
 
 ### Phone app

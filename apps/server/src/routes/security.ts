@@ -15,6 +15,7 @@ import type { Db } from '../db/index.js';
 import { twoFactor, users } from '../db/schema.js';
 import { readJson } from '../http.js';
 import { deletePasskey, listPasskeys, registrationOptions, relyingParty, savePasskey, type RelyingParty } from '../passkeys.js';
+import { Pending } from '../pending.js';
 import type { SecretBox } from '../secrets.js';
 import {
   base32Decode,
@@ -23,7 +24,6 @@ import {
   matchTotp,
   newRecoveryCodes,
   newTotpSecret,
-  Pending,
   recoveryCodesLeft,
   totpEnabled,
   totpUri,
