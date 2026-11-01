@@ -113,6 +113,27 @@ Screen" (needs HTTPS, so run it behind a reverse proxy and set
 `NICOTES_SECURE_COOKIES=true`). On Android it then appears in the share menu, and shared
 links open the importer.
 
+### Browser sidebar
+
+The extension in `extension/` shows Nicotes in the browser's sidebar, the way Bitwarden
+does, in Firefox, Chrome and Edge. It shows the normal app (in its phone layout), with its
+own sign-in.
+
+1. Allow it on the server: set `NICOTES_BROWSER_EXTENSION=true` in `.env` and restart Nicotes.
+2. Install it:
+   - **Firefox:** release Firefox only installs signed extensions. Pack the folder with
+     `npx web-ext build -s extension -i "*.test.js"` and sign the zip on
+     [addons.mozilla.org](https://addons.mozilla.org/developers/) as "On your own" (unlisted;
+     automatic and free), then open the signed `.xpi` in Firefox. To try it without signing,
+     open `about:debugging` → This Firefox → "Load Temporary Add-on…" and pick
+     `extension/manifest.json` (it is removed when Firefox restarts).
+   - **Chrome / Edge:** open `chrome://extensions` (`edge://extensions`), turn on developer
+     mode, choose "Load unpacked" and pick the `extension` folder.
+3. Click the Nicotes button in the toolbar (or the Nicotes icon in Firefox's sidebar) and enter
+   the address you open Nicotes at. The browser asks to let the extension access that site,
+   which keeps you signed in in the sidebar. To change the address later, open the extension's
+   options (Firefox: `about:addons` → Nicotes → Options).
+
 ### Backups
 
 Nicotes backs itself up once a day: a consistent copy of the database (taken while it runs),

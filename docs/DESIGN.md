@@ -140,6 +140,16 @@ and tsup respectively).
   FTS syntax; `#tag` words filter by tag.
 - **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
   and plain text display inline; everything else downloads.
+- **Framing** is refused (`frame-ancestors 'none'`). `NICOTES_BROWSER_EXTENSION=true`
+  allows `moz-extension:` and `chrome-extension:` ancestors for the sidebar extension
+  (`extension/`): Firefox gives every install a random origin, so it can only be allowed by
+  scheme. An installed extension could then frame Nicotes and overlay it (clickjacking),
+  which is why it is opt-in.
+- **Sidebar extension** (`extension/`, Manifest V3, no build step): a sidebar page
+  (Firefox `sidebar_action`, Chrome/Edge `side_panel`) with an iframe of the configured
+  address, plus an options page. It requests host access to that site when the address is
+  saved: without it the frame is third-party to the extension page, so the `SameSite=Lax`
+  session cookie is withheld (Chromium) and signing in does nothing.
 
 ### Smart Import
 
@@ -388,6 +398,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
+| `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
 | `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
