@@ -1,0 +1,6 @@
+# How to report a security problem in Nicotes (RFC 9116).
+Contact: https://github.com/1n9i9c7om/nicotes/security/advisories/new
+Expires: {{EXPIRES}}
+Policy: https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/SECURITY.md
+Preferred-Languages: en, de
+Canonical: https://pages.nico.software/1n9i9c7om/nicotes/.well-known/security.txt

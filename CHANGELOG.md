@@ -2,6 +2,19 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.4.2 — 2026-11-01
+
+**Changes**
+
+- **Report bugs and ideas on GitHub.** Nicotes now has a
+  [mirror on GitHub](https://github.com/1n9i9c7om/nicotes). Its issue tracker takes bug
+  reports (with a short form) and ideas, and pull requests are welcome there.
+- **Report security problems privately.** Use GitHub's private vulnerability reporting on
+  the mirror. The website also lists this contact in its `security.txt`.
+- **The browser extension stays at 0.4.1.** It now has its own version, which only changes
+  when the extension itself does. This release doesn't change it, so there's nothing to
+  update.
+
 ## 0.4.1 — 2026-11-01
 
 **Changes**

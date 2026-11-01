@@ -1,17 +1,17 @@
 # Contributing to Nicotes
 
-Thanks for helping! Bug reports, ideas and merge requests are all welcome.
+Thanks for helping! Bug reports, ideas and pull requests are all welcome.
 
 ## Reporting bugs and ideas
 
-Open an [issue](https://git.nico.software/1n9i9c7om/nicotes/-/issues). For a bug, please
-include:
+Open an [issue on GitHub](https://github.com/1n9i9c7om/nicotes/issues/new/choose). For a bug,
+please include:
 
 - the version (Settings → About shows version and build);
 - your browser and device, and whether it happens in the installed phone app or the sidebar;
 - what you did, what you expected and what happened instead.
 
-Security problems go in a confidential issue instead, see [SECURITY.md](SECURITY.md).
+Security problems are reported privately instead, see [SECURITY.md](SECURITY.md).
 
 ## Setting up
 
@@ -25,15 +25,25 @@ npm run dev        # server on :3000, web on :5180 (proxies /api)
 `npm run dev` reads `.env` in the repository root if there is one (start from
 `.env.example`). Without an account in it, the first visit shows the setup screen.
 
+## Where the code lives
+
+Nicotes is developed on [git.nico.software](https://git.nico.software/1n9i9c7om/nicotes), which
+runs the pipelines and publishes releases. The [GitHub repository](https://github.com/1n9i9c7om/nicotes)
+is a mirror of it that updates itself a few minutes after every change, so open your pull
+request there: a maintainer merges it on git.nico.software, and it comes back to GitHub
+through the mirror.
+
 ## Branches
 
 - `develop` is where changes come together. Start your branch from it
-  (`feature/<what-it-does>`) and open your merge request against `develop`, not `main`.
+  (`feature/<what-it-does>`) and open your pull request against `develop`, not `main`.
 - `main` only receives releases, each tagged `vX.Y.Z`. A maintainer bumps the version and
   writes the [changelog](CHANGELOG.md) entry when releasing, so you don't need to.
-- Keep a merge request to one change. Small ones are reviewed faster.
+- If you change anything in `extension/`, bump the extension's own version in
+  `extension/manifest.json` (for example `0.4.1` → `0.4.2`); the pipeline warns until you do.
+- Keep a pull request to one change. Small ones are reviewed faster.
 
-## Before you open a merge request
+## Before you open a pull request
 
 ```bash
 npm run typecheck
