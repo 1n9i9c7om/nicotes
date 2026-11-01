@@ -7,8 +7,8 @@
 [![Pipeline](https://img.shields.io/gitlab/pipeline-status/1n9i9c7om%2Fnicotes?gitlab_url=https%3A%2F%2Fgit.nico.software&branch=main&logo=gitlab&label=pipeline)](https://git.nico.software/1n9i9c7om/nicotes/-/pipelines)
 [![Latest release](https://img.shields.io/gitlab/v/release/1n9i9c7om%2Fnicotes?gitlab_url=https%3A%2F%2Fgit.nico.software&sort=semver&label=release)](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
 [![Docker](https://img.shields.io/badge/runs%20on-Docker-2496ED?logo=docker&logoColor=white)](#quick-start)
-[![Node 24+](https://img.shields.io/badge/node-24%2B-5FA04E?logo=nodedotjs&logoColor=white)](#development)
-[![React + TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6?logo=typescript&logoColor=white)](#development)
+[![Node 24+](https://img.shields.io/badge/node-24%2B-5FA04E?logo=nodedotjs&logoColor=white)](docs/DEVELOPMENT.md)
+[![React + TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6?logo=typescript&logoColor=white)](docs/DEVELOPMENT.md)
 [![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)](#phone-app)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
@@ -212,7 +212,7 @@ own sign-in.
    (each release links the extension), or take `extension/` from the repository.
 3. Install it:
    - **Firefox:** release Firefox only installs signed extensions. Open the release's signed
-     `.xpi` in Firefox; it then updates itself from GitLab Pages (see below). Without one,
+     `.xpi` in Firefox; it then updates itself whenever a new version comes out. Without one,
      sign the zip yourself on
      [addons.mozilla.org](https://addons.mozilla.org/developers/) as "On your own" (unlisted;
      automatic and free). To try it without signing, open `about:debugging` → This Firefox →
@@ -255,126 +255,12 @@ backup folder. Without Docker, stop the server and run `npm run restore -- <back
 `DATA_DIR`. Separately, Settings → Export downloads all notes as Markdown (an
 Obsidian-compatible vault), handy for reading them without Nicotes.
 
-## Development
-
-Requires Node 24+.
-
-```bash
-npm install
-npm run dev        # server on :3000, web on :5180 (proxies /api); loads ./.env
-npm test
-npm run build      # production build of web + server
-```
-
-### End-to-end tests
-
-`apps/e2e` drives the real web UI with [Playwright](https://playwright.dev) against the built
-server, started on free ports with throwaway data dirs in the system temp folder (one with a
-test account from `NICOTES_ADMIN_USER`, one empty for the first-run setup screen). AI features
-are not covered: the test servers run without an OpenRouter key and all outbound requests
-go to a dead proxy.
-
-```bash
-npx playwright install chromium   # once; without it the installed Microsoft Edge is used
-npm run e2e                       # builds web + server, then runs all specs
-```
-
-After a build, run specs directly with `npm run e2e -w apps/e2e -- tests/editor.spec.ts`
-(add `--headed` or `--ui` to watch). Set `E2E_CHANNEL=msedge` (or `chrome`) to pick a
-browser. Failures leave a trace in `apps/e2e/test-results`
-(`npx playwright show-trace <file>`).
-
-Database schema changes: edit `apps/server/src/db/schema.ts`, then
-`npm run db:generate -w apps/server` and commit the generated migration.
-
-## Branches, releases and images
-
-- `develop` is where work comes together: every change starts as a feature branch off
-  `develop` and is merged back into it.
-- A release merges `develop` into `main` and tags it `vX.Y.Z` (bump the `version` fields in the
-  `package.json` files first, and add the version to `CHANGELOG.md`, which becomes the
-  release notes). Settings → About shows the running version and build.
-- The browser extension has its own version in `extension/manifest.json`. Bump it only when
-  something in `extension/` changes; releases without changes there reuse the extension
-  that is already signed.
-
-### Pull requests from GitHub
-
-[GitHub](https://github.com/1n9i9c7om/nicotes) gets everything from git.nico.software through
-a push mirror, which only goes one way and overwrites GitHub's branches with GitLab's. So
-rulesets on GitHub block every change to branches and tags except the mirror's own pushes
-(its deploy key), and pull requests can't be merged there. Issues and private
-vulnerability reports are not affected. To take in pull request 123:
-
-```bash
-git fetch https://github.com/1n9i9c7om/nicotes.git pull/123/head:pr-123
-git switch develop
-git merge --no-ff pr-123
-git push origin develop
-```
-
-A few minutes later the mirror brings the merge to GitHub, and GitHub marks the pull
-request as merged. That only works while the pull request's commits stay as they are, so
-merge it as above instead of squashing or rebasing it.
-
-GitLab CI (`.gitlab-ci.yml`) builds the Docker image on a runner with the host's Docker
-socket and pushes it to the project's container registry:
-
-| Push | Image tags |
-|---|---|
-| `develop` | `dev-latest`, `<short-sha>` |
-| `main` | `main-latest`, `<short-sha>` |
-| tag `v1.2.3` | `v1.2.3` |
-| other branches, merge requests | built only, not pushed |
-
-So `main-latest` is always the newest release, and `v1.2.3` pins an older one;
-`docker-compose.yml` uses `main-latest` unless `NICOTES_TAG` says otherwise.
-
-The pipeline also packs the browser extension (`extension/`) into a zip, kept as a job
-artifact on every pipeline. If that extension version is already released but `extension/`
-differs from it, branch pipelines warn and a tag fails: bump the extension's version. A tag
-`v1.2.3` (whose `package.json` must say `1.2.3`) then:
-
-- uploads the zip to the project's package registry (generic package `nicotes-extension`,
-  the extension's version), unless an earlier release already did;
-- with the CI/CD variables `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` (an
-  [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
-  masked and protected, with `v*` tags protected so they get them), has Mozilla sign the
-  extension as "On your own" and uploads the signed `.xpi`, which release Firefox installs.
-  Mozilla signs each version only once; an extension version that is already signed is
-  taken from the package registry instead;
-- creates the GitLab release `Nicotes 1.2.3` once the image is pushed, with that version's
-  `CHANGELOG.md` section as its notes and the extension linked;
-- publishes the landing page (`site/`, with the logo and screenshots from `docs/`) on the
-  project's GitLab Pages, with the signed `.xpi` and an update manifest (`updates.json`)
-  next to it; the landing page offers the `.xpi` for Firefox. The packed extension's
-  `update_url` points there, so an installed copy updates itself (Firefox checks about once
-  a day). Without a signed `.xpi` of the current extension version, the extension files
-  already on Pages are kept, so installed copies are never offered an unsigned version.
-
-Firefox checks for updates without signing in, so set **Settings → General → Visibility →
-Pages** to "Everyone". Pages must be enabled on the GitLab instance and served over HTTPS
-(Firefox ignores `http://` update URLs). If the project's Pages address isn't HTTPS, give
-the Pages site a custom domain with HTTPS (Settings → Pages → Domains) and set the CI/CD
-variable `EXTENSION_UPDATE_URL` to `https://<that domain>/updates.json`. Without an HTTPS
-address, branch builds pack the extension without `update_url` (with a warning) and a tag
-that would be signed fails, since a version can only be signed once.
-
-To update the landing page between releases, run the manual `pages` job in a branch
-pipeline (e.g. on `develop`). It publishes the page with the signed extension of the
-current extension version if a release signed it, and otherwise keeps the extension files
-already on Pages. The job prints the addresses of the page and of `updates.json`, which
-must open in a private browser window, without signing in.
-
-To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0` and open
-`public/index.html`.
-
 ## Contributing
 
 Bug reports and ideas go to the [issue tracker on GitHub](https://github.com/1n9i9c7om/nicotes/issues);
-pull requests are welcome too. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to set things
-up and where changes go. Please report security problems privately, as described in
-[SECURITY.md](SECURITY.md).
+pull requests are welcome too. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to contribute,
+and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covers setting up, tests, the pipeline and
+releases. Please report security problems privately, as described in [SECURITY.md](SECURITY.md).
 
 Nicotes is developed on [git.nico.software](https://git.nico.software/1n9i9c7om/nicotes);
 [GitHub](https://github.com/1n9i9c7om/nicotes) has a read-only mirror of the code. Releases,

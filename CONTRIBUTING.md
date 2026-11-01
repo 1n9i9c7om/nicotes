@@ -24,6 +24,8 @@ npm run dev        # server on :3000, web on :5180 (proxies /api)
 
 `npm run dev` reads `.env` in the repository root if there is one (start from
 `.env.example`). Without an account in it, the first visit shows the setup screen.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has more on tests, database changes, the pipeline
+and releases.
 
 ## Where the code lives
 
