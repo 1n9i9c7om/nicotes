@@ -49,6 +49,8 @@ export interface AppOptions {
   settingsEnv?: Config['env'];
   /** Allow imports from private network hosts. */
   importAllowPrivate?: boolean;
+  /** Let browser extension pages show the app in a frame (the Nicotes sidebar extension). */
+  browserExtension?: boolean;
   /** Backup directory and schedule; defaults to `<dataDir>/backups` with no schedule. */
   backups?: Partial<BackupOptions>;
   /** Tests: a fake embedder, and no waiting for typing to pause before indexing. */
@@ -64,6 +66,7 @@ export function createApp({
   secret,
   settingsEnv = {} as Config['env'],
   importAllowPrivate = false,
+  browserExtension = false,
   backups: backupOptions,
   embedder,
   semanticQuietMs,
@@ -107,8 +110,12 @@ export function createApp({
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
-      frameAncestors: ["'none'"],
+      // Extension pages get a random origin per install (moz-extension://<uuid>), so the
+      // sidebar extension can only be allowed by scheme.
+      frameAncestors: browserExtension ? ['moz-extension:', 'chrome-extension:'] : ["'none'"],
     },
+    // Superseded by frame-ancestors, but browsers that still honour it would block the sidebar.
+    xFrameOptions: browserExtension ? false : 'SAMEORIGIN',
   });
   // Attachment downloads set their own, stricter sandbox policy.
   app.use('*', (c, next) => (c.req.path.startsWith('/api/attachments/') ? next() : headers(c, next)));

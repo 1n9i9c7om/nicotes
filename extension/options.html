@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nicotes options</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="options">
+    <form>
+      <label for="address">Nicotes address</label>
+      <input id="address" name="address" type="text" inputmode="url" placeholder="https://notes.example.com" autocomplete="url" spellcheck="false" required />
+      <button type="submit">Save</button>
+      <p class="status" role="status"></p>
+    </form>
+    <p class="hint">
+      The sidebar shows Nicotes from this address; the extension needs access to that site to keep
+      you signed in. The server must allow the extension: set
+      <code>NICOTES_BROWSER_EXTENSION=true</code> and restart it.
+    </p>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

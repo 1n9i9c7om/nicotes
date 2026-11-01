@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Notebook, Page, PageSummary } from '@nicotes/shared';
-import { createApp } from '../src/app.js';
+import { createApp, type AppOptions } from '../src/app.js';
 import { openDb } from '../src/db/index.js';
 import { dataDir, migrationsFolder, setup } from './helpers.js';
 
@@ -35,6 +35,19 @@ describe('auth', () => {
       body: 'username=evil&password=evil-pass',
     });
     expect(res.status).toBe(415);
+  });
+
+  it('may only be framed by the sidebar extension when allowed', async () => {
+    const policy = async (options: Partial<AppOptions>) => {
+      const app = createApp({ db: openDb(':memory:', migrationsFolder), secureCookies: false, dataDir, ...options });
+      const res = await app.request('/api/auth/status');
+      return { csp: res.headers.get('content-security-policy'), xfo: res.headers.get('x-frame-options') };
+    };
+    expect(await policy({})).toMatchObject({ csp: expect.stringContaining("frame-ancestors 'none'"), xfo: 'SAMEORIGIN' });
+    expect(await policy({ browserExtension: true })).toMatchObject({
+      csp: expect.stringContaining('frame-ancestors moz-extension: chrome-extension:'),
+      xfo: null,
+    });
   });
 });
 
