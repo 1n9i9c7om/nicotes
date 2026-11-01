@@ -124,7 +124,8 @@ own sign-in.
    take `extension/` from the repository.
 3. Install it:
    - **Firefox:** release Firefox only installs signed extensions. Open the release's signed
-     `.xpi` in Firefox. Without one, sign the zip yourself on
+     `.xpi` in Firefox; it then updates itself from GitLab Pages (see below). Without one,
+     sign the zip yourself on
      [addons.mozilla.org](https://addons.mozilla.org/developers/) as "On your own" (unlisted;
      automatic and free). To try it without signing, open `about:debugging` → This Firefox →
      "Load Temporary Add-on…" and pick its `manifest.json` (it is removed when Firefox
@@ -251,3 +252,9 @@ then:
   [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
   masked), also has Mozilla sign the extension as "On your own" and adds the signed `.xpi`,
   which release Firefox installs. Mozilla signs each version only once.
+- with those keys, also publishes the signed `.xpi` and an update manifest (`updates.json`)
+  on the project's GitLab Pages. The packed extension's `update_url` points there, so an
+  installed copy updates itself (Firefox checks about once a day). Firefox checks without
+  signing in, so set **Settings → General → Visibility → Pages** to "Everyone"; the
+  repository itself can stay private. Pages must be enabled on the GitLab instance; to host
+  `updates.json` somewhere else, set the CI/CD variable `EXTENSION_UPDATE_URL` instead.

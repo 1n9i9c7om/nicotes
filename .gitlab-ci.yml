@@ -10,7 +10,8 @@
 # v1.2.3 uploads it to the package registry (generic package "nicotes-extension", version
 # 1.2.3) and creates the GitLab release with the CHANGELOG.md notes and the package linked.
 # With the CI/CD variables AMO_JWT_ISSUER and AMO_JWT_SECRET (addons.mozilla.org API key),
-# the tag also gets a Firefox-signed .xpi.
+# the tag also gets a Firefox-signed .xpi, published on GitLab Pages together with the update
+# manifest (updates.json) that installed copies check for new versions.
 #
 # Workflow: features branch off develop and merge back into develop; a release merges develop
 # into main and is tagged vX.Y.Z (see README, "Releases").
@@ -117,7 +118,8 @@ build:release:
 # ---------- Browser extension ----------
 
 # Every pipeline: zip extension/ (without tests), checking that its manifest has the version
-# of package.json and, on a tag, the tag's version.
+# of package.json and, on a tag, the tag's version. The packed manifest gets Firefox's
+# update_url: EXTENSION_UPDATE_URL if set, else updates.json on this project's GitLab Pages.
 extension:build:
   stage: build
   image: node:24-alpine
@@ -140,13 +142,22 @@ extension:build:
         echo "extension/manifest.json has version $VERSION, but the tag is $CI_COMMIT_TAG."
         exit 1
       fi
-    - mkdir -p dist
-    - cd extension && zip -r -X "../dist/$EXTENSION_PACKAGE-$VERSION.zip" . -x '*.test.js' && cd ..
+    - mkdir -p dist build && cp -r extension build/extension && rm build/extension/*.test.js
+    - UPDATE_URL="${EXTENSION_UPDATE_URL:-${CI_PAGES_URL:+$CI_PAGES_URL/updates.json}}"
+    - |
+      if [ -n "$UPDATE_URL" ]; then
+        node scripts/extension-update-url.mjs build/extension/manifest.json "$UPDATE_URL"
+        echo "Firefox update_url: $UPDATE_URL"
+      else
+        echo "No GitLab Pages and no EXTENSION_UPDATE_URL: the extension gets no update_url."
+      fi
+    - cd build/extension && zip -r -X "../../dist/$EXTENSION_PACKAGE-$VERSION.zip" . && cd ../..
     - echo "EXTENSION_VERSION=$VERSION" > extension.env
   artifacts:
     name: $EXTENSION_PACKAGE-$CI_COMMIT_REF_SLUG
     paths:
       - dist/
+      - build/extension/
     expire_in: 30 days
     reports:
       dotenv: extension.env
@@ -177,8 +188,8 @@ extension:sign-firefox:
   script:
     - apk add --no-cache curl >/dev/null
     - >
-      npx --yes web-ext@8 sign --channel unlisted --source-dir extension --artifacts-dir signed
-      --ignore-files '*.test.js' --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
+      npx --yes web-ext@8 sign --channel unlisted --source-dir build/extension --artifacts-dir signed
+      --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
       --approval-timeout 1800000
     - XPI="$(ls signed/*.xpi | head -n 1)"
     - >
@@ -188,6 +199,32 @@ extension:sign-firefox:
     paths:
       - signed/*.xpi
     expire_in: 30 days
+
+# Tags, with AMO keys: publish the signed .xpi and updates.json on GitLab Pages, where Firefox
+# looks for updates (the update_url in the signed manifest). Pages must be visible to everyone
+# (Settings → General → Visibility → Pages), also for a private project, because Firefox
+# checks without signing in. Each deployment replaces the site, so it holds the newest version.
+pages:
+  stage: release
+  image: node:24-alpine
+  interruptible: false
+  needs: [extension:build, extension:sign-firefox]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $AMO_JWT_ISSUER && $AMO_JWT_SECRET
+  script:
+    - |
+      if [ -z "${CI_PAGES_URL:-}" ]; then
+        echo "GitLab Pages is not enabled on this instance; nothing to publish."
+        exit 1
+      fi
+    - mkdir -p public
+    - XPI="$EXTENSION_PACKAGE-$EXTENSION_VERSION.xpi"
+    - cp "$(ls signed/*.xpi | head -n 1)" "public/$XPI"
+    - node scripts/extension-updates.mjs build/extension/manifest.json "public/$XPI" "$CI_PAGES_URL/$XPI" > public/updates.json
+    - cat public/updates.json
+  artifacts:
+    paths:
+      - public
 
 # Tags: once the image is pushed, create the release with the CHANGELOG.md notes and the
 # extension packages linked.
