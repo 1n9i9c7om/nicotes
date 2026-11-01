@@ -114,9 +114,11 @@ differs from it, branch pipelines warn and a tag fails: bump the extension's ver
 - with the CI/CD variables `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` (an
   [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
   masked and protected, with `v*` tags protected so they get them), has Mozilla sign the
-  extension as "On your own" and uploads the signed `.xpi`, which release Firefox installs.
-  Mozilla signs each version only once; an extension version that is already signed is
-  taken from the package registry instead;
+  extension as "On your own" and uploads the signed `.xpi`, which release Firefox installs
+  (job `extension:firefox-xpi`). Mozilla signs each version only once, so only a new
+  extension version is sent there: when `extension/` did not change (same version as an
+  earlier release), the job takes that release's `.xpi` from the package registry and does
+  not contact Mozilla;
 - creates the GitLab release `Nicotes 1.2.3` once the image is pushed, with that version's
   `CHANGELOG.md` section as its notes and the extension linked;
 - publishes the landing page (`site/`, with the logo and screenshots from `docs/`) on the

@@ -214,10 +214,11 @@ extension:upload:
           --upload-file "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "$ZIP_URL"
       fi
 
-# Tags, with AMO keys: have addons.mozilla.org sign the extension as unlisted ("On your own")
-# and upload the signed .xpi. A version can be signed only once, so a version an earlier
-# release signed is taken from the package registry instead.
-extension:sign-firefox:
+# Tags, with AMO keys: the Firefox-signed .xpi of the extension's version. Only a new
+# extension version is sent to addons.mozilla.org (signed as unlisted, "On your own"; each
+# version can be signed once) and uploaded; a version that an earlier release signed, i.e.
+# an unchanged extension, is taken from the package registry without contacting Mozilla.
+extension:firefox-xpi:
   stage: package
   image: node:24-alpine
   needs: [extension:build]
@@ -230,9 +231,11 @@ extension:sign-firefox:
     - mkdir -p signed
     - |
       if curl -sf --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "signed/$XPI_NAME" "$XPI_URL"; then
-        echo "Extension $EXTENSION_VERSION is already signed; using the .xpi from the package registry."
+        echo "Extension $EXTENSION_VERSION was signed for an earlier release and is unchanged:"
+        echo "using its .xpi from the package registry. Nothing is sent to addons.mozilla.org."
       else
         rm -f "signed/$XPI_NAME"
+        echo "Extension $EXTENSION_VERSION is new: asking addons.mozilla.org to sign it (takes a few minutes)."
         npx --yes web-ext@8 sign --channel unlisted --source-dir build/extension --artifacts-dir signed \
           --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" --approval-timeout 1800000
         curl --fail-with-body --header "JOB-TOKEN: $CI_JOB_TOKEN" \
@@ -246,7 +249,7 @@ extension:sign-firefox:
 # Tags (and manual runs on branches): publish the landing page (site/, see
 # scripts/build-site.sh) on GitLab Pages, with the signed .xpi of the extension's version and
 # updates.json, where Firefox looks for updates (the update_url in the signed manifest). The
-# .xpi comes from extension:sign-firefox or, if an earlier release signed it, the package
+# .xpi comes from extension:firefox-xpi or, if an earlier release signed it, the package
 # registry. If this extension version isn't signed (no AMO keys, or an unreleased version on
 # a branch), the extension files already on Pages are kept, so installed copies are never
 # offered an unsigned version. Pages must be visible to everyone (Settings → General →
@@ -257,7 +260,7 @@ pages:
   interruptible: false
   needs:
     - job: extension:build
-    - job: extension:sign-firefox
+    - job: extension:firefox-xpi
       optional: true
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
@@ -318,7 +321,7 @@ release:
     - job: extension:build
       artifacts: true
     - job: extension:upload
-    - job: extension:sign-firefox
+    - job: extension:firefox-xpi
       optional: true
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
