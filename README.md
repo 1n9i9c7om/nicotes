@@ -256,5 +256,15 @@ then:
   on the project's GitLab Pages. The packed extension's `update_url` points there, so an
   installed copy updates itself (Firefox checks about once a day). Firefox checks without
   signing in, so set **Settings → General → Visibility → Pages** to "Everyone"; the
-  repository itself can stay private. Pages must be enabled on the GitLab instance; to host
-  `updates.json` somewhere else, set the CI/CD variable `EXTENSION_UPDATE_URL` instead.
+  repository itself can stay private. Pages must be enabled on the GitLab instance and
+  served over HTTPS (Firefox ignores `http://` update URLs). If the project's Pages address
+  isn't HTTPS, give the Pages site a custom domain with HTTPS (Settings → Pages → Domains)
+  and set the CI/CD variable `EXTENSION_UPDATE_URL` to `https://<that domain>/updates.json`.
+  Without an HTTPS address, branch builds pack the extension without `update_url` (with a
+  warning) and a tag that would be signed fails, since a version can only be signed once.
+
+To check Pages before a release, run the manual `pages` job in a branch pipeline (e.g. on
+`develop`). It publishes a preview with the unsigned zip and that branch's version, so
+installed copies don't update to it, and prints the address of `updates.json`. That
+address must open in a private browser window, without signing in. The next release
+replaces the preview.

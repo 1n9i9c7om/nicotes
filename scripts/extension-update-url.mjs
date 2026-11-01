@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const [file, url] = process.argv.slice(2);
 if (!file || !url?.startsWith('https://')) {
+  console.error(`Firefox needs an https:// update URL, got ${JSON.stringify(url)}.`);
   console.error('Usage: node scripts/extension-update-url.mjs <manifest.json> <https:// update URL>');
   process.exit(2);
 }
