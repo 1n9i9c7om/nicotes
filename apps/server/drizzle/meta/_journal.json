@@ -85,6 +85,13 @@
       "when": 1793555794864,
       "tag": "0011_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793556837221,
+      "tag": "0012_shares",
+      "breakpoints": true
     }
   ]
 }

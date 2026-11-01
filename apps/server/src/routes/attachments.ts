@@ -56,7 +56,6 @@ export async function storeAttachment(
 }
 
 export function attachmentRoutes(db: Db, dataDir: string) {
-  const dir = join(dataDir, 'attachments');
 
   return new Hono<AppEnv>()
     .post(
@@ -99,20 +98,24 @@ export function attachmentRoutes(db: Db, dataDir: string) {
         .where(and(eq(attachments.id, c.req.param('id')), eq(attachments.userId, c.var.user.id)))
         .get();
       if (!row) throw notFound('Attachment');
-
-      const inline = INLINE_TYPES.has(row.mime);
-      const disposition = `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(row.filename)}`;
-      const stream = Readable.toWeb(createReadStream(join(dir, row.id))) as ReadableStream;
-      return new Response(stream, {
-        headers: {
-          'Content-Type': row.mime,
-          'Content-Length': String(row.size),
-          'Content-Disposition': disposition,
-          'Cache-Control': 'private, max-age=31536000, immutable',
-          'X-Content-Type-Options': 'nosniff',
-          // Uploaded files never run scripts, even when opened directly (e.g. SVG, HTML).
-          'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
-        },
-      });
+      return attachmentResponse(dataDir, row, 'private, max-age=31536000, immutable');
     });
+}
+
+/** The file itself, displayed inline where that is safe, never able to run scripts. */
+export function attachmentResponse(dataDir: string, row: typeof attachments.$inferSelect, cacheControl: string): Response {
+  const inline = INLINE_TYPES.has(row.mime);
+  const disposition = `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(row.filename)}`;
+  const stream = Readable.toWeb(createReadStream(join(dataDir, 'attachments', row.id))) as ReadableStream;
+  return new Response(stream, {
+    headers: {
+      'Content-Type': row.mime,
+      'Content-Length': String(row.size),
+      'Content-Disposition': disposition,
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+      // Uploaded files never run scripts, even when opened directly (e.g. SVG, HTML).
+      'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+    },
+  });
 }

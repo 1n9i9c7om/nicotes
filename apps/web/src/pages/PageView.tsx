@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   FolderInput,
+  Globe,
   History,
   LayoutTemplate,
   Link2,
@@ -40,9 +41,11 @@ import { HistoryDialog } from '../components/HistoryDialog';
 import { PageLayout } from '../components/layouts/PageLayout';
 import { Menu } from '../components/Menu';
 import { MoveDialog } from '../components/MoveDialog';
+import { ShareDialog } from '../components/ShareDialog';
 import { TagEditor } from '../components/TagEditor';
 import { ApiError, uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
+import { linksShowing, useShares } from '../lib/shares';
 import { useLocalState } from '../lib/storage';
 import {
   useApplyChanges,
@@ -108,6 +111,7 @@ function PageEditor({ page }: { page: Page }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useLocalState('nicotes.assistantOpen', false);
   // Purely visual: source citations ("gooey 2, 3, 7.") are hidden, the text keeps them.
   const [hideSources, setHideSources] = useLocalState('nicotes.hideSources', false);
@@ -133,6 +137,8 @@ function PageEditor({ page }: { page: Page }) {
   );
   const notebook = notebooks.data?.find((n) => n.id === notebookId);
   const trail = ancestors(tree, page.id);
+  const shares = useShares();
+  const sharedBy = linksShowing(shares.data ?? [], { id: page.id, notebookId }, trail.map((p) => p.id));
 
   const linkHere = (mention: OutgoingMention) => {
     const next = linkFirstMention(content, mention.title, mention.target);
@@ -214,12 +220,22 @@ function PageEditor({ page }: { page: Page }) {
         </nav>
         <div className="page-bar-actions">
           <SaveIndicator status={status} />
+          {sharedBy.length > 0 && (
+            <button
+              className="btn btn-sm shared-toggle"
+              title="Anyone with a link can read this page"
+              onClick={() => setSharing(true)}
+            >
+              <Globe size={15} /> <span>Shared</span>
+            </button>
+          )}
           <Menu
             label="Page actions"
             items={[
               { label: 'Version history', icon: <History size={15} />, onSelect: () => setHistoryOpen(true) },
               { label: 'Show in graph', icon: <Waypoints size={15} />, onSelect: () => navigate(`/graph?focus=${page.id}&depth=2`) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
+              { label: 'Share…', icon: <Globe size={15} />, onSelect: () => setSharing(true) },
               {
                 label: 'Summarize with AI',
                 icon: <Sparkles size={15} />,
@@ -367,6 +383,18 @@ function PageEditor({ page }: { page: Page }) {
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
+      {sharing && (
+        <ShareDialog
+          kind="page"
+          targetId={page.id}
+          title={displayTitle(title)}
+          hasChildren={(tree.children.get(page.id)?.length ?? 0) > 0}
+          inherited={sharedBy
+            .filter((s) => s.targetId !== page.id)
+            .map((share) => ({ share, title: share.kind === 'notebook' ? (notebook?.title ?? '') : displayTitle(tree.byId.get(share.targetId)?.title) }))}
+          onClose={() => setSharing(false)}
+        />
+      )}
       {historyOpen && (
         <HistoryDialog
           pageId={page.id}

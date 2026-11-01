@@ -20,6 +20,7 @@ import { formatCost } from '../components/JobProgress';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
 import { SettingsSecurity } from '../components/SettingsSecurity';
+import { SettingsShares } from '../components/SettingsShares';
 import { SettingsTokens } from '../components/SettingsTokens';
 import { SettingsCalendar } from '../components/SettingsCalendar';
 import {
@@ -552,6 +553,8 @@ export function SettingsPage() {
       </section>
 
       <SettingsBackups />
+
+      <SettingsShares />
 
       <SettingsTokens />
 

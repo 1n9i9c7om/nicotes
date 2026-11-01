@@ -115,10 +115,10 @@ export const Wikilink = Node.create<WikilinkOptions>({
       const render = () => {
         const { target, label } = node.attrs as WikilinkAttrs;
         const resolved = bridge?.resolve(target) ?? null;
-        dom.className = resolved || !bridge ? 'wikilink' : 'wikilink unresolved';
+        dom.className = resolved || !bridge ? 'wikilink' : bridge.readOnly ? 'wikilink unshared' : 'wikilink unresolved';
         dom.dataset.wikilink = target;
         dom.textContent = label || target;
-        dom.title = resolved ? resolved.path : bridge ? `Create page “${target}”` : target;
+        dom.title = resolved ? resolved.path : !bridge ? target : bridge.readOnly ? '' : `Create page “${target}”`;
       };
       render();
       const unsubscribe = bridge?.subscribe(render);

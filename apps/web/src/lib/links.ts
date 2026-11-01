@@ -37,6 +37,8 @@ export interface LinkBridge {
   suggest: (query: string) => LinkSuggestion[];
   open: (target: string) => void;
   subscribe: (listener: () => void) => () => void;
+  /** Shared pages: links to pages that are not shared are plain text, never "create page". */
+  readOnly?: boolean;
 }
 
 /** Opens a link target: navigates to the page, or creates it (in the matching place) first. */

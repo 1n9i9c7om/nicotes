@@ -32,6 +32,7 @@ import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
 import { securityRoutes } from './routes/security.js';
+import { publicShareRoutes, shareRoutes } from './routes/shares.js';
 import { taskRoutes } from './routes/tasks.js';
 import { tagRoutes } from './routes/tags.js';
 import { trashRoutes } from './routes/trash.js';
@@ -122,8 +123,9 @@ export function createApp({
     // Superseded by frame-ancestors, but browsers that still honour it would block the sidebar.
     xFrameOptions: browserExtension ? false : 'SAMEORIGIN',
   });
-  // Attachment downloads set their own, stricter sandbox policy.
-  app.use('*', (c, next) => (c.req.path.startsWith('/api/attachments/') ? next() : headers(c, next)));
+  // Attachment downloads set their own, stricter sandbox policy (also through a shared link).
+  const download = /^\/api\/(attachments|public\/shares\/[^/]+\/attachments)\//;
+  app.use('*', (c, next) => (download.test(c.req.path) ? next() : headers(c, next)));
 
   // CSRF defence: state-changing API calls must be JSON (or bodiless). Cross-site forms
   // cannot send application/json without a CORS preflight, which this server never allows.
@@ -148,12 +150,14 @@ export function createApp({
   app.get('/api/health', (c) => c.json({ ok: true }));
   // Calendar apps fetch without a session: the token in the address signs them in.
   app.route('/api/calendar', calendarRoutes(db, settings));
+  // Read-only links: the token in the address is the key, no account needed.
+  app.route('/api/public/shares', publicShareRoutes(db, dataDir));
   app.route('/api/auth', authRoutes(db, secureCookies, secrets));
   for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
-  for (const area of ['settings', 'backups', 'tokens', 'security']) {
+  for (const area of ['settings', 'backups', 'tokens', 'security', 'shares']) {
     app.use(`/api/${area}`, sessionOnly);
     app.use(`/api/${area}/*`, sessionOnly);
   }
@@ -175,6 +179,7 @@ export function createApp({
   app.route('/api/backups', backupRoutes(backups));
   app.route('/api/tokens', tokenRoutes(db));
   app.route('/api/security', securityRoutes(db, secrets));
+  app.route('/api/shares', shareRoutes(db, secrets));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));
@@ -207,6 +212,8 @@ export function createApp({
     // SPA fallback: client-side routes all render index.html.
     app.get('*', (c) => {
       c.header('Cache-Control', 'no-cache');
+      // Shared links are for the people they are sent to, not for search engines.
+      if (c.req.path.startsWith('/s/')) c.header('X-Robots-Tag', 'noindex, nofollow');
       return c.html(indexHtml);
     });
   }
