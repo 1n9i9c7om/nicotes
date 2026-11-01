@@ -298,6 +298,25 @@ Database schema changes: edit `apps/server/src/db/schema.ts`, then
   something in `extension/` changes; releases without changes there reuse the extension
   that is already signed.
 
+### Pull requests from GitHub
+
+[GitHub](https://github.com/1n9i9c7om/nicotes) gets everything from git.nico.software through
+a push mirror, which only goes one way and overwrites GitHub's branches with GitLab's. So
+rulesets on GitHub block every change to branches and tags except the mirror's own pushes
+(its deploy key), and pull requests can't be merged there. Issues and private
+vulnerability reports are not affected. To take in pull request 123:
+
+```bash
+git fetch https://github.com/1n9i9c7om/nicotes.git pull/123/head:pr-123
+git switch develop
+git merge --no-ff pr-123
+git push origin develop
+```
+
+A few minutes later the mirror brings the merge to GitHub, and GitHub marks the pull
+request as merged. That only works while the pull request's commits stay as they are, so
+merge it as above instead of squashing or rebasing it.
+
 GitLab CI (`.gitlab-ci.yml`) builds the Docker image on a runner with the host's Docker
 socket and pushes it to the project's container registry:
 
