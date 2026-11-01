@@ -47,23 +47,3 @@ export async function createPasskey(name: string): Promise<Passkey> {
   }
   return api.post<Passkey>('/security/passkeys', { name, flow, response });
 }
-
-/** A starting name for a new passkey, from the device it is made on. */
-export function deviceName(): string {
-  const ua = navigator.userAgent;
-  const device = /iPhone/.test(ua)
-    ? 'iPhone'
-    : /iPad/.test(ua)
-      ? 'iPad'
-      : /Android/.test(ua)
-        ? 'Android'
-        : /Mac OS X/.test(ua)
-          ? 'Mac'
-          : /Windows/.test(ua)
-            ? 'Windows'
-            : /Linux/.test(ua)
-              ? 'Linux'
-              : 'This device';
-  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
-  return browser ? `${device} · ${browser}` : device;
-}

@@ -539,3 +539,23 @@
     align-items: center;
   }
 }
+
+/* ---------- Reminders ---------- */
+
+.reminder-digest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.setting .reminder-digest input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 5px;
+}
+
+.setting .reminder-digest input[type='time'] {
+  width: auto;
+}

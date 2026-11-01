@@ -14,9 +14,9 @@ curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
 
 - **Read only** tokens may use `GET` requests only; **Read and write** tokens may also
   create and change things. Calendar tokens only open the calendar feed (below).
-- No token can open Settings, the backups, sign-in security, shared links or the token
-  list (`/api/settings`, `/api/backups`, `/api/security`, `/api/shares`, `/api/tokens`):
-  those need a signed-in browser. Two-step sign-in does not apply to tokens; a token is a credential of
+- No token can open Settings, the backups, sign-in security, shared links, reminders or the
+  token list (`/api/settings`, `/api/backups`, `/api/security`, `/api/shares`,
+  `/api/reminders`, `/api/tokens`): those need a signed-in browser. Two-step sign-in does not apply to tokens; a token is a credential of
   its own, so keep it as safe as a password.
 - A wrong token is answered with `401`; after 20 wrong tokens from one address within 15
   minutes, with `429` for a while.

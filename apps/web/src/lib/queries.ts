@@ -69,6 +69,7 @@ export const keys = {
   graph: ['graph'] as const,
   daily: (from: string, to: string) => ['daily', from, to] as const,
   tasks: ['tasks'] as const,
+  reminders: ['reminders'] as const,
   semantic: ['semantic-status'] as const,
   related: (id: string) => ['related', id] as const,
   summary: (id: string) => ['summary', id] as const,
@@ -366,6 +367,8 @@ export function useUpdateSettings() {
       }
       // Your own server's models join (or leave) the model lists.
       if (input.localAiUrl !== undefined || input.localAiKey !== undefined) qc.invalidateQueries({ queryKey: keys.models });
+      // Another bot: its name and the (now disconnected) chat.
+      if (input.telegramBotToken !== undefined) qc.invalidateQueries({ queryKey: keys.reminders });
     },
   });
 }

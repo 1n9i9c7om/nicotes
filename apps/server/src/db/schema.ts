@@ -53,6 +53,40 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** Browsers and installed apps that receive reminders as push notifications. */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The push service's address for this browser; it identifies the subscription. */
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** "Android · Chrome", to tell devices apart. */
+    name: text('name').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastSentAt: integer('last_sent_at'),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId)],
+);
+
+/** Reminders already sent, so each goes out once; old entries are pruned. */
+export const remindersSent = sqliteTable(
+  'reminders_sent',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** "digest:2026-11-04" or "task:<hash of page, text and time>". */
+    key: text('key').notNull(),
+    sentAt: integer('sent_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
 /** Read-only links to a page (optionally with its subpages) or a whole notebook. */
 export const shares = sqliteTable(
   'shares',

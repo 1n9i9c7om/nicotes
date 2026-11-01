@@ -71,6 +71,7 @@ describe('calendar feed', () => {
       text: 'Ä'.repeat(60),
       done: false,
       due: '2026-12-31',
+      remind: null,
       heading: null,
       depth: 0,
       pageId: 'p1',

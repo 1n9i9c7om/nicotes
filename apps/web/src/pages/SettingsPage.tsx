@@ -19,6 +19,7 @@ import {
 import { formatCost } from '../components/JobProgress';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
+import { SettingsReminders } from '../components/SettingsReminders';
 import { SettingsSecurity } from '../components/SettingsSecurity';
 import { SettingsShares } from '../components/SettingsShares';
 import { SettingsTokens } from '../components/SettingsTokens';
@@ -221,7 +222,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, semantic } = settings.data;
+  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, reminders, semantic } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -536,6 +537,23 @@ export function SettingsPage() {
         />
         <SettingsCalendar />
       </section>
+
+      <SettingsReminders
+        reminders={reminders}
+        save={save}
+        telegramToken={
+          <SettingField
+            key={`telegram-${reminders.telegramTokenSource}`}
+            label="Bot token"
+            secret
+            source={reminders.telegramTokenSource}
+            current={null}
+            placeholder="123456789:AA…"
+            pending={update.isPending}
+            onSave={(v) => save({ telegramBotToken: v })}
+          />
+        }
+      />
 
       <section className="settings-card">
         <h2>

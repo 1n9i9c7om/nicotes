@@ -112,6 +112,14 @@ export interface Settings {
     excludeTags: string[];
     excludeTagsSource: SettingSource;
   };
+  reminders: {
+    /** "HH:MM": a summary of the day's tasks at that time; null when off. */
+    digestTime: string | null;
+    /** IANA time zone reminder times are in, e.g. "Europe/Berlin". */
+    timeZone: string | null;
+    telegramTokenSet: boolean;
+    telegramTokenSource: SettingSource;
+  };
   semantic: {
     /** Opt-in: indexing sends all note text to OpenRouter for embeddings. */
     enabled: boolean;
@@ -122,6 +130,15 @@ export interface Settings {
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
+
+function isTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const optionalUrl = z
   .string()
   .trim()
@@ -164,6 +181,18 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
+  reminderDigestTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected a time like 08:00')
+    .nullable()
+    .optional(),
+  reminderTimeZone: z
+    .string()
+    .max(64)
+    .refine(isTimeZone, 'Unknown time zone')
+    .nullable()
+    .optional(),
+  telegramBotToken: optionalSecret,
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

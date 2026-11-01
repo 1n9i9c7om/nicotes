@@ -45,5 +45,17 @@ export function setup(options: Partial<AppOptions> = {}) {
   /** A request without the session cookie, e.g. with an API token. */
   const request = (path: string, init?: RequestInit) => app.request(path, init);
 
-  return { db, jobs: app.jobs, semantic: app.semantic, backups: app.backups, call, upload, raw, rawPost, request, logout: () => (cookie = '') };
+  return {
+    db,
+    jobs: app.jobs,
+    semantic: app.semantic,
+    backups: app.backups,
+    reminders: app.reminders,
+    call,
+    upload,
+    raw,
+    rawPost,
+    request,
+    logout: () => (cookie = ''),
+  };
 }

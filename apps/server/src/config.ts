@@ -60,6 +60,7 @@ export const config = {
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
     embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,
     semanticIndex: process.env.NICOTES_SEMANTIC_INDEX?.trim() || undefined,
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
   },
 };
 

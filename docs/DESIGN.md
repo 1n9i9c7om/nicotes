@@ -100,10 +100,10 @@ and tsup respectively).
 - **API tokens** (`tokens.ts`, table `api_tokens`): `nct_` + 32 random bytes, shown once,
   stored as SHA-256 with their last four characters for the list. Sent as
   `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
-  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security`, `/api/shares` and
-  `/api/tokens` only accept the session (403 for a token), so a token can neither read
-  stored AI keys nor the key file, change how the account signs in, publish notes, nor make
-  more tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security`, `/api/shares`,
+  `/api/reminders` and `/api/tokens` only accept the session (403 for a token), so a token
+  can neither read stored AI keys nor the key file, change how the account signs in,
+  publish notes, nor make more tokens. Token requests skip the CSRF content-type rule (browsers never send the
   header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
   `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
 - **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
@@ -113,6 +113,19 @@ and tsup respectively).
   plain text, DESCRIPTION/URL link to the page (origin from `X-Forwarded-Proto/Host` behind
   a proxy), CATEGORIES the notebook, UID a hash of page, text and date. Text is escaped and
   lines folded at 75 octets (RFC 5545); unknown tokens get 404 and are rate-limited per IP.
+- **Reminders** (`reminders.ts`, `routes/reminders.ts`; tables `push_subscriptions`,
+  `reminders_sent`): tasks may carry `⏰ HH:MM` (on the due date) or `⏰ YYYY-MM-DD HH:MM`,
+  parsed into `remind` (local time). A per-account time zone (saved from the browser) and an
+  optional morning-summary time live in settings. `ReminderService` ticks once a minute:
+  open tasks (re-parsed only when pages changed) whose reminder time has come, at most two
+  hours late, and the summary of tasks due today plus overdue ones. Each goes out once (key
+  in `reminders_sent`, pruned after three days); if every target fails it is retried up to
+  five times. Channels: Web Push via `web-push` with a VAPID key pair per account (private
+  key encrypted; subscriptions answering 404/410 are dropped; the generated service worker
+  loads `push-sw.js` for `push` and `notificationclick`), and Telegram through the user's
+  own bot (token in settings or `TELEGRAM_BOT_TOKEN`). Linking a chat needs no public
+  address: a one-time code in a `t.me/<bot>?start=<code>` link, read by long polling
+  `getUpdates` only while a code waits; a new token unlinks the chat.
 - **Shared links** (`routes/shares.ts`, table `shares`): a read-only link to a page (with
   or without its subtree) or a notebook. The 18-byte token is looked up by SHA-256 and also
   stored encrypted (SecretBox), so the owner can copy the link again. `/api/shares` is
@@ -461,6 +474,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
 | `LOCAL_AI_URL` / `LOCAL_AI_KEY` | — | Your own OpenAI-compatible model server (address ending in `/v1`, optional key) for `local:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
+| `TELEGRAM_BOT_TOKEN` | — | Bot for task reminders in Telegram (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
@@ -510,6 +524,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     images into the registry.
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
-    links; next: task reminders (web push, Telegram), Obsidian vault import, search inside
+    links, ✅ task reminders (web push, Telegram); next: Obsidian vault import, search inside
     images and PDFs, voice notes, canvas pages with drawing.
 12. **Later** — multi-user.
