@@ -23,6 +23,7 @@ import type { Db } from './db/index.js';
 import { importRoutes } from './import/routes.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
+import { calendarRoutes } from './routes/calendar.js';
 import { dailyRoutes } from './routes/daily.js';
 import { exportRoutes } from './routes/export.js';
 import { graphRoutes } from './routes/graph.js';
@@ -143,6 +144,8 @@ export function createApp({
   const auth = requireAuth(db, secureCookies, tokenSignIn(db));
   const sessionOnly = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
+  // Calendar apps fetch without a session: the token in the address signs them in.
+  app.route('/api/calendar', calendarRoutes(db, settings));
   app.route('/api/auth', authRoutes(db, secureCookies));
   for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system']) {
     app.use(`/api/${area}`, auth);

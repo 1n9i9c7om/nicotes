@@ -139,3 +139,11 @@ export interface PageTask extends TaskItem {
   version: number;
   pageUpdatedAt: number;
 }
+
+/** [[target|label]] and [text](url) in task text. */
+export const TASK_INLINE_LINK = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]|\[([^\]\n]*)\]\([^)\n]*\)/g;
+/** Drops bold, strike-through and code markers. */
+export const stripTaskMarkup = (text: string) => text.replace(/\*\*|__|~~|`/g, '');
+/** Task text as plain text: links become their label, Markdown markers are dropped. */
+export const taskPlainText = (text: string) =>
+  stripTaskMarkup(text.replace(TASK_INLINE_LINK, (_m, target?: string, label?: string, linkText?: string) => (label ?? target ?? linkText ?? '').trim()));

@@ -107,7 +107,9 @@ the calendar). Any page tagged `#template` can be used for new pages and daily n
 Every `- [ ]` checkbox in any page shows up under **Tasks**, grouped by due date
 (`📅 2026-10-25` in the text, or pick a date in the list); ticking one off there updates its
 page, and new tasks go into today's journal note. Checklists of pages tagged `#recipe` stay
-out (Settings → Tasks). Below each page, **Connections** shows backlinks, **unlinked
+out (Settings → Tasks). Under Settings → Tasks → **Calendar subscription** you get a secret
+address for Google Calendar, Apple Calendar, Thunderbird and the like: open tasks with a due
+date show up there as all-day events. Below each page, **Connections** shows backlinks, **unlinked
 mentions** (pages that name each other without a link, linked with one click) and, with
 the semantic index, **related** pages.
 

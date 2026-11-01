@@ -3,11 +3,21 @@ import { z } from 'zod';
 /** Personal access tokens start with this, so they are easy to recognise (and to find in leaks). */
 export const API_TOKEN_PREFIX = 'nct_';
 
-/** "read" tokens may only use GET; "write" tokens may change notes too. */
-export const API_TOKEN_SCOPES = ['read', 'write'] as const;
+/**
+ * "read" tokens may only use GET; "write" tokens may change notes too; "calendar" tokens
+ * only open the calendar feed (their token is part of its address).
+ */
+export const API_TOKEN_SCOPES = ['read', 'write', 'calendar'] as const;
 export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
 
-export const API_TOKEN_SCOPE_LABELS: Record<ApiTokenScope, string> = { read: 'Read only', write: 'Read and write' };
+export const API_TOKEN_SCOPE_LABELS: Record<ApiTokenScope, string> = {
+  read: 'Read only',
+  write: 'Read and write',
+  calendar: 'Calendar feed',
+};
+
+/** The calendar feed of a calendar token, relative to the server: `/api/calendar/<token>.ics`. */
+export const calendarFeedPath = (token: string) => `/api/calendar/${token}.ics`;
 
 /** A token as listed in Settings: never the token itself, only its last characters. */
 export interface ApiToken {
