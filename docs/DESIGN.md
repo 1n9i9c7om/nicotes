@@ -150,6 +150,14 @@ and tsup respectively).
   address, plus an options page. It requests host access to that site when the address is
   saved: without it the frame is third-party to the extension page, so the `SameSite=Lax`
   session cookie is withheld (Chromium) and signing in does nothing.
+- **Extension updates** (Firefox, self-distributed): CI writes `update_url` into the packed
+  manifest (`$CI_PAGES_URL/updates.json` or `EXTENSION_UPDATE_URL`) before Mozilla signs it,
+  and the `pages` job publishes the signed `.xpi` with `updates.json`
+  (`scripts/extension-updates.mjs`: version, link, SHA-256, minimum Firefox under
+  `applications` — Firefox does not read `browser_specific_settings` there). Pages rather
+  than the package registry or release links, because Firefox fetches anonymously and the
+  project is private. The repository's manifest has no `update_url`, so unpacked copies
+  don't update. Lint the packed copy with `web-ext lint --self-hosted`.
 
 ### Smart Import
 
