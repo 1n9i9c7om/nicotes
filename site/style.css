@@ -295,15 +295,12 @@ kbd {
 }
 
 .section > .wrap > h2,
+/* As wide as the section around it, so short leads stay on one line. */
 .section-lead {
-  text-align: center;
-}
-
-.section-lead {
-  max-width: 640px;
   margin: 0 auto 48px;
   color: var(--text-muted);
   font-size: 1.08rem;
+  text-align: center;
   text-wrap: balance;
 }
 
