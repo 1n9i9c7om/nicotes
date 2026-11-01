@@ -94,7 +94,9 @@ and tsup respectively).
   API requests must be JSON (or bodiless); multipart uploads must carry
   `X-Requested-With: nicotes`. Neither is possible cross-site without a CORS preflight. On first start an account is created from
   `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD`, or — if those are unset — the UI
-  offers a one-time setup screen while no user exists.
+  offers a one-time setup screen while no user exists. The server refuses to start
+  rather than create that account with the example password `change-me` or one shorter
+  than 8 characters.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
   `409` so two tabs never silently overwrite each other.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new
@@ -399,7 +401,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 |---|---|---|
 | `NICOTES_PORT` | `3000` | HTTP port |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and attachments |
-| `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start |
+| `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start (not with the example password) |
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |

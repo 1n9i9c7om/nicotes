@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
-import { createUser, hashPassword, hasUsers, purgeExpiredSessions } from './auth.js';
+import { createUser, hashPassword, hasUsers, initialPasswordProblem, purgeExpiredSessions } from './auth.js';
 import { config } from './config.js';
 import { openDb } from './db/index.js';
 import { reindexAllLinks } from './links.js';
@@ -9,6 +9,13 @@ import { purgeTrash } from './routes/trash.js';
 const db = openDb(config.dbFile, config.migrationsFolder);
 
 if (!hasUsers(db) && config.adminUser && config.adminPassword) {
+  const problem = initialPasswordProblem(config.adminPassword);
+  if (problem) {
+    // Stop instead of falling back to the setup screen, which whoever reaches the server
+    // first could claim.
+    console.error(`Not creating the account "${config.adminUser}": ${problem}. Choose your own in .env and start Nicotes again.`);
+    process.exit(1);
+  }
   createUser(db, config.adminUser, await hashPassword(config.adminPassword));
   console.log(`Created account "${config.adminUser}" from NICOTES_ADMIN_USER`);
 }
