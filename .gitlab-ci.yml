@@ -264,7 +264,7 @@ pages:
       else
         echo "No signed extension in this release, so Pages only gets the landing page."
       fi
-    - echo "Landing page: $BASE/"
+    - echo "Landing page at $BASE/"
   artifacts:
     paths:
       - public
