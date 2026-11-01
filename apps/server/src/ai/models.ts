@@ -1,5 +1,5 @@
-import { ROUTEWAY_PREFIX, providerModelId, providerOf, type AiProvider, type ModelInfo } from '@nicotes/shared';
-import { LlmError } from './llm.js';
+import { LOCAL_PREFIX, ROUTEWAY_PREFIX, providerModelId, providerOf, type AiProvider, type ModelInfo } from '@nicotes/shared';
+import { LlmError, type ProviderKeys } from './llm.js';
 
 export type ModelKind = 'chat' | 'embedding';
 
@@ -24,15 +24,36 @@ interface RoutewayModel {
   capabilities?: { function_call?: boolean; reasoning?: boolean };
 }
 
-async function getJson<T>(url: string, service: string): Promise<T> {
+async function getJson<T>(url: string, service: string, key?: string | null): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetch(url, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (error) {
     throw new LlmError(`Cannot reach ${service}: ${(error as Error).message}`);
   }
   if (!res.ok) throw new LlmError(`${service} answered ${res.status}`);
   return (await res.json()) as T;
+}
+
+/**
+ * The models installed on your own server (OpenAI's `/models`), which says nothing about
+ * what a model does: names with "embed" count as embedding models, the rest as chat models.
+ */
+export async function localModels(local: NonNullable<ProviderKeys['local']>, kind: ModelKind): Promise<ModelInfo[]> {
+  const body = await getJson<{ data?: { id: string }[] }>(`${local.url}/models`, 'your model server', local.key);
+  return (body.data ?? [])
+    .filter((m) => /embed/i.test(m.id) === (kind === 'embedding'))
+    .map((m) => ({
+      id: `${LOCAL_PREFIX}${m.id}`,
+      name: m.id,
+      provider: 'local' as const,
+      promptPrice: 0,
+      completionPrice: kind === 'chat' ? 0 : null,
+      contextLength: null,
+      tools: false,
+      reasoning: false,
+      free: true,
+    }));
 }
 
 async function openRouterModels(kind: ModelKind): Promise<ModelInfo[]> {
@@ -78,28 +99,36 @@ async function routewayModels(): Promise<ModelInfo[]> {
 }
 
 const cache = new Map<string, { at: number; models: ModelInfo[] }>();
+/** Your own server's list changes whenever you pull a model, so it is kept shorter. */
+const LOCAL_CACHE_MS = 5 * 60 * 1000;
 
-async function cached(key: string, load: () => Promise<ModelInfo[]>, refresh: boolean): Promise<ModelInfo[]> {
+async function cached(key: string, load: () => Promise<ModelInfo[]>, refresh: boolean, maxAge = CACHE_MS): Promise<ModelInfo[]> {
   const hit = cache.get(key);
-  if (hit && !refresh && Date.now() - hit.at < CACHE_MS) return hit.models;
+  if (hit && !refresh && Date.now() - hit.at < maxAge) return hit.models;
   const models = await load();
   cache.set(key, { at: Date.now(), models });
   return models;
 }
 
 /**
- * The public model lists for the model pickers (cached for an hour): chat models of both
- * services, embedding models of OpenRouter. A service that cannot be reached is left out.
+ * The model lists for the model pickers: chat models of OpenRouter and Routeway, embedding
+ * models of OpenRouter (cached for an hour), plus your own server's when one is set up. A
+ * service that cannot be reached is left out.
  */
-export async function listModels(kind: ModelKind, refresh = false): Promise<{ models: ModelInfo[]; errors: string[] }> {
-  const sources: [string, () => Promise<ModelInfo[]>][] =
+export async function listModels(
+  kind: ModelKind,
+  refresh = false,
+  local: ProviderKeys['local'] = null,
+): Promise<{ models: ModelInfo[]; errors: string[] }> {
+  const sources: [string, () => Promise<ModelInfo[]>, number?][] =
     kind === 'chat'
       ? [
           ['openrouter:chat', () => openRouterModels('chat')],
           ['routeway:chat', routewayModels],
         ]
       : [['openrouter:embedding', () => openRouterModels('embedding')]];
-  const results = await Promise.allSettled(sources.map(([key, load]) => cached(key, load, refresh)));
+  if (local) sources.push([`local:${local.url}:${kind}`, () => localModels(local, kind), LOCAL_CACHE_MS]);
+  const results = await Promise.allSettled(sources.map(([key, load, maxAge]) => cached(key, load, refresh, maxAge)));
   const models = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const errors = results.flatMap((r) => (r.status === 'rejected' ? [(r.reason as Error).message] : []));
   return { models: models.sort((a, b) => a.name.localeCompare(b.name)), errors };

@@ -30,6 +30,8 @@ const KEYS = {
   openrouterApiKey: { key: 'openrouter.apiKey', secret: true },
   openrouterModel: { key: 'openrouter.model', secret: false },
   routewayApiKey: { key: 'routeway.apiKey', secret: true },
+  localAiUrl: { key: 'local.url', secret: false },
+  localAiKey: { key: 'local.apiKey', secret: true },
   crawl4aiUrl: { key: 'crawl4ai.url', secret: false },
   crawl4aiToken: { key: 'crawl4ai.token', secret: true },
   importModel: { key: 'ai.model.import', secret: false },
@@ -106,6 +108,8 @@ export class SettingsStore {
       apiKey: pick('openrouterApiKey'),
       model: pick('openrouterModel', DEFAULT_OPENROUTER_MODEL),
       routewayKey: pick('routewayApiKey'),
+      localUrl: pick('localAiUrl'),
+      localKey: pick('localAiKey'),
       url: pick('crawl4aiUrl'),
       token: pick('crawl4aiToken'),
       tasks: Object.fromEntries(AI_TASKS.map((task) => [task, pick(modelSetting(task))])) as Record<
@@ -133,6 +137,12 @@ export class SettingsStore {
         modelSource: r.model.source,
       },
       routeway: { apiKeySet: r.routewayKey.value !== null, apiKeySource: r.routewayKey.source },
+      local: {
+        url: r.localUrl.value,
+        urlSource: r.localUrl.source,
+        apiKeySet: r.localKey.value !== null,
+        apiKeySource: r.localKey.source,
+      },
       crawl4ai: {
         url: r.url.value,
         urlSource: r.url.source,
@@ -163,7 +173,11 @@ export class SettingsStore {
     const r = this.resolve(userId);
     return {
       openrouterApiKey: r.apiKey.value,
-      keys: { openrouter: r.apiKey.value, routeway: r.routewayKey.value },
+      keys: {
+        openrouter: r.apiKey.value,
+        routeway: r.routewayKey.value,
+        local: r.localUrl.value ? { url: r.localUrl.value.replace(/\/+$/, ''), key: r.localKey.value } : null,
+      },
       model: r.model.value!,
       models: Object.fromEntries(AI_TASKS.map((task) => [task, r.tasks[task].value ?? r.model.value!])) as Record<AiTask, string>,
       crawl4aiUrl: r.url.value?.replace(/\/+$/, '') ?? null,
@@ -264,6 +278,29 @@ export async function checkRouteway(apiKey: string | null): Promise<ConnectionCh
   }
 }
 
+/** Your own server: lists its models (OpenAI's `/models`), which also checks the key. */
+export async function checkLocal(local: ProviderKeys['local']): Promise<ConnectionCheck> {
+  if (!local) return { ok: false, message: 'No address configured' };
+  try {
+    const res = await fetch(`${local.url}/models`, {
+      headers: local.key ? { authorization: `Bearer ${local.key}` } : {},
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, message: 'Your model server rejected the key' };
+    if (res.status === 404 && !/\/v1$/.test(local.url)) {
+      return { ok: false, message: 'Not found: most servers need the address of their OpenAI API, ending in /v1' };
+    }
+    if (!res.ok) return { ok: false, message: `Your model server answered ${res.status}` };
+    const body = (await res.json()) as { data?: { id: string }[] };
+    const count = body.data?.length ?? 0;
+    return count
+      ? { ok: true, message: `Reachable · ${count} model${count === 1 ? '' : 's'} installed` }
+      : { ok: false, message: 'Reachable, but it has no models installed yet' };
+  } catch (error) {
+    return { ok: false, message: `Cannot reach your model server: ${(error as Error).cause ?? (error as Error).message}` };
+  }
+}
+
 export async function checkCrawl4ai(url: string | null, token: string | null): Promise<ConnectionCheck> {
   if (!url) return { ok: false, message: 'No crawl4ai URL configured — imports use the built-in extractor' };
   try {
@@ -305,21 +342,20 @@ export function settingsRoutes(store: SettingsStore) {
       return c.json(store.view(c.var.user.id));
     })
     .post('/check', async (c) => {
-      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'crawl4ai', 'searxng']) }));
+      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'local', 'crawl4ai', 'searxng']) }));
       const cfg = store.effective(c.var.user.id);
-      const result =
-        target === 'openrouter'
-          ? await checkOpenRouter(cfg.openrouterApiKey)
-          : target === 'routeway'
-            ? await checkRouteway(cfg.keys.routeway)
-            : target === 'crawl4ai'
-            ? await checkCrawl4ai(cfg.crawl4aiUrl, cfg.crawl4aiToken)
-            : await checkSearxng(cfg.searxngUrl);
-      return c.json(result);
+      const checks = {
+        openrouter: () => checkOpenRouter(cfg.openrouterApiKey),
+        routeway: () => checkRouteway(cfg.keys.routeway),
+        local: () => checkLocal(cfg.keys.local),
+        crawl4ai: () => checkCrawl4ai(cfg.crawl4aiUrl, cfg.crawl4aiToken),
+        searxng: () => checkSearxng(cfg.searxngUrl),
+      };
+      return c.json(await checks[target]());
     })
-    .get('/models', async (c) =>
-      c.json(
-        (await listModels(c.req.query('kind') === 'embedding' ? 'embedding' : 'chat', c.req.query('refresh') === '1')) satisfies ModelList,
-      ),
-    );
+    .get('/models', async (c) => {
+      const kind = c.req.query('kind') === 'embedding' ? 'embedding' : 'chat';
+      const local = store.effective(c.var.user.id).keys.local;
+      return c.json((await listModels(kind, c.req.query('refresh') === '1', local)) satisfies ModelList);
+    });
 }

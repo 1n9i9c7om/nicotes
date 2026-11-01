@@ -84,8 +84,9 @@ export function createApp({
     Boolean(secret),
   );
   settings.onUpdate((userId, input) => {
-    if (input.semanticIndex === undefined && input.embeddingModel === undefined && input.openrouterApiKey === undefined) return;
-    // Switched off, the index is deleted; switched on, or with another model or key, it (re)builds.
+    const affectsIndex = [input.semanticIndex, input.embeddingModel, input.openrouterApiKey, input.localAiUrl, input.localAiKey];
+    if (affectsIndex.every((value) => value === undefined)) return;
+    // Switched off, the index is deleted; switched on, or with another model, key or server, it (re)builds.
     if (!settings.effective(userId).semanticIndex) semantic.clear(userId);
     else {
       semantic.retry(userId);
