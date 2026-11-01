@@ -33,6 +33,7 @@ it upfront.
 - 🤖 **Optional AI** through OpenRouter, Routeway or your own model server (Ollama, LM Studio …): ask your notes, research the web, an assistant whose changes you review like a diff.
 - 📱 **On every screen**: installable on your phone, and in the sidebar of Firefox, Chrome and Edge.
 - 💾 **Your data, on your server**: one container, daily backups and a Markdown export that opens in Obsidian.
+- 🔐 **Locked down**: two-step sign-in with an authenticator app, and passkeys.
 
 <table>
   <tr>
@@ -250,6 +251,34 @@ token is shown once; send it as `Authorization: Bearer nct_…`. **Read only** t
 look at your notes, **Read and write** ones can change them too. No token can change
 settings, download backups or create other tokens, and each one can be revoked at any time.
 [docs/API.md](docs/API.md) lists what the API can do, with examples.
+
+## Sign-in security
+
+Settings → **Sign-in security** protects your account beyond the password:
+
+- **Two-step sign-in:** after the password, Nicotes asks for a 6-digit code from an
+  authenticator app such as Google Authenticator, Microsoft Authenticator, Aegis or 2FAS.
+  Setting it up shows a QR code and ten recovery codes. Keep those somewhere safe: each one
+  signs in once when your phone is not at hand.
+- **Passkeys:** sign in with your fingerprint, face or screen lock, without password or
+  code. They need HTTPS (or localhost) and only work at the address they were made at, so
+  add them at the address you normally use.
+
+Changing either asks for your password again. API tokens and the calendar address keep
+working as before.
+
+**Locked out?** If the phone and the recovery codes are both gone, turn two-step sign-in
+off on the server; the password alone signs in again:
+
+```bash
+docker compose exec nicotes node apps/server/dist/reset-2fa.js <username>
+```
+
+Add `--passkeys` to remove the account's passkeys as well, for example when the phone was
+stolen. The account is signed out everywhere. Without Docker, run
+`npm run reset-2fa -- <username>`. The authenticator secret is encrypted with the same key
+as stored API keys: if that key changes (a new `NICOTES_SECRET`, or a lost key file),
+codes from the app stop working and a recovery code or this command gets you back in.
 
 ## Backups
 

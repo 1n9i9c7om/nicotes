@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { taskPlainText, type PageTask } from '@nicotes/shared';
 import { LoginLimiter } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { notebooks } from '../db/schema.js';
-import { clientIp } from '../http.js';
+import { clientIp, requestOrigin } from '../http.js';
 import type { SettingsStore } from '../settings.js';
 import { tokenAccess } from '../tokens.js';
 import { listTasks } from './tasks.js';
@@ -32,14 +32,6 @@ function fold(line: string): string {
 const icsDate = (iso: string) => iso.replaceAll('-', '');
 const nextDay = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 const stamp = (time: number) => new Date(time).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-
-/** The address the feed was requested at, also behind a reverse proxy. */
-function origin(c: Context): string {
-  const url = new URL(c.req.url);
-  const proto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim();
-  const host = c.req.header('x-forwarded-host')?.split(',')[0]?.trim();
-  return `${proto ?? url.protocol.replace(':', '')}://${host ?? url.host}`;
-}
 
 /**
  * Open tasks with a due date as all-day events. The UID hashes page, text and date, so an
@@ -103,7 +95,7 @@ export function calendarRoutes(db: Db, settings: SettingsStore) {
     const titles = new Map(
       db.select({ id: notebooks.id, title: notebooks.title }).from(notebooks).where(eq(notebooks.userId, userId)).all().map((n) => [n.id, n.title]),
     );
-    const body = tasksCalendar(listTasks(db, userId, 'open', excludeTags), titles, origin(c));
+    const body = tasksCalendar(listTasks(db, userId, 'open', excludeTags), titles, requestOrigin(c));
     return c.body(body, 200, {
       'content-type': 'text/calendar; charset=utf-8',
       'content-disposition': 'inline; filename="nicotes-tasks.ics"',

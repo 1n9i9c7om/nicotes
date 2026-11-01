@@ -31,6 +31,7 @@ import { mentionRoutes } from './routes/mentions.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
+import { securityRoutes } from './routes/security.js';
 import { taskRoutes } from './routes/tasks.js';
 import { tagRoutes } from './routes/tags.js';
 import { trashRoutes } from './routes/trash.js';
@@ -74,7 +75,8 @@ export function createApp({
   semanticQuietMs,
 }: AppOptions) {
   const app = new Hono();
-  const settings = new SettingsStore(db, SecretBox.load(dataDir, secret), settingsEnv);
+  const secrets = SecretBox.load(dataDir, secret);
+  const settings = new SettingsStore(db, secrets, settingsEnv);
   const jobs = new JobRunner(db, settings);
   jobs.register('organize', organizeJob(db));
   jobs.register('research', researchJob(db, importAllowPrivate));
@@ -140,18 +142,18 @@ export function createApp({
   app.use('/api/*', (c, next) => (c.req.path.startsWith('/api/attachments') ? next() : jsonLimit(c, next)));
 
   // Signed in by session, or by API token where scripts may reach (not settings with their
-  // keys, backups with the key file, or the tokens themselves).
+  // keys, backups with the key file, sign-in security, or the tokens themselves).
   const auth = requireAuth(db, secureCookies, tokenSignIn(db));
   const sessionOnly = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   // Calendar apps fetch without a session: the token in the address signs them in.
   app.route('/api/calendar', calendarRoutes(db, settings));
-  app.route('/api/auth', authRoutes(db, secureCookies));
+  app.route('/api/auth', authRoutes(db, secureCookies, secrets));
   for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
-  for (const area of ['settings', 'backups', 'tokens']) {
+  for (const area of ['settings', 'backups', 'tokens', 'security']) {
     app.use(`/api/${area}`, sessionOnly);
     app.use(`/api/${area}/*`, sessionOnly);
   }
@@ -172,6 +174,7 @@ export function createApp({
   app.route('/api/semantic', semanticRoutes(db, semantic));
   app.route('/api/backups', backupRoutes(backups));
   app.route('/api/tokens', tokenRoutes(db));
+  app.route('/api/security', securityRoutes(db, secrets));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));

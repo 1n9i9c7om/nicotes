@@ -53,6 +53,58 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** Two-step sign-in with an authenticator app (TOTP); a row means it is on. */
+export const twoFactor = sqliteTable('two_factor', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** The shared secret, encrypted with the server's secret key. */
+  totpSecret: text('totp_secret').notNull(),
+  /** The last 30-second step a code was accepted for, so no code works twice. */
+  lastStep: integer('last_step').notNull().default(0),
+  enabledAt: integer('enabled_at').notNull(),
+});
+
+/** One-time codes for when the authenticator app is gone; used ones are deleted. */
+export const recoveryCodes = sqliteTable(
+  'recovery_codes',
+  {
+    /** SHA-256 of the normalised code. */
+    codeHash: text('code_hash').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('recovery_codes_user_idx').on(t.userId)],
+);
+
+/** WebAuthn credentials: sign-in with a fingerprint, face or device PIN. */
+export const passkeys = sqliteTable(
+  'passkeys',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** base64url, as the browser reports it. */
+    credentialId: text('credential_id').notNull().unique(),
+    /** base64url COSE public key. */
+    publicKey: text('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    /** JSON array of transports ("internal", "usb", "hybrid", …), a hint for the browser. */
+    transports: text('transports'),
+    /** The host name the passkey belongs to; it only signs in there. */
+    rpId: text('rp_id').notNull(),
+    /** Synced between devices (e.g. iCloud Keychain, Google Password Manager). */
+    backedUp: integer('backed_up', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+  },
+  (t) => [index('passkeys_user_idx').on(t.userId)],
+);
+
 export const notebooks = sqliteTable(
   'notebooks',
   {

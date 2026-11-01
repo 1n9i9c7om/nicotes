@@ -93,6 +93,17 @@ export function endSession(c: Context, db: Db) {
   deleteCookie(c, SESSION_COOKIE, { path: '/' });
 }
 
+/** The stored id of the request's session (a hash of the cookie), or null without one. */
+export function sessionId(c: Context): string | null {
+  const token = getCookie(c, SESSION_COOKIE);
+  return token ? hashToken(token) : null;
+}
+
+/** Signs an account out everywhere, e.g. after its sign-in was reset. */
+export function endAllSessions(db: Db, userId: string): number {
+  return db.delete(sessions).where(eq(sessions.userId, userId)).run().changes;
+}
+
 /** Resolves the session cookie to a user, renewing sessions that are past half their lifetime. */
 export function sessionUser(c: Context, db: Db, secure: boolean): User | null {
   const token = getCookie(c, SESSION_COOKIE);
