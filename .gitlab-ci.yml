@@ -215,14 +215,17 @@ extension:sign-firefox:
       - signed/*.xpi
     expire_in: 30 days
 
-# Tags, with AMO keys: publish the signed .xpi and updates.json on GitLab Pages, where Firefox
-# looks for updates (the update_url in the signed manifest). Pages must be visible to everyone
-# (Settings → General → Visibility → Pages), also for a private project, because Firefox
-# checks without signing in. Each deployment replaces the site, so it holds the newest version.
+# Tags: publish the landing page (site/, see scripts/build-site.sh) on GitLab Pages. With AMO
+# keys, also the signed .xpi and updates.json, where Firefox looks for updates (the
+# update_url in the signed manifest). Pages must be visible to everyone (Settings → General →
+# Visibility → Pages), also for a private project, because Firefox checks without signing in.
+# Each deployment replaces the site, so it holds the newest version.
 #
-# Branches: a manual run publishes a preview with the unsigned zip instead, to check that
-# Pages serves updates.json publicly over HTTPS. It lists the branch's current version, so
-# installed copies never update to it; the next release replaces it.
+# Branches: a manual run publishes the landing page too. If the package registry already has
+# the signed .xpi of the branch's version (from its release), it is published like on a tag.
+# Otherwise it's a preview with the unsigned zip, to check the page and that Pages serves
+# updates.json publicly over HTTPS; it lists the branch's current version, so installed
+# copies never update to it, and the next release replaces it.
 pages:
   stage: release
   image: node:24-alpine
@@ -232,7 +235,7 @@ pages:
     - job: extension:sign-firefox
       optional: true
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $AMO_JWT_ISSUER && $AMO_JWT_SECRET
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -244,18 +247,33 @@ pages:
       fi
       echo "GitLab Pages URL: $CI_PAGES_URL"
     - BASE="${EXTENSION_UPDATE_BASE:-$CI_PAGES_URL}"
-    - mkdir -p public
+    # The landing page (site/), then the extension and its update manifest next to it.
+    - sh scripts/build-site.sh public "$EXTENSION_VERSION"
     - XPI="$EXTENSION_PACKAGE-$EXTENSION_VERSION.xpi"
     - |
       if ls signed/*.xpi >/dev/null 2>&1; then
         cp "$(ls signed/*.xpi | head -n 1)" "public/$XPI"
+      elif wget -q --header "JOB-TOKEN: $CI_JOB_TOKEN" -O "public/$XPI" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$EXTENSION_PACKAGE/$EXTENSION_VERSION/$XPI"; then
+        echo "Using the signed $XPI that an earlier pipeline put in the package registry."
       else
-        echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
-        cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
+        rm -f "public/$XPI"
+        if [ -z "${CI_COMMIT_TAG:-}" ]; then
+          echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
+          cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
+          # The landing page then hides its Firefox install button.
+          sed -i 's/<html lang="en">/<html lang="en" data-preview>/' public/index.html
+        fi
       fi
-    - node scripts/extension-updates.mjs build/extension/manifest.json "public/$XPI" "$BASE/$XPI" > public/updates.json
-    - cat public/updates.json
-    - echo "Check $BASE/updates.json in a private browser window; it must open without signing in."
+    - |
+      if [ -f "public/$XPI" ]; then
+        node scripts/extension-updates.mjs build/extension/manifest.json "public/$XPI" "$BASE/$XPI" > public/updates.json
+        cat public/updates.json
+        echo "Check $BASE/updates.json in a private browser window; it must open without signing in."
+      else
+        echo "No signed extension in this release, so Pages only gets the landing page."
+      fi
+    - echo "Landing page at $BASE/"
   artifacts:
     paths:
       - public

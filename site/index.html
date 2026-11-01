@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nicotes · Notes that are easy to group and link</title>
+    <meta name="description" content="Nicotes is a self-hosted notes app between OneNote and Obsidian: notebooks and pages for structure, links and a graph for connections. One Docker container, your data.">
+    <meta name="theme-color" content="#0a0e16">
+    <meta property="og:title" content="Nicotes">
+    <meta property="og:description" content="Self-hosted notes that are easy to group and link.">
+    <meta property="og:image" content="images/editor.png">
+    <link rel="icon" href="brand/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <script src="site.js" defer></script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="#top" aria-label="Nicotes, back to top"><img src="brand/logo.svg" alt="Nicotes" height="32"></a>
+        <nav aria-label="Sections">
+          <a href="#features">Features</a>
+          <a href="#tour">Tour</a>
+          <a href="#sidebar">Browser sidebar</a>
+          <a href="#start">Get started</a>
+        </nav>
+        <a class="btn btn-ghost btn-sm" href="https://git.nico.software/1n9i9c7om/nicotes">Source</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Self-hosted · Open in any browser · Version <span data-version>{{VERSION}}</span></p>
+          <h1>Notes that are easy to <span class="grad">group</span> and <span class="grad">link</span>.</h1>
+          <p class="lead">
+            Nicotes sits between OneNote and Obsidian: notebooks and pages when you want structure,
+            links and a graph when you want connections. One Docker container on your own server,
+            and your notes stay yours.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="#start">Get started</a>
+            <a class="btn btn-ghost" href="#tour">Take the tour</a>
+          </div>
+          <figure class="showcase">
+            <div class="window">
+              <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+              <img src="images/editor.png" alt="A page in Nicotes: notebooks and pages on the left, a formatted page with a table, tasks and links on the right" width="1600" height="1000">
+            </div>
+            <div class="phone">
+              <img src="images/phone-checklist.png" alt="A packing list in the checklist view on a phone" width="1082" height="2202">
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="wrap">
+          <h2>Everything a notebook needs, nothing that gets in the way</h2>
+          <p class="section-lead">Start writing right away. Structure and connections grow as you go.</p>
+          <div class="grid">
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6l2 2h8v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M8 12h8M8 15h5"/></svg>
+              <h3>Notebooks and subpages</h3>
+              <p>Group pages into colour-coded notebooks and nest them as deep as you like. Drag to reorder, tag anything, find it all with <kbd>Ctrl</kbd> <kbd>K</kbd>.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+              <h3>Links, backlinks, graph</h3>
+              <p>Type <code>[[</code> to link pages. Every page shows what links to it and which pages mention it without a link yet.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+              <h3>One list for every task</h3>
+              <p>Every checkbox from every page lands in Tasks, sorted by due date. Ticking one off there updates its page.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l2.5 2M10 3h4"/></svg>
+              <h3>Pages that know what they are</h3>
+              <p>A recipe gets servings and timers, a list becomes a checklist, a how-to turns into a step-by-step guide, a story is read aloud.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m12 8 1.2 2.8L16 12l-2.8 1.2L12 16l-1.2-2.8L8 12l2.8-1.2z"/></svg>
+              <h3>AI, only if you want it</h3>
+              <p>Bring an OpenRouter or Routeway key to ask your notes, research the web with sources, or let the assistant suggest edits you approve one by one.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+              <h3>Safe on your own server</h3>
+              <p>Daily backups with retention, version history for every page, and an export that opens as an Obsidian vault.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="tour" class="section tour">
+        <div class="wrap">
+          <div class="row">
+            <div class="row-text">
+              <p class="eyebrow">Graph</p>
+              <h2>See how your ideas connect</h2>
+              <p>The graph shows pages joined by links, subpages and tags, coloured by notebook. Filter by notebook or tag, or focus on one page and its neighbours. Each page also has a small graph of its own.</p>
+            </div>
+            <img class="shot" src="images/graph.png" alt="The graph of pages, coloured by notebook" width="1600" height="1000" loading="lazy">
+          </div>
+          <div class="row row-flip">
+            <div class="row-text">
+              <p class="eyebrow">Interactive views</p>
+              <h2>Cook from your notes, not from your phone's tiny text</h2>
+              <p>Switch a page to <strong>View</strong> and Nicotes lays it out the way it's meant to be used: scale a recipe, start timers right from the steps, and follow along in a full-screen cook mode. Whatever you change there edits the page itself.</p>
+            </div>
+            <img class="shot" src="images/recipe.png" alt="A recipe in the interactive view with servings and timers" width="1600" height="1000" loading="lazy">
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <p class="eyebrow">Tasks and journal</p>
+              <h2>Write tasks where they belong</h2>
+              <p>Jot a <code>- [ ]</code> into any page, add a date if it has one, and it shows up under Tasks: overdue, today, the next days. The daily journal note is one click away and takes new tasks too.</p>
+            </div>
+            <img class="shot" src="images/tasks.png" alt="Tasks from all pages grouped by due date" width="1600" height="1000" loading="lazy">
+          </div>
+        </div>
+      </section>
+
+      <section class="section phones-section">
+        <div class="wrap">
+          <h2>In your pocket, too</h2>
+          <p class="section-lead">Install Nicotes on your phone's home screen. On Android, links shared to it become notes.</p>
+          <div class="phones">
+            <img src="images/phone-journal.png" alt="The daily journal note on a phone" width="1082" height="2202" loading="lazy">
+            <img src="images/phone-checklist.png" alt="A packing list in the checklist view on a phone" width="1082" height="2202" loading="lazy">
+            <img src="images/phone-drawer.png" alt="The navigation drawer on a phone" width="1082" height="2202" loading="lazy">
+          </div>
+        </div>
+      </section>
+
+      <section id="sidebar" class="section">
+        <div class="wrap split">
+          <div>
+            <p class="eyebrow">Browser extension</p>
+            <h2>Nicotes next to every page you read</h2>
+            <p>The Nicotes extension opens your notes in the sidebar of Firefox, or the side panel of Chrome and Edge, so you can take notes while you read. Enter your Nicotes address once and sign in; the Firefox version keeps itself up to date.</p>
+            <p class="note">Your server needs <code>NICOTES_BROWSER_EXTENSION=true</code> in its <code>.env</code>.</p>
+            <div class="actions">
+              <a class="btn btn-primary" data-firefox hidden>Add to Firefox</a>
+              <a class="btn btn-ghost" href="https://git.nico.software/1n9i9c7om/nicotes/-/releases">All downloads</a>
+            </div>
+          </div>
+          <ol class="steps">
+            <li><strong>Download</strong> the extension from the latest release.</li>
+            <li><strong>Firefox:</strong> open the signed <code>.xpi</code>. <strong>Chrome / Edge:</strong> unpack the zip and load it under <code>chrome://extensions</code> with developer mode on.</li>
+            <li><strong>Click the Nicotes button</strong> in the toolbar and enter your address.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="start" class="section">
+        <div class="wrap narrow">
+          <h2>Up and running in a minute</h2>
+          <p class="section-lead">All you need is Docker. Download two files, choose a username and password, start it.</p>
+          <div class="code">
+            <div class="code-bar">
+              <span>Terminal</span>
+              <button class="copy" type="button" data-copy="#start-code">Copy</button>
+            </div>
+            <pre id="start-code"><code>mkdir nicotes &amp;&amp; cd nicotes
+curl -fsSLO https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/docker-compose.yml
+curl -fsSL https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/.env.example -o .env
+nano .env   # choose NICOTES_ADMIN_USER and your own NICOTES_ADMIN_PASSWORD
+docker compose up -d</code></pre>
+          </div>
+          <p>Then open <code>http://localhost:3000</code>. Updates are a <code>docker compose pull &amp;&amp; docker compose up -d</code> away. For your phone, run it behind a reverse proxy with HTTPS. The <a href="https://git.nico.software/1n9i9c7om/nicotes#quick-start">README</a> covers backups, AI keys, the extension and everything else.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <img src="brand/mark.svg" alt="" width="28" height="28">
+        <span>Nicotes <span data-version>{{VERSION}}</span></span>
+        <a href="https://git.nico.software/1n9i9c7om/nicotes">Source</a>
+        <a href="https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://git.nico.software/1n9i9c7om/nicotes/-/releases">Releases</a>
+        <a href="https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/LICENSE">AGPL-3.0</a>
+      </div>
+    </footer>
+  </body>
+</html>

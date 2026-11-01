@@ -3,7 +3,7 @@ import { eq, lt } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
-import type { User } from '@nicotes/shared';
+import { credentialsSchema, type User } from '@nicotes/shared';
 import type { Db } from './db/index.js';
 import { sessions, users } from './db/schema.js';
 import { newId } from './ids.js';
@@ -48,6 +48,23 @@ export function createUser(db: Db, username: string, passwordHash: string): User
 
 export function hasUsers(db: Db): boolean {
   return db.select({ id: users.id }).from(users).limit(1).get() !== undefined;
+}
+
+/** The password .env.example ships with: never good enough for a real account. */
+export const EXAMPLE_PASSWORD = 'change-me';
+
+/**
+ * Why the account from NICOTES_ADMIN_USER / NICOTES_ADMIN_PASSWORD must not be created, or
+ * null if it may: the setup screen's password policy, and never the example password.
+ */
+export function initialPasswordProblem(password: string): string | null {
+  if (password.trim().toLowerCase() === EXAMPLE_PASSWORD) {
+    return `NICOTES_ADMIN_PASSWORD is still the example password "${EXAMPLE_PASSWORD}" from .env.example`;
+  }
+  if (!credentialsSchema.shape.password.safeParse(password).success) {
+    return 'NICOTES_ADMIN_PASSWORD must be 8 to 256 characters long';
+  }
+  return null;
 }
 
 export function startSession(c: Context, db: Db, userId: string, secure: boolean) {

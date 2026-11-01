@@ -8,3 +8,4 @@ data/
 apps/e2e/.auth/
 apps/e2e/test-results/
 apps/e2e/playwright-report/
+/public/

@@ -2,6 +2,27 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.4.1 — 2026-11-01
+
+**Changes**
+
+- **A new logo.** Nicotes has a new icon: an N with a folded page corner. It shows in the
+  browser tab, in the app, on your phone's home screen and on the sidebar extension's
+  button. An installed phone app may take a while to pick up the new icon, or show it
+  after you reinstall it.
+- **A license and a home page.** Nicotes is now licensed under the GNU AGPL-3.0, and has a
+  home page with screenshots, features and install steps.
+
+**For administrators**
+
+- **Install without building.** `docker-compose.yml` now pulls the ready-made image from
+  the project's container registry (`main-latest`, the newest release). Update with
+  `docker compose pull && docker compose up -d`, and pin a version with `NICOTES_TAG` in
+  `.env`. `docker compose up -d --build` still builds from your checkout.
+- **No more example password.** Nicotes refuses to create its first account with the
+  example password `change-me` from `.env.example`, or with one shorter than 8
+  characters, and stops with a message saying why. Existing accounts are not affected.
+
 ## 0.4.0 — 2026-11-01
 
 **New**
