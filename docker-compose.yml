@@ -1,10 +1,13 @@
 services:
   nicotes:
-    # Later: registry image, e.g. git.nico.software:<port>/1n9i9c7om/nicotes:latest
-    image: ${NICOTES_IMAGE:-nicotes:latest}
+    # The image CI publishes: main-latest is the newest release, vX.Y.Z pins one (set
+    # NICOTES_TAG in .env). In a checkout, `docker compose up -d --build` builds it instead.
+    image: registry.nico.software/1n9i9c7om/nicotes:${NICOTES_TAG:-main-latest}
     build: .
     restart: unless-stopped
     ports:
+      # Behind a reverse proxy, publish on localhost only ("127.0.0.1:3000:3000") and set
+      # NICOTES_SECURE_COOKIES=true in .env when it serves HTTPS.
       - "${NICOTES_HTTP_PORT:-3000}:3000"
     environment:
       NICOTES_ADMIN_USER: ${NICOTES_ADMIN_USER:-}
