@@ -221,10 +221,11 @@ extension:sign-firefox:
 # Visibility → Pages), also for a private project, because Firefox checks without signing in.
 # Each deployment replaces the site, so it holds the newest version.
 #
-# Branches: a manual run publishes a preview of the landing page with the unsigned zip, to
-# check the page and that Pages serves updates.json publicly over HTTPS. It lists the
-# branch's current version, so installed copies never update to it; the next release
-# replaces it.
+# Branches: a manual run publishes the landing page too. If the package registry already has
+# the signed .xpi of the branch's version (from its release), it is published like on a tag.
+# Otherwise it's a preview with the unsigned zip, to check the page and that Pages serves
+# updates.json publicly over HTTPS; it lists the branch's current version, so installed
+# copies never update to it, and the next release replaces it.
 pages:
   stage: release
   image: node:24-alpine
@@ -252,11 +253,17 @@ pages:
     - |
       if ls signed/*.xpi >/dev/null 2>&1; then
         cp "$(ls signed/*.xpi | head -n 1)" "public/$XPI"
-      elif [ -z "${CI_COMMIT_TAG:-}" ]; then
-        echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
-        cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
-        # The landing page then hides its Firefox install button.
-        sed -i 's/<html lang="en">/<html lang="en" data-preview>/' public/index.html
+      elif wget -q --header "JOB-TOKEN: $CI_JOB_TOKEN" -O "public/$XPI" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$EXTENSION_PACKAGE/$EXTENSION_VERSION/$XPI"; then
+        echo "Using the signed $XPI that an earlier pipeline put in the package registry."
+      else
+        rm -f "public/$XPI"
+        if [ -z "${CI_COMMIT_TAG:-}" ]; then
+          echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
+          cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
+          # The landing page then hides its Firefox install button.
+          sed -i 's/<html lang="en">/<html lang="en" data-preview>/' public/index.html
+        fi
       fi
     - |
       if [ -f "public/$XPI" ]; then

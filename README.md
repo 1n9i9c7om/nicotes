@@ -335,12 +335,15 @@ then:
   Without an HTTPS address, branch builds pack the extension without `update_url` (with a
   warning) and a tag that would be signed fails, since a version can only be signed once.
 
-To check Pages before a release, run the manual `pages` job in a branch pipeline (e.g. on
-`develop`). It publishes a preview of the landing page (without its Firefox button) with
-the unsigned zip and that branch's version, so installed copies don't update to it, and prints the addresses of the
-page and of `updates.json`. Both must open in a private browser window, without signing
-in. The next release replaces the preview. Each deployment replaces the whole site, so a
-release without the AMO keys removes an earlier `updates.json`.
+To update the landing page between releases, run the manual `pages` job in a branch
+pipeline (e.g. on `develop`). If the signed `.xpi` of that branch's version is already in
+the package registry (from its release), it is published as on a release. Otherwise the
+job publishes a preview without the Firefox button, with the unsigned zip and that
+branch's version, so installed copies don't update to it; the next release replaces it.
+Either way the job prints the addresses of the page and of `updates.json`, which must open
+in a private browser window, without signing in. Each deployment replaces the whole site,
+so a release without the AMO keys and without a signed `.xpi` removes an earlier
+`updates.json`.
 
 To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0` and open
 `public/index.html`.
