@@ -1,11 +1,12 @@
 #!/bin/sh
 # CI: creates the GitLab release for tag $CI_COMMIT_TAG with its CHANGELOG.md notes and links
-# the extension packages uploaded by the package jobs. Re-running it only adds missing links.
-# Needs curl and jq.
+# the extension packages (version $EXTENSION_VERSION, which can be older than the release)
+# uploaded by the package jobs. Re-running it only adds missing links. Needs curl and jq.
 set -eu
 version="${CI_COMMIT_TAG#v}"
+extension="${EXTENSION_VERSION:-$version}"
 api="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
-packages="$api/packages/generic/$EXTENSION_PACKAGE/$version"
+packages="$api/packages/generic/$EXTENSION_PACKAGE/$extension"
 
 notes="$(sh scripts/release-notes.sh "$version")"
 [ -n "$notes" ] || notes="See CHANGELOG.md."
@@ -20,8 +21,8 @@ add_link() {
       '. + [{name: $name, url: $url, direct_asset_path: $path, link_type: "package"}]')"
   fi
 }
-add_link "Browser extension for Firefox (signed)" "nicotes-extension-$version.xpi"
-add_link "Browser extension (zip, unsigned)" "nicotes-extension-$version.zip"
+add_link "Browser extension $extension for Firefox (signed)" "nicotes-extension-$extension.xpi"
+add_link "Browser extension $extension (zip, unsigned)" "nicotes-extension-$extension.zip"
 
 body="$(jq -n --arg tag "$CI_COMMIT_TAG" --arg name "Nicotes $version" --arg notes "$notes" --argjson links "$links" \
   '{tag_name: $tag, name: $name, description: $notes, assets: {links: $links}}')"

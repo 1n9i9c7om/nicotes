@@ -31,6 +31,8 @@ npm run dev        # server on :3000, web on :5180 (proxies /api)
   (`feature/<what-it-does>`) and open your merge request against `develop`, not `main`.
 - `main` only receives releases, each tagged `vX.Y.Z`. A maintainer bumps the version and
   writes the [changelog](CHANGELOG.md) entry when releasing, so you don't need to.
+- If you change anything in `extension/`, bump the extension's own version in
+  `extension/manifest.json` (for example `0.4.1` → `0.4.2`); the pipeline warns until you do.
 - Keep a merge request to one change. Small ones are reviewed faster.
 
 ## Before you open a merge request
