@@ -15,7 +15,9 @@ for (const button of document.querySelectorAll('[data-copy]')) {
 }
 
 const firefox = document.querySelector('[data-firefox]');
-fetch('updates.json')
+// Branch previews publish the unsigned zip, which release Firefox refuses to install.
+const preview = document.documentElement.hasAttribute('data-preview');
+if (!preview) fetch('updates.json')
   .then((res) => (res.ok ? res.json() : null))
   .then((manifest) => {
     const addon = manifest && Object.values(manifest.addons ?? {})[0];
