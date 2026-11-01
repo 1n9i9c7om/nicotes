@@ -43,6 +43,9 @@ export function ResearchPage() {
   const [depth, setDepth] = useLocalState<ResearchDepth>('nicotes.researchDepth', 'standard');
   const [mode, setMode] = useLocalState<ResearchMode>('nicotes.researchMode', 'web');
   const offline = mode === 'offline';
+  // Web research without SearXNG uses the model service's own search, which your own server lacks.
+  const cannotSearch =
+    !offline && !!settings.data && !settings.data.ai.searxngUrl && providerOf(modelFor(settings.data, 'research')) === 'local';
   const [lastNotebook, setLastNotebook] = useLocalState<string | null>('nicotes.researchNotebook', null);
   const [notebookId, setNotebookId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -203,7 +206,9 @@ export function ResearchPage() {
                     ? searchLabel('offline')
                     : ai.searxngUrl
                       ? 'SearXNG'
-                      : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))}{' '}
+                      : cannotSearch
+                        ? 'no web search available'
+                        : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))}{' '}
                   · limit {formatCost(ai.costLimit)}{' '}
                   <Link to="/settings" aria-label="AI settings">
                     <SettingsIcon size={13} />
@@ -211,11 +216,17 @@ export function ResearchPage() {
                 </>
               )}
             </span>
-            <button className="btn btn-primary" disabled={!target || start.isPending || !question.trim()}>
+            <button className="btn btn-primary" disabled={!target || start.isPending || !question.trim() || cannotSearch}>
               <Telescope size={16} /> Start research
             </button>
           </div>
           {keyCheck.message && <p className="error">{keyCheck.message}</p>}
+          {cannotSearch && (
+            <p className="error">
+              Your own model server cannot search the web. Set up SearXNG under Settings, or choose “Model knowledge
+              only”.
+            </p>
+          )}
         </form>
       )}
 

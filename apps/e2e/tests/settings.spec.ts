@@ -31,7 +31,7 @@ test('picks a Routeway model for one feature and goes back to the default', asyn
   await expect(options).toHaveCount(4); // "Use the default model" + 3 models
   await page.getByRole('group', { name: 'Services' }).getByRole('button', { name: 'Routeway' }).click();
   await expect(options).toHaveCount(2);
-  await page.getByRole('group', { name: 'Services' }).getByRole('button', { name: 'Both services' }).click();
+  await page.getByRole('group', { name: 'Services' }).getByRole('button', { name: 'All services' }).click();
   await page.getByRole('group', { name: 'Capabilities' }).getByRole('button', { name: 'Free' }).click();
   await expect(options.filter({ hasText: 'Meta: Llama' })).toHaveCount(1);
   await page.getByRole('group', { name: 'Capabilities' }).getByRole('button', { name: 'All' }).click();
@@ -50,4 +50,33 @@ test('picks a Routeway model for one feature and goes back to the default', asyn
   await page.getByRole('option', { name: /Use the default model/ }).click();
   await expect(picker).toContainText('Default ·');
   await expect.poll(async () => (await (await page.request.get('/api/settings')).json()).models.assistant.model).toBeNull();
+});
+
+test('sets up your own model server and picks one of its models', async ({ page }) => {
+  const withLocal: ModelList = {
+    models: [...list.models, model({ id: 'local:llama3.2', name: 'llama3.2', provider: 'local', promptPrice: 0, completionPrice: 0, contextLength: null, free: true })],
+    errors: [],
+  };
+  await page.route('**/api/settings/models?kind=chat*', (route) => route.fulfill({ json: withLocal }));
+  await page.route('**/api/settings/check', (route) => route.fulfill({ json: { ok: true, message: 'Reachable · 1 model installed' } }));
+  await page.goto('/settings#local-models');
+
+  const card = page.locator('#local-models');
+  await card.getByLabel('Address').fill('http://ollama:11434/v1');
+  await card.getByRole('button', { name: 'Save' }).first().click();
+  await expect(card.getByText('Saved here')).toBeVisible();
+  await card.getByRole('button', { name: 'Test connection' }).click();
+  await expect(card.getByRole('status')).toHaveText('Reachable · 1 model installed');
+
+  const picker = page.getByRole('button', { name: 'Summaries' });
+  await picker.click();
+  await page.getByRole('group', { name: 'Services' }).getByRole('button', { name: 'Own server' }).click();
+  const options = page.getByRole('listbox', { name: 'Summaries' }).getByRole('option');
+  await expect(options).toHaveCount(2); // "Use the default model" + llama3.2
+  await options.filter({ hasText: 'llama3.2' }).click();
+  await expect(picker).toContainText('Own server');
+  await expect.poll(async () => (await (await page.request.get('/api/settings')).json()).models.summary.model).toBe('local:llama3.2');
+
+  // Back to how the other tests expect it.
+  await page.request.patch('/api/settings', { data: { localAiUrl: null, summaryModel: null } });
 });

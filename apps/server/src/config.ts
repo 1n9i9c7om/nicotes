@@ -43,6 +43,8 @@ export const config = {
     openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
     openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
     routewayApiKey: process.env.ROUTEWAY_API_KEY?.trim() || undefined,
+    localAiUrl: process.env.LOCAL_AI_URL?.trim() || undefined,
+    localAiKey: process.env.LOCAL_AI_KEY?.trim() || undefined,
     crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
     crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
     // Per-feature models; unset ones use OPENROUTER_MODEL.

@@ -354,13 +354,15 @@ export function useUpdateSettings() {
         qc.invalidateQueries({ queryKey: keys.semantic });
         qc.invalidateQueries({ queryKey: ['related'] });
       }
+      // Your own server's models join (or leave) the model lists.
+      if (input.localAiUrl !== undefined || input.localAiKey !== undefined) qc.invalidateQueries({ queryKey: keys.models });
     },
   });
 }
 
 export const useCheckConnection = () =>
   useMutation({
-    mutationFn: (target: 'openrouter' | 'routeway' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
+    mutationFn: (target: 'openrouter' | 'routeway' | 'local' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
   });
 
 /** Chat models of both services, or OpenRouter's embedding models (pickers and prices). */

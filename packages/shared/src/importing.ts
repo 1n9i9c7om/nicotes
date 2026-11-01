@@ -44,17 +44,24 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
   },
 };
 
-/** Services that run the chat models. Embeddings (semantic index) always use OpenRouter. */
-export const AI_PROVIDERS = ['openrouter', 'routeway'] as const;
+/**
+ * Services that run the models: two hosted ones, and your own OpenAI-compatible server
+ * (Ollama, LM Studio, LocalAI, vLLM …). Embeddings run on OpenRouter or your own server.
+ */
+export const AI_PROVIDERS = ['openrouter', 'routeway', 'local'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
-export const AI_PROVIDER_LABELS: Record<AiProvider, string> = { openrouter: 'OpenRouter', routeway: 'Routeway' };
+export const AI_PROVIDER_LABELS: Record<AiProvider, string> = { openrouter: 'OpenRouter', routeway: 'Routeway', local: 'Own server' };
 
-/** Routeway models are stored as "routeway:<id>"; every other model id is an OpenRouter one. */
+/** Routeway models are stored as "routeway:<id>", your own server's as "local:<id>"; every other id is an OpenRouter one. */
 export const ROUTEWAY_PREFIX = 'routeway:';
-export const providerOf = (model: string): AiProvider => (model.startsWith(ROUTEWAY_PREFIX) ? 'routeway' : 'openrouter');
-/** The id the provider itself uses (without the "routeway:" prefix). */
-export const providerModelId = (model: string) =>
-  model.startsWith(ROUTEWAY_PREFIX) ? model.slice(ROUTEWAY_PREFIX.length) : model;
+export const LOCAL_PREFIX = 'local:';
+export const providerOf = (model: string): AiProvider =>
+  model.startsWith(ROUTEWAY_PREFIX) ? 'routeway' : model.startsWith(LOCAL_PREFIX) ? 'local' : 'openrouter';
+/** The id the provider itself uses (without the "routeway:" or "local:" prefix). */
+export const providerModelId = (model: string) => {
+  for (const prefix of [ROUTEWAY_PREFIX, LOCAL_PREFIX]) if (model.startsWith(prefix)) return model.slice(prefix.length);
+  return model;
+};
 
 /** Default spending limit per AI job (research run, organize run), in USD. */
 export const DEFAULT_AI_COST_LIMIT = 0.5;
@@ -71,6 +78,13 @@ export interface Settings {
     modelSource: SettingSource;
   };
   routeway: {
+    apiKeySet: boolean;
+    apiKeySource: SettingSource;
+  };
+  /** Your own OpenAI-compatible model server; most need no key. */
+  local: {
+    url: string | null;
+    urlSource: SettingSource;
     apiKeySet: boolean;
     apiKeySource: SettingSource;
   };
@@ -126,6 +140,8 @@ export const settingsUpdateSchema = z.object({
   openrouterApiKey: optionalSecret,
   openrouterModel: modelId,
   routewayApiKey: optionalSecret,
+  localAiUrl: optionalUrl,
+  localAiKey: optionalSecret,
   crawl4aiUrl: optionalUrl,
   crawl4aiToken: optionalSecret,
   importModel: modelId,
@@ -157,7 +173,7 @@ export interface ConnectionCheck {
 }
 
 export interface ModelInfo {
-  /** The id as stored in settings ("routeway:" prefixed for Routeway). */
+  /** The id as stored in settings ("routeway:" / "local:" prefixed for Routeway / your own server). */
   id: string;
   name: string;
   provider: AiProvider;

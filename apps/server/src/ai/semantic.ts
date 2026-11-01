@@ -19,7 +19,7 @@ import { pageIdsWithTag } from '../routes/tags.js';
 import type { AiConfig, SettingsStore } from '../settings.js';
 import { chunkPage, embeddingInput } from './chunks.js';
 import { dot, embed as openRouterEmbed, EMBED_BATCH, fromBlob, toBlob, type Embedder } from './embeddings.js';
-import { LlmError } from './llm.js';
+import { hasKeyFor, LlmError } from './llm.js';
 
 const TICK_MS = 20_000;
 /** Pages being edited wait until typing has paused this long. */
@@ -125,7 +125,7 @@ export class SemanticIndex {
 
   private async indexUser(userId: string) {
     const cfg = this.settings.effective(userId);
-    if (!cfg.semanticIndex || !cfg.openrouterApiKey) return;
+    if (!cfg.semanticIndex || !hasKeyFor(cfg.keys, cfg.embeddingModel)) return;
     const model = cfg.embeddingModel;
     const stale = this.db.$client
       .prepare(
@@ -169,7 +169,7 @@ export class SemanticIndex {
     for (let i = 0; i < missing.length; i += EMBED_BATCH) {
       const batch = missing.slice(i, i + EMBED_BATCH);
       try {
-        const { vectors, usage } = await this.embedder({ apiKey: cfg.openrouterApiKey, model, inputs: batch.map((h) => inputOf.get(h)!) });
+        const { vectors, usage } = await this.embedder({ keys: cfg.keys, model, inputs: batch.map((h) => inputOf.get(h)!) });
         batch.forEach((h, j) => {
           known.set(h, toBlob(vectors[j]!));
           costOf.set(h, usage.cost / batch.length);
@@ -221,7 +221,7 @@ export class SemanticIndex {
       .get({ u: userId, m: cfg.embeddingModel }) as { pages: number; indexed: number; chunks: number; cost: number };
     return {
       enabled: cfg.semanticIndex,
-      ready: !!cfg.openrouterApiKey,
+      ready: hasKeyFor(cfg.keys, cfg.embeddingModel),
       model: cfg.embeddingModel,
       ...counts,
       error: this.errors.get(userId)?.message ?? null,
@@ -284,7 +284,7 @@ export class SemanticIndex {
       this.queries.set(key, hit);
       return hit;
     }
-    const { vectors } = await this.embedder({ apiKey: cfg.openrouterApiKey!, model: cfg.embeddingModel, inputs: [query] });
+    const { vectors } = await this.embedder({ keys: cfg.keys, model: cfg.embeddingModel, inputs: [query] });
     this.queries.set(key, vectors[0]!);
     if (this.queries.size > QUERY_CACHE) this.queries.delete(this.queries.keys().next().value!);
     return vectors[0]!;
@@ -315,7 +315,7 @@ export class SemanticIndex {
   /** Whether the index can answer for this user; null when it is off. */
   private ready(userId: string) {
     const cfg = this.settings.effective(userId);
-    return cfg.semanticIndex && cfg.openrouterApiKey ? cfg : null;
+    return cfg.semanticIndex && hasKeyFor(cfg.keys, cfg.embeddingModel) ? cfg : null;
   }
 
   /** The best matching passages for a query, at most `perPage` from each page. */

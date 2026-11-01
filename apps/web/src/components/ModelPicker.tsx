@@ -3,7 +3,7 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import { AI_PROVIDER_LABELS, providerOf, type AiProvider, type ModelInfo } from '@nicotes/shared';
 
 type Capability = 'all' | 'tools' | 'reasoning' | 'free';
-type Service = 'both' | AiProvider;
+type Service = 'all' | AiProvider;
 
 const CAPABILITIES: { key: Capability; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -12,10 +12,18 @@ const CAPABILITIES: { key: Capability; label: string }[] = [
   { key: 'free', label: 'Free' },
 ];
 const SERVICES: { key: Service; label: string }[] = [
-  { key: 'both', label: 'Both services' },
+  { key: 'all', label: 'All services' },
   { key: 'openrouter', label: AI_PROVIDER_LABELS.openrouter },
   { key: 'routeway', label: AI_PROVIDER_LABELS.routeway },
+  { key: 'local', label: AI_PROVIDER_LABELS.local },
 ];
+
+/** "an OpenRouter model id (…)" for ids typed into the search. */
+const CUSTOM_HINT: Record<AiProvider, string> = {
+  openrouter: 'an OpenRouter model id (prefix Routeway ids with “routeway:”, your own server’s with “local:”)',
+  routeway: 'a Routeway model id',
+  local: 'a model on your own server',
+};
 /** Rendering hundreds of rows at once is slow; the search narrows it down. */
 const MAX_ROWS = 150;
 
@@ -62,7 +70,7 @@ interface Props {
 
 type Row = { kind: 'default' } | { kind: 'custom'; id: string } | { kind: 'model'; model: ModelInfo };
 
-/** A searchable model list with capability and service filters (OpenRouter and Routeway). */
+/** A searchable model list with capability and service filters (OpenRouter, Routeway, your own server). */
 export function ModelPicker({
   value,
   placeholder,
@@ -80,7 +88,7 @@ export function ModelPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [capability, setCapability] = useState<Capability>('all');
-  const [service, setService] = useState<Service>('both');
+  const [service, setService] = useState<Service>('all');
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -91,7 +99,7 @@ export function ModelPicker({
     return (models ?? []).filter(
       (m) =>
         (capability === 'all' || m[capability]) &&
-        (service === 'both' || m.provider === service) &&
+        (service === 'all' || m.provider === service) &&
         words.every((w) => m.name.toLowerCase().includes(w) || m.id.toLowerCase().includes(w)),
     );
   }, [models, query, capability, service]);
@@ -235,10 +243,7 @@ export function ModelPicker({
                   {row.kind === 'custom' && (
                     <span className="model-option-text">
                       <span className="model-option-name">Use “{row.id}”</span>
-                      <span className="model-option-details">
-                        Not in the lists; used as {providerOf(row.id) === 'routeway' ? 'a Routeway' : 'an OpenRouter'} model
-                        id (prefix Routeway ids with “routeway:”).
-                      </span>
+                      <span className="model-option-details">Not in the lists; used as {CUSTOM_HINT[providerOf(row.id)]}.</span>
                     </span>
                   )}
                   {row.kind === 'model' && (

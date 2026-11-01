@@ -224,10 +224,15 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   each resolve their own model (settings > environment variable > the default model), so
   cheap extraction and demanding writing can use different models. Settings shows
   OpenRouter's prices next to each and warns about ids missing from its model list.
-- **Services:** chat models run on OpenRouter or Routeway (`ai/llm.ts`). A model id
-  `routeway:<id>` goes to `https://api.routeway.ai/v1` with the Routeway key, anything else
-  to OpenRouter, so each feature uses the service of its model and a missing key is
-  reported per service. The services differ in options: OpenRouter gets
+- **Services:** chat models run on OpenRouter, Routeway or the user's own
+  OpenAI-compatible server (`ai/llm.ts`). A model id `routeway:<id>` goes to
+  `https://api.routeway.ai/v1` with the Routeway key, `local:<id>` to
+  `<own server address>/chat/completions` (key optional, cost 0, no web search; a 400 about
+  JSON mode is retried without `response_format`), anything else to OpenRouter, so each
+  feature uses the service of its model and a missing key or address is reported per
+  service. Embeddings run on OpenRouter or the own server (`ai/embeddings.ts`); the own
+  server's `/models` list is split into chat and embedding models by the word "embed" and
+  cached for five minutes. The services differ in options: OpenRouter gets
   `reasoning.effort` and `usage.include` and searches via its `web` plugin; Routeway leaves
   reasoning off unless an effort above "minimal" is asked for, reports streamed usage via
   `stream_options.include_usage`, searches with an `@online` model suffix (links are read
@@ -406,6 +411,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
+| `LOCAL_AI_URL` / `LOCAL_AI_KEY` | — | Your own OpenAI-compatible model server (address ending in `/v1`, optional key) for `local:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
