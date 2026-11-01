@@ -53,6 +53,37 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** Adapters: data from other services, written into a logbook page or the journal daily. */
+export const adapters = sqliteTable(
+  'adapters',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    name: text('name').notNull(),
+    /** JSON of the non-secret fields. */
+    config: text('config').notNull(),
+    /** JSON of the secret fields, encrypted with the server's secret key. */
+    secrets: text('secrets'),
+    /** 'logbook' or 'journal'. */
+    target: text('target').notNull(),
+    /** "HH:MM" in the account's time zone. */
+    dailyAt: text('daily_at').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /** The logbook page, made by the first run (set null when it is deleted). */
+    pageId: text('page_id').references(() => pages.id, { onDelete: 'set null' }),
+    lastRunAt: integer('last_run_at'),
+    /** The local date of the last scheduled run, so each day runs once. */
+    lastRunDate: text('last_run_date'),
+    lastStatus: text('last_status'),
+    lastMessage: text('last_message'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('adapters_user_idx').on(t.userId)],
+);
+
 /** The chat's conversations: one per channel (the web app, Telegram), until reset. */
 export const chatMessages = sqliteTable(
   'chat_messages',

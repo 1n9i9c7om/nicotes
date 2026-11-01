@@ -52,6 +52,16 @@ browser. Failures leave a trace in `apps/e2e/test-results`
   other platforms from `package-lock.json` (npm/cli#4828). Compare the lockfile with
   `git diff` after adding a dependency and put missing entries back before committing.
 
+## Adding an adapter
+
+An adapter type is a `Source` in `apps/server/src/adapters/` (`read` returns the day's
+values; `check` validates its settings) registered in `SOURCES` in `service.ts`, plus its
+entry in `ADAPTER_TYPE_INFO` in `packages/shared/src/adapters.ts`: the fields the settings
+form shows (`secret` fields are encrypted and never sent back), a description and the default
+target and time. Use `getJson` for requests, so network trouble and error statuses become
+readable messages, and `ctx.fetch`, so tests can answer with a fake service (see
+`apps/server/test/adapters.test.ts`).
+
 ## Database schema changes
 
 Edit `apps/server/src/db/schema.ts`, then run `npm run db:generate -w apps/server` and commit
