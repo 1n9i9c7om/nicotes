@@ -10,6 +10,7 @@
 [![Node 24+](https://img.shields.io/badge/node-24%2B-5FA04E?logo=nodedotjs&logoColor=white)](#development)
 [![React + TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6?logo=typescript&logoColor=white)](#development)
 [![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)](#phone-app)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [Quick start](#quick-start) · [Features](#features) · [Changelog](CHANGELOG.md) · [Design & roadmap](docs/DESIGN.md)
 
@@ -51,14 +52,35 @@ it upfront.
 
 ## Quick start
 
+All you need is Docker with Compose. In an empty folder, e.g. `/opt/nicotes`:
+
 ```bash
-cp .env.example .env   # set NICOTES_ADMIN_USER / NICOTES_ADMIN_PASSWORD
-docker compose up -d --build
+curl -fsSLO https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/docker-compose.yml
+curl -fsSL https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/.env.example -o .env
+nano .env              # choose NICOTES_ADMIN_USER and your own NICOTES_ADMIN_PASSWORD
+docker compose up -d
 ```
 
-Open http://localhost:3000 and sign in. Data lives in the `nicotes-data` volume (SQLite
-database, attachments and the key that encrypts stored API keys). To use the prebuilt
-image instead of building it, see [Branches, releases and images](#branches-releases-and-images).
+Open http://localhost:3000 and sign in. Nicotes refuses to start with the example
+password, so pick your own. Data lives in the `nicotes-data` volume (SQLite database,
+attachments and the key that encrypts stored API keys); see [Backups](#backups).
+
+**Updating:** `docker compose pull && docker compose up -d`. The image comes from the
+project's container registry (`registry.nico.software/1n9i9c7om/nicotes`):
+
+| Tag | What it is |
+|---|---|
+| `main-latest` | the newest release (default) |
+| `v0.4.0` | one particular release; set `NICOTES_TAG=v0.4.0` in `.env` to stay on it |
+| `dev-latest` | the current `develop` build, for testing only |
+
+**Over the internet,** put Nicotes behind a reverse proxy that serves HTTPS (Caddy,
+Traefik, nginx …), publish the port on localhost only (`127.0.0.1:3000:3000` in
+`docker-compose.yml`) and set `NICOTES_SECURE_COOKIES=true` in `.env`. HTTPS is also what
+lets you install it on your phone.
+
+**From source:** clone the repository and run `docker compose up -d --build` in it, which
+builds the image from your checkout instead of pulling it.
 
 ## Features
 
@@ -284,8 +306,8 @@ socket and pushes it to the project's container registry:
 | tag `v1.2.3` | `v1.2.3` |
 | other branches, merge requests | built only, not pushed |
 
-So `main-latest` is always the newest release, and `v1.2.3` pins an older one, e.g.
-`image: <registry>/1n9i9c7om/nicotes:main-latest` in docker-compose instead of `build: .`.
+So `main-latest` is always the newest release, and `v1.2.3` pins an older one;
+`docker-compose.yml` uses `main-latest` unless `NICOTES_TAG` says otherwise.
 
 The pipeline also packs the browser extension (`extension/`) into a zip, kept as a job
 artifact on every pipeline. It fails when `extension/manifest.json`'s version differs from
@@ -322,3 +344,15 @@ release without the AMO keys removes an earlier `updates.json`.
 
 To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0` and open
 `public/index.html`.
+
+## Contributing
+
+Bug reports, ideas and merge requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains
+how to set things up and where changes go. Please report security problems privately, as
+described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Nicotes is free software under the [GNU Affero General Public License v3.0](LICENSE). You
+may use, change and share it; if you run a changed version for others, for example as a
+hosted service, you have to offer them its source code as well.
