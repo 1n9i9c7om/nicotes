@@ -156,18 +156,19 @@
       <section id="start" class="section">
         <div class="wrap narrow">
           <h2>Up and running in a minute</h2>
-          <p class="section-lead">All you need is Docker. Clone the repository, pick a username and password, start it.</p>
+          <p class="section-lead">All you need is Docker. Download two files, choose a username and password, start it.</p>
           <div class="code">
             <div class="code-bar">
               <span>Terminal</span>
               <button class="copy" type="button" data-copy="#start-code">Copy</button>
             </div>
-            <pre id="start-code"><code>git clone https://git.nico.software/1n9i9c7om/nicotes.git
-cd nicotes
-cp .env.example .env   # set NICOTES_ADMIN_USER / NICOTES_ADMIN_PASSWORD
-docker compose up -d --build</code></pre>
+            <pre id="start-code"><code>mkdir nicotes &amp;&amp; cd nicotes
+curl -fsSLO https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/docker-compose.yml
+curl -fsSL https://git.nico.software/1n9i9c7om/nicotes/-/raw/main/.env.example -o .env
+nano .env   # choose NICOTES_ADMIN_USER and your own NICOTES_ADMIN_PASSWORD
+docker compose up -d</code></pre>
           </div>
-          <p>Then open <code>http://localhost:3000</code>. For your phone, run it behind a reverse proxy with HTTPS. The <a href="https://git.nico.software/1n9i9c7om/nicotes#quick-start">README</a> covers backups, AI keys, the extension and everything else.</p>
+          <p>Then open <code>http://localhost:3000</code>. Updates are a <code>docker compose pull &amp;&amp; docker compose up -d</code> away. For your phone, run it behind a reverse proxy with HTTPS. The <a href="https://git.nico.software/1n9i9c7om/nicotes#quick-start">README</a> covers backups, AI keys, the extension and everything else.</p>
         </div>
       </section>
     </main>
@@ -179,6 +180,7 @@ docker compose up -d --build</code></pre>
         <a href="https://git.nico.software/1n9i9c7om/nicotes">Source</a>
         <a href="https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://git.nico.software/1n9i9c7om/nicotes/-/releases">Releases</a>
+        <a href="https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/LICENSE">AGPL-3.0</a>
       </div>
     </footer>
   </body>
