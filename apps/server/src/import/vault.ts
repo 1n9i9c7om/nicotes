@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import {
+  isCanvas,
   MAX_ATTACHMENT_BYTES,
   normalizeTag,
   vaultImportSchema,
@@ -136,7 +137,8 @@ const INLINE_TAG = /(?<=^|[\s,])#([\p{L}\p{N}_\-/]*[\p{L}_\-/][\p{L}\p{N}_\-/]*)
 
 function parseNote(path: string, text: string): VaultNote {
   const folder = posix.dirname(path) === '.' ? '' : posix.dirname(path);
-  const name = posix.basename(path).replace(MARKDOWN, '');
+  const name = posix.basename(path).replace(MARKDOWN, '').replace(/\.excalidraw$/i, '');
+  const canvas = /\.excalidraw\.md$/i.test(path) || isCanvas(text.replace(/^﻿/, ''));
   const { props, body } = splitFrontmatter(text.replace(/^﻿/, ''));
   const listed = props.tags ?? props.tag ?? [];
   const tags = (Array.isArray(listed) ? listed : listed.split(/[,\s]+/)).map(normalizeTag);
@@ -147,6 +149,19 @@ function parseNote(path: string, text: string): VaultNote {
     .filter(([key]) => !KNOWN.has(key.toLowerCase()))
     .map(([key, value]) => `**${key}:** ${Array.isArray(value) ? value.join(', ') : value}`);
   const title = typeof props.title === 'string' && props.title.trim() ? props.title.trim() : name;
+  if (canvas) {
+    // An Excalidraw drawing becomes a canvas page: its Markdown stays as the plugin wrote it.
+    return {
+      path,
+      folder,
+      name,
+      title: title.slice(0, 300),
+      tags: [...new Set(tags.filter(Boolean))],
+      createdAt: dateOf(props.created),
+      updatedAt: dateOf(props.updated ?? props.modified),
+      body: `---\nexcalidraw-plugin: parsed\n---\n${body}`,
+    };
+  }
   // A first heading that repeats the title would show it twice under the page title.
   let markdown = body.replace(/^\s*\n/, '');
   const heading = /^#[ \t]+(.+?)[ \t#]*(?:\r?\n|$)/.exec(markdown);
@@ -235,8 +250,7 @@ export function readVault(zip: Uint8Array, fallbackName: string): Vault {
   const notes: VaultNote[] = [];
   const files = new Map<string, Uint8Array>();
   for (const { raw, path } of paths) {
-    if (/\.excalidraw\.md$/i.test(path)) skipped.push({ path, reason: 'Excalidraw drawings are not imported' });
-    else if (MARKDOWN.test(path)) notes.push(parseNote(path, strFromU8(entries[raw]!)));
+    if (MARKDOWN.test(path)) notes.push(parseNote(path, strFromU8(entries[raw]!)));
     else files.set(path, entries[raw]!);
   }
   return { name, notes, files, skipped };

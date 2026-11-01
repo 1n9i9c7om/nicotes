@@ -23,6 +23,7 @@ import {
 import {
   appendSeeAlso,
   hasCitations,
+  isCanvas,
   findPhrase,
   linkFirstMention,
   linkMention,
@@ -59,7 +60,11 @@ import {
 } from '../lib/queries';
 import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
+import { loadCanvasEditor } from '../lib/excalidraw';
 import { NotFound } from './NotFound';
+
+// Excalidraw is large: canvas pages load it on demand.
+const CanvasEditor = lazy(loadCanvasEditor);
 
 type Mode = 'visual' | 'source';
 /** Navigation state set when a page was just created: open it directly and focus the title. */
@@ -96,6 +101,8 @@ function PageEditor({ page }: { page: Page }) {
   // The interactive view is remembered per page (a recipe opens in cook view, notes in the editor).
   const [viewPages, setViewPages] = useLocalState<string[]>('nicotes.viewPages', []);
   const viewing = viewPages.includes(page.id);
+  // A drawing rather than text: shown by the canvas editor, without the text tools.
+  const canvas = isCanvas(content);
   const showView = (on: boolean) =>
     setViewPages((list) => (on ? [...list.filter((id) => id !== page.id), page.id].slice(-500) : list.filter((id) => id !== page.id)));
   const editIn = (next: Mode) => {
@@ -250,7 +257,7 @@ function PageEditor({ page }: { page: Page }) {
               },
             ]}
           />
-          {cited && (viewing || mode === 'visual') && (
+          {!canvas && cited && (viewing || mode === 'visual') && (
             <button
               className={`btn btn-sm sources-toggle${hideSources ? ' active' : ''}`}
               aria-pressed={hideSources}
@@ -260,15 +267,17 @@ function PageEditor({ page }: { page: Page }) {
               <EyeOff size={15} /> <span>Hide sources</span>
             </button>
           )}
-          <button
-            className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
-            aria-pressed={assistantOpen}
-            title="Chat about this page and let AI propose changes"
-            onClick={() => setAssistantOpen(!assistantOpen)}
-          >
-            <Bot size={15} /> <span>Assistant</span>
-          </button>
-          <div className="segmented" role="group" aria-label="Editor mode">
+          {!canvas && (
+            <button
+              className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
+              aria-pressed={assistantOpen}
+              title="Chat about this page and let AI propose changes"
+              onClick={() => setAssistantOpen(!assistantOpen)}
+            >
+              <Bot size={15} /> <span>Assistant</span>
+            </button>
+          )}
+          {!canvas && <div className="segmented" role="group" aria-label="Editor mode">
             <button
               className={!viewing && mode === 'visual' ? 'active' : ''}
               aria-pressed={!viewing && mode === 'visual'}
@@ -291,7 +300,7 @@ function PageEditor({ page }: { page: Page }) {
             >
               <LayoutTemplate size={15} /> <span>View</span>
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -320,8 +329,12 @@ function PageEditor({ page }: { page: Page }) {
 
       <div className="page-split">
         <div className="page-main">
-          <div ref={body} className={`page-body${hideSources ? ' hide-sources' : ''}`} style={pageWidth ? { maxWidth: pageWidth } : undefined}>
-            <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />
+          <div
+            ref={body}
+            className={`page-body${hideSources ? ' hide-sources' : ''}${canvas ? ' canvas-body' : ''}`}
+            style={pageWidth && !canvas ? { maxWidth: pageWidth } : undefined}
+          >
+            {!canvas && <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />}
             <textarea
               ref={titleInput}
               className="page-title"
@@ -339,8 +352,12 @@ function PageEditor({ page }: { page: Page }) {
               }}
             />
             <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
-            <PageSummary pageId={page.id} version={version} summarize={summarize} />
-            {viewing ? (
+            {!canvas && <PageSummary pageId={page.id} version={version} summarize={summarize} />}
+            {canvas ? (
+              <Suspense fallback={<div className="canvas-host canvas-loading" aria-busy="true" />}>
+                <CanvasEditor key={`c${revision}`} content={content} onChange={setContent} upload={upload} onOpenLink={(t) => bridge.open(t)} />
+              </Suspense>
+            ) : viewing ? (
               <PageLayout
                 pageId={page.id}
                 notebookId={notebookId}
@@ -371,7 +388,7 @@ function PageEditor({ page }: { page: Page }) {
             <LocalGraph pageId={page.id} notebookId={notebookId} />
           </div>
         </div>
-        {assistantOpen && (
+        {assistantOpen && !canvas && (
           <PageAssistant
             pageId={page.id}
             title={title}

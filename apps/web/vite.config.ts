@@ -1,11 +1,45 @@
 /// <reference types="vitest/config" />
+import { cpSync, existsSync, readFileSync } from 'node:fs';
+import { join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * Excalidraw (canvas pages) loads its fonts from EXCALIDRAW_ASSET_PATH, else from a CDN that
+ * the CSP blocks: they are served from /excalidraw/fonts instead. Browsers fetch only the
+ * subsets the text needs (see CanvasEditor), so the large CJK font costs disk space only.
+ */
+function excalidrawFonts(): Plugin {
+  const fonts = ['../../node_modules', 'node_modules']
+    .map((dir) => fileURLToPath(new URL(`${dir}/@excalidraw/excalidraw/dist/prod/fonts`, import.meta.url)))
+    .find((dir) => existsSync(dir));
+  if (!fonts) throw new Error('@excalidraw/excalidraw is not installed');
+  let outDir = 'dist';
+  return {
+    name: 'nicotes-excalidraw-fonts',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    configureServer(server) {
+      server.middlewares.use('/excalidraw/fonts', (req, res, next) => {
+        const file = normalize(join(fonts, decodeURIComponent((req.url ?? '').split('?')[0]!)));
+        if (!file.startsWith(fonts) || !existsSync(file) || !file.endsWith('.woff2')) return next();
+        res.setHeader('Content-Type', 'font/woff2');
+        res.end(readFileSync(file));
+      });
+    },
+    writeBundle() {
+      cpSync(fonts, join(outDir, 'excalidraw/fonts'), { recursive: true });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    excalidrawFonts(),
     VitePWA({
       registerType: 'autoUpdate',
       // Registered from main.tsx (virtual:pwa-register), which also reloads the page once an
@@ -59,6 +93,11 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    // One React, also should npm ever nest a second copy for a dependency's peer range
+    // (Excalidraw's Radix tabs ask for React 18; see docs/DEVELOPMENT.md).
+    dedupe: ['react', 'react-dom'],
+  },
   server: {
     port: 5180,
     proxy: { '/api': 'http://localhost:3000' },

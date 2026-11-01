@@ -448,3 +448,28 @@
   display: flex;
   gap: 6px;
 }
+
+/* ---------- Canvas pages ---------- */
+
+.page-body.canvas-body {
+  max-width: none;
+}
+
+.canvas-host {
+  position: relative;
+  height: max(420px, calc(100dvh - 240px));
+  margin: 8px 0 24px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.canvas-loading {
+  background: var(--bg-elev);
+}
+
+/* Excalidraw's own font for its UI is fine; it should not inherit the page's prose styles. */
+.canvas-host .excalidraw {
+  --color-primary: var(--accent);
+  font-size: 14px;
+}

@@ -4,6 +4,7 @@ import { normalizeTag } from './tags';
 export * from './ai';
 export * from './assistant';
 export * from './blocks';
+export * from './canvas';
 export * from './citations';
 export * from './colors';
 export * from './diff';
@@ -119,6 +120,8 @@ export interface PageSummary {
   sortOrder: number;
   /** Normalised tag names, sorted. */
   tags: string[];
+  /** A canvas page (a drawing) rather than a text page. */
+  canvas: boolean;
   createdAt: number;
   updatedAt: number;
 }
