@@ -1,20 +1,66 @@
-# Nicotes
+<div align="center">
 
-Self-hosted notes that are easy to group and link — somewhere between OneNote and
-Obsidian. Web UI only, dark theme, runs as a single Docker container.
+<img src="docs/brand/logo.svg" alt="Nicotes" height="72">
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the design and roadmap, and
-[CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+**Self-hosted notes that are easy to group and link, somewhere between OneNote and Obsidian.**
 
-## Run with Docker
+[![Pipeline](https://git.nico.software/1n9i9c7om/nicotes/badges/main/pipeline.svg)](https://git.nico.software/1n9i9c7om/nicotes/-/pipelines)
+[![Latest release](https://git.nico.software/1n9i9c7om/nicotes/-/badges/release.svg)](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
+[![Docker](https://img.shields.io/badge/runs%20on-Docker-2496ED?logo=docker&logoColor=white)](#quick-start)
+[![Node 24+](https://img.shields.io/badge/node-24%2B-5FA04E?logo=nodedotjs&logoColor=white)](#development)
+[![React + TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6?logo=typescript&logoColor=white)](#development)
+[![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)](#phone-app)
+
+[Quick start](#quick-start) · [Features](#features) · [Changelog](CHANGELOG.md) · [Design & roadmap](docs/DESIGN.md)
+
+<img src="docs/images/editor.png" alt="A page in Nicotes: notebooks and pages on the left, a formatted page with a table, tasks and links on the right" width="900">
+
+</div>
+
+## Why Nicotes?
+
+OneNote gives you notebooks and pages but few connections between them. Obsidian gives
+you links and a graph, but a folder of files can be a lot to keep in order. Nicotes tries to
+sit in between: a calm web app where notes live in **notebooks and nested pages**, and
+**links, tags and a graph** connect them across notebooks, without having to plan any of
+it upfront.
+
+- 🗂️ **Notebooks and subpages** you can drag around, with colours, tags and a full-text search (<kbd>Ctrl</kbd> <kbd>K</kbd>).
+- 🔗 **`[[Links]]`, backlinks and a graph**, plus unlinked mentions that turn into links with one click.
+- ✅ **Every checkbox in one task list**, grouped by due date, with a daily journal note.
+- 🍳 **Pages that know what they are**: recipes with servings and timers, checklists, step-by-step guides, a read-aloud reader.
+- 🤖 **Optional AI** through OpenRouter or Routeway: ask your notes, research the web, an assistant whose changes you review like a diff.
+- 📱 **On every screen**: installable on your phone, and in the sidebar of Firefox, Chrome and Edge.
+- 💾 **Your data, on your server**: one container, daily backups and a Markdown export that opens in Obsidian.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/graph.png" alt="The graph of pages, coloured by notebook"><br><sub><b>Graph</b>: how pages connect through links, subpages and tags.</sub></td>
+    <td width="50%"><img src="docs/images/recipe.png" alt="A recipe in the interactive view with servings and timers"><br><sub><b>View</b>: a recipe with adjustable servings, timers and a cook mode.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/tasks.png" alt="Tasks from all pages grouped by due date"><br><sub><b>Tasks</b>: every checkbox from every page, grouped by due date.</sub></td>
+    <td width="50%">
+      <img src="docs/images/phone-journal.png" alt="The daily journal note on a phone" width="31%">
+      <img src="docs/images/phone-checklist.png" alt="A packing list in the checklist view on a phone" width="31%">
+      <img src="docs/images/phone-drawer.png" alt="The navigation drawer on a phone" width="31%">
+      <br><sub><b>Phone</b>: the same app, laid out for small screens.</sub>
+    </td>
+  </tr>
+</table>
+
+## Quick start
 
 ```bash
 cp .env.example .env   # set NICOTES_ADMIN_USER / NICOTES_ADMIN_PASSWORD
 docker compose up -d --build
 ```
 
-Open http://localhost:3000. Data lives in the `nicotes-data` volume (SQLite database,
-attachments and the key that encrypts stored API keys).
+Open http://localhost:3000 and sign in. Data lives in the `nicotes-data` volume (SQLite
+database, attachments and the key that encrypts stored API keys). To use the prebuilt
+image instead of building it, see [Branches, releases and images](#branches-releases-and-images).
+
+## Features
 
 ### Writing
 
@@ -106,6 +152,26 @@ format must be enabled), otherwise via the web search of the research model's se
 docker compose -f compose.searxng.yml up -d
 ```
 
+### Import (optional)
+
+Import turns web pages into notes. It works out of the box for pages with embedded recipe
+data and as a plain page clip; summaries and structure need an
+[OpenRouter](https://openrouter.ai/keys) API key (default model `z-ai/glm-5.3-flashx`) or a
+[Routeway](https://routeway.ai) key with a Routeway model chosen for import.
+Keys, model and crawl4ai can be set under **Settings** or via `.env`.
+
+[crawl4ai](https://github.com/unclecode/crawl4ai) is optional and renders JavaScript-heavy
+pages. To run one locally, set `CRAWL4AI_TOKEN` in `.env`, then:
+
+```bash
+docker compose -f compose.crawl4ai.yml up -d
+```
+
+Point Nicotes at it with `CRAWL4AI_URL=http://localhost:11235` (dev) or, if both run in one
+compose project, `http://crawl4ai:11235`.
+
+## Phone and browser
+
 ### Phone app
 
 Nicotes is a PWA: open it in your phone's browser and choose "Install app" / "Add to Home
@@ -137,7 +203,7 @@ own sign-in.
    which keeps you signed in in the sidebar. To change the address later, open the extension's
    options (Firefox: `about:addons` → Nicotes → Options).
 
-### Backups
+## Backups
 
 Nicotes backs itself up once a day: a consistent copy of the database (taken while it runs),
 the attachments and the key file for stored API keys, as one `nicotes-<time>.tar.gz`. It
@@ -166,24 +232,6 @@ backup folder. Without Docker, stop the server and run `npm run restore -- <back
 (or `node apps/server/dist/restore.js <backup file>` with a build); it restores into
 `DATA_DIR`. Separately, Settings → Export downloads all notes as Markdown (an
 Obsidian-compatible vault), handy for reading them without Nicotes.
-
-### Import (optional)
-
-Import turns web pages into notes. It works out of the box for pages with embedded recipe
-data and as a plain page clip; summaries and structure need an
-[OpenRouter](https://openrouter.ai/keys) API key (default model `z-ai/glm-5.3-flashx`) or a
-[Routeway](https://routeway.ai) key with a Routeway model chosen for import.
-Keys, model and crawl4ai can be set under **Settings** or via `.env`.
-
-[crawl4ai](https://github.com/unclecode/crawl4ai) is optional and renders JavaScript-heavy
-pages. To run one locally, set `CRAWL4AI_TOKEN` in `.env`, then:
-
-```bash
-docker compose -f compose.crawl4ai.yml up -d
-```
-
-Point Nicotes at it with `CRAWL4AI_URL=http://localhost:11235` (dev) or, if both run in one
-compose project, `http://crawl4ai:11235`.
 
 ## Development
 
@@ -252,8 +300,10 @@ then:
   [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
   masked), also has Mozilla sign the extension as "On your own" and adds the signed `.xpi`,
   which release Firefox installs. Mozilla signs each version only once.
+- publishes the landing page (`site/`, with the logo and screenshots from `docs/`) on the
+  project's GitLab Pages;
 - with those keys, also publishes the signed `.xpi` and an update manifest (`updates.json`)
-  on the project's GitLab Pages. The packed extension's `update_url` points there, so an
+  next to it, and the landing page offers the `.xpi` for Firefox. The packed extension's `update_url` points there, so an
   installed copy updates itself (Firefox checks about once a day). Firefox checks without
   signing in, so set **Settings → General → Visibility → Pages** to "Everyone"; the
   repository itself can stay private. Pages must be enabled on the GitLab instance and
@@ -264,7 +314,11 @@ then:
   warning) and a tag that would be signed fails, since a version can only be signed once.
 
 To check Pages before a release, run the manual `pages` job in a branch pipeline (e.g. on
-`develop`). It publishes a preview with the unsigned zip and that branch's version, so
-installed copies don't update to it, and prints the address of `updates.json`. That
-address must open in a private browser window, without signing in. The next release
-replaces the preview.
+`develop`). It publishes a preview of the landing page with the unsigned zip and that
+branch's version, so installed copies don't update to it, and prints the addresses of the
+page and of `updates.json`. Both must open in a private browser window, without signing
+in. The next release replaces the preview. Each deployment replaces the whole site, so a
+release without the AMO keys removes an earlier `updates.json`.
+
+To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0` and open
+`public/index.html`.
