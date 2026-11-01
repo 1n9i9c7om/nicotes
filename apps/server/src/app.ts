@@ -31,11 +31,13 @@ import { mentionRoutes } from './routes/mentions.js';
 import { notebookRoutes } from './routes/notebooks.js';
 import { pageRoutes } from './routes/pages.js';
 import { searchRoutes } from './routes/search.js';
+import { reminderRoutes } from './routes/reminders.js';
 import { securityRoutes } from './routes/security.js';
 import { publicShareRoutes, shareRoutes } from './routes/shares.js';
 import { taskRoutes } from './routes/tasks.js';
 import { tagRoutes } from './routes/tags.js';
 import { trashRoutes } from './routes/trash.js';
+import { ReminderService, type ReminderOptions } from './reminders.js';
 import { SecretBox } from './secrets.js';
 import { settingsRoutes, SettingsStore } from './settings.js';
 import { systemRoutes } from './system.js';
@@ -60,6 +62,8 @@ export interface AppOptions {
   /** Tests: a fake embedder, and no waiting for typing to pause before indexing. */
   embedder?: Embedder;
   semanticQuietMs?: number;
+  /** Tests: fake push services, Telegram and clock for reminders. */
+  reminders?: ReminderOptions;
 }
 
 export function createApp({
@@ -74,6 +78,7 @@ export function createApp({
   backups: backupOptions,
   embedder,
   semanticQuietMs,
+  reminders: reminderOptions,
 }: AppOptions) {
   const app = new Hono();
   const secrets = SecretBox.load(dataDir, secret);
@@ -82,6 +87,7 @@ export function createApp({
   jobs.register('organize', organizeJob(db));
   jobs.register('research', researchJob(db, importAllowPrivate));
   const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
+  const reminders = new ReminderService(db, settings, reminderOptions);
   const backups = new BackupService(
     db,
     dataDir,
@@ -157,7 +163,7 @@ export function createApp({
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
-  for (const area of ['settings', 'backups', 'tokens', 'security', 'shares']) {
+  for (const area of ['settings', 'backups', 'tokens', 'security', 'shares', 'reminders']) {
     app.use(`/api/${area}`, sessionOnly);
     app.use(`/api/${area}/*`, sessionOnly);
   }
@@ -180,6 +186,7 @@ export function createApp({
   app.route('/api/tokens', tokenRoutes(db));
   app.route('/api/security', securityRoutes(db, secrets));
   app.route('/api/shares', shareRoutes(db, secrets));
+  app.route('/api/reminders', reminderRoutes(reminders));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));
@@ -218,5 +225,5 @@ export function createApp({
     });
   }
 
-  return Object.assign(app, { jobs, semantic, backups });
+  return Object.assign(app, { jobs, semantic, backups, reminders });
 }

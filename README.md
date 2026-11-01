@@ -111,7 +111,16 @@ Every `- [ ]` checkbox in any page shows up under **Tasks**, grouped by due date
 page, and new tasks go into today's journal note. Checklists of pages tagged `#recipe` stay
 out (Settings → Tasks). Under Settings → Tasks → **Calendar subscription** you get a secret
 address for Google Calendar, Apple Calendar, Thunderbird and the like: open tasks with a due
-date show up there as all-day events. Below each page, **Connections** shows backlinks, **unlinked
+date show up there as all-day events.
+
+**Reminders:** write `⏰ 09:00` after a task with a due date (or `⏰ 2026-11-04 09:00` after
+any task) to be reminded then, and/or get a summary of the day's tasks every morning.
+Settings → **Reminders** sends them as notifications to your phone or computer (on iPhone
+and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
+own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in
+the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token.
+
+Below each page, **Connections** shows backlinks, **unlinked
 mentions** (pages that name each other without a link, linked with one click) and, with
 the semantic index, **related** pages.
 

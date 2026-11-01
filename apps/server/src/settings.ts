@@ -50,6 +50,9 @@ const KEYS = {
   tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
   semanticIndex: { key: 'ai.semanticIndex', secret: false },
   embeddingModel: { key: 'ai.embeddingModel', secret: false },
+  reminderDigestTime: { key: 'reminders.digestTime', secret: false },
+  reminderTimeZone: { key: 'reminders.timeZone', secret: false },
+  telegramBotToken: { key: 'telegram.botToken', secret: true },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -123,6 +126,9 @@ export class SettingsStore {
       excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
       semanticIndex: pick('semanticIndex', 'false'),
       embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
+      digestTime: pick('reminderDigestTime'),
+      timeZone: pick('reminderTimeZone'),
+      telegramToken: pick('telegramBotToken'),
     };
   }
 
@@ -160,6 +166,12 @@ export class SettingsStore {
       },
       daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
       tasks: { excludeTags: parseList(r.excludeTags.value), excludeTagsSource: r.excludeTags.source },
+      reminders: {
+        digestTime: r.digestTime.value,
+        timeZone: r.timeZone.value,
+        telegramTokenSet: r.telegramToken.value !== null,
+        telegramTokenSource: r.telegramToken.source,
+      },
       semantic: {
         enabled: r.semanticIndex.value === 'true',
         enabledSource: r.semanticIndex.source,
@@ -187,6 +199,41 @@ export class SettingsStore {
       semanticIndex: r.semanticIndex.value === 'true',
       embeddingModel: r.embeddingModel.value!,
     };
+  }
+
+  /** Reminder settings with the bot token itself, for the reminder service only. */
+  reminders(userId: string) {
+    const r = this.resolve(userId);
+    return { digestTime: r.digestTime.value, timeZone: r.timeZone.value, telegramToken: r.telegramToken.value };
+  }
+
+  /**
+   * Values the server keeps per account that are no user setting (keys it generated, a linked
+   * chat). Same table, under `internal.` keys; secrets are encrypted.
+   */
+  internal(userId: string, key: string, secret = false): string | null {
+    const row = this.db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(and(eq(settings.userId, userId), eq(settings.key, `internal.${key}`)))
+      .get();
+    if (!row) return null;
+    return secret ? this.box.decrypt(row.value) : row.value;
+  }
+
+  setInternal(userId: string, key: string, value: string | null, secret = false) {
+    const where = and(eq(settings.userId, userId), eq(settings.key, `internal.${key}`));
+    if (value === null) {
+      this.db.delete(settings).where(where).run();
+      return;
+    }
+    const stored = secret ? this.box.encrypt(value) : value;
+    const now = Date.now();
+    this.db
+      .insert(settings)
+      .values({ userId, key: `internal.${key}`, value: stored, updatedAt: now })
+      .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value: stored, updatedAt: now } })
+      .run();
   }
 
   /** Called after every update, e.g. to start or clear the semantic index. */

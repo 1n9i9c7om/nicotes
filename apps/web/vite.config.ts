@@ -40,6 +40,8 @@ export default defineConfig({
         // language modes, font subsets) are cached the first time they are used. Data
         // always comes from the server.
         globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg', 'icons/*.png'],
+        // Shows task reminders that arrive as push messages (public/push-sw.js).
+        importScripts: ['push-sw.js'],
         // A new version takes over at once instead of waiting until every Nicotes tab is
         // closed (the old app code would otherwise keep talking to the new server).
         skipWaiting: true,

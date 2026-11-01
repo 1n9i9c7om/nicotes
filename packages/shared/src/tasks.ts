@@ -11,6 +11,12 @@ import { addToSection, appendBlock } from './sections';
  */
 export const DUE_TOKEN = /(?:📅\s*|\bdue:|(?<![\w.])@)(\d{4}-\d{2}-\d{2})(?!\d)/gu;
 
+/**
+ * A reminder: `⏰ 09:00` on the due date, or `⏰ 2026-10-25 09:00` on a day of its own. Times
+ * are in the time zone set under Settings → Reminders.
+ */
+export const REMIND_TOKEN = /⏰\s*(?:(\d{4}-\d{2}-\d{2})\s+)?([01]?\d|2[0-3]):([0-5]\d)(?!\d)/gu;
+
 const TASK_LINE = /^(\s*)([-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const HEADING = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/;
@@ -25,6 +31,8 @@ export interface TaskItem {
   done: boolean;
   /** YYYY-MM-DD. */
   due: string | null;
+  /** "YYYY-MM-DDTHH:MM", local time; null without a reminder (or a time but no date). */
+  remind: string | null;
   /** Nearest heading above the task. */
   heading: string | null;
   /** Indentation level (0 for top-level tasks). */
@@ -32,6 +40,13 @@ export interface TaskItem {
 }
 
 const stripDue = (text: string) => text.replace(DUE_TOKEN, '').replace(/\s{2,}/g, ' ').trim();
+const stripMeta = (text: string) => stripDue(text.replace(REMIND_TOKEN, ''));
+
+function remindAt(body: string, due: string | null): string | null {
+  const m = [...body.matchAll(REMIND_TOKEN)].at(-1);
+  const day = m?.[1] ?? due;
+  return m && day ? `${day}T${m[2]!.padStart(2, '0')}:${m[3]}` : null;
+}
 
 /** All tasks of a page, outside code blocks. */
 export function parseTasks(markdown: string): TaskItem[] {
@@ -60,9 +75,10 @@ export function parseTasks(markdown: string): TaskItem[] {
     tasks.push({
       line: index,
       raw: line,
-      text: stripDue(body),
+      text: stripMeta(body),
       done: m[3] !== ' ',
       due,
+      remind: remindAt(body, due),
       heading,
       depth: Math.floor(m[1]!.replace(/\t/g, '  ').length / 2),
     });

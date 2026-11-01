@@ -83,10 +83,27 @@ describe('tasks', () => {
       '- [] not a task either',
     ].join('\n');
     expect(parseTasks(md)).toEqual([
-      { line: 1, raw: '- [ ] Flour 📅 2026-10-25', text: 'Flour', done: false, due: '2026-10-25', heading: 'Shopping', depth: 0 },
-      { line: 2, raw: '  - [x] Eggs due:2026-10-21', text: 'Eggs', done: true, due: '2026-10-21', heading: 'Shopping', depth: 1 },
-      { line: 3, raw: '1. [ ] Call @2026-10-22 mom', text: 'Call mom', done: false, due: '2026-10-22', heading: 'Shopping', depth: 0 },
+      { line: 1, raw: '- [ ] Flour 📅 2026-10-25', text: 'Flour', done: false, due: '2026-10-25', remind: null, heading: 'Shopping', depth: 0 },
+      { line: 2, raw: '  - [x] Eggs due:2026-10-21', text: 'Eggs', done: true, due: '2026-10-21', remind: null, heading: 'Shopping', depth: 1 },
+      { line: 3, raw: '1. [ ] Call @2026-10-22 mom', text: 'Call mom', done: false, due: '2026-10-22', remind: null, heading: 'Shopping', depth: 0 },
     ]);
+  });
+
+  it('reads reminder times on the due date or on a day of their own', () => {
+    const [onDue, ownDay, noDate, late] = parseTasks(
+      [
+        '- [ ] Call mum ⏰ 9:30 📅 2026-11-04',
+        '- [ ] Pay rent 📅 2026-11-30 ⏰ 2026-11-28 18:00',
+        '- [ ] Stretch ⏰ 07:00',
+        '- [ ] Not a time ⏰ 24:00 📅 2026-11-04',
+      ].join('\n'),
+    );
+    expect(onDue).toMatchObject({ text: 'Call mum', due: '2026-11-04', remind: '2026-11-04T09:30' });
+    expect(ownDay).toMatchObject({ text: 'Pay rent', due: '2026-11-30', remind: '2026-11-28T18:00' });
+    expect(noDate).toMatchObject({ text: 'Stretch', remind: null });
+    expect(late).toMatchObject({ remind: null });
+    // Setting another due date keeps the reminder.
+    expect(updateTaskLine('- [ ] Call mum ⏰ 9:30 📅 2026-11-04', { due: '2026-11-05' })).toBe('- [ ] Call mum ⏰ 9:30 📅 2026-11-05');
   });
 
   it('adds tasks to a placeholder, a tasks section or the end of the page', () => {

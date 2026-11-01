@@ -4,7 +4,8 @@ import { Check, CheckCircle2, Copy, Download, Fingerprint, ShieldCheck, XCircle 
 import type { Passkey, RecoveryCodes, SecurityStatus, TotpSetup } from '@nicotes/shared';
 import { api, ApiError } from '../lib/api';
 import { timeAgo } from '../lib/format';
-import { createPasskey, deviceName, passkeysSupported } from '../lib/passkeys';
+import { deviceName } from '../lib/device';
+import { createPasskey, passkeysSupported } from '../lib/passkeys';
 import { useAuthStatus } from '../lib/queries';
 
 const securityKey = ['security'] as const;
