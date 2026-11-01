@@ -96,6 +96,12 @@ toolbar's highlighter button colours the selected text or its background from a 
 palette; colours are stored the way Obsidian writes them (`==highlight==`,
 `<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
 
+**Voice notes:** the microphone button in the toolbar records straight into the page (the
+recording is kept as an attachment, with a player). With a transcription service set up
+under Settings → **Voice notes**, what you said is written below it too: your own Whisper
+server (such as [Speaches](https://speaches.ai)), or Groq or OpenAI with a key. Recording
+needs HTTPS (or localhost).
+
 Search (<kbd>Ctrl</kbd> <kbd>K</kbd>) also looks inside the PDFs and text files your pages
 show. Photos and scanned images can be searched too once you turn on **Read images with AI**
 under Settings → Search in files: each image is then sent once to an AI model of your choice

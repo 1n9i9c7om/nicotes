@@ -377,7 +377,8 @@ export function useUpdateSettings() {
 
 export const useCheckConnection = () =>
   useMutation({
-    mutationFn: (target: 'openrouter' | 'routeway' | 'local' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
+    mutationFn: (target: 'openrouter' | 'routeway' | 'local' | 'crawl4ai' | 'searxng' | 'transcribe') =>
+      api.post<ConnectionCheck>('/settings/check', { target }),
   });
 
 /** Chat models of both services, or OpenRouter's embedding models (pickers and prices). */

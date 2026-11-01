@@ -210,8 +210,20 @@ and tsup respectively).
   picture (≤ 10 MB). Turning that on, or changing model or keys, retries images not read
   yet. Search adds file matches for pages whose Markdown still links the file (keeping at
   least a quarter of the results for them); a page matching by its own text is listed once.
-- **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
-  and plain text display inline; everything else downloads.
+- **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF,
+  plain text and audio display inline; everything else downloads. Byte ranges (`Range`,
+  206/416) are supported, which Safari needs for audio and video.
+- **Voice notes** (`components/VoiceRecorder.tsx`, `editor/audio.ts`, `ai/transcribe.ts`):
+  MediaRecorder records Opus in WebM (Chrome, Firefox) or AAC in MP4 (Safari), at most 30
+  minutes, uploaded as an attachment and linked as `[🎙️ Voice note (m:ss)](…)` (its own
+  paragraph unless the line is empty). Markdown has no audio syntax, so the link stays a
+  link; a ProseMirror plugin adds an `<audio>` widget after links to audio attachments
+  (keyed by address, so typing does not restart playback; WebM lacks a duration, which the
+  player works out by seeking to the end once). Transcription: `POST
+  /api/attachments/<id>/transcribe` sends the file to an OpenAI-compatible
+  `/audio/transcriptions` (URL, key and model in settings, `TRANSCRIBE_*` env), stores the
+  text in `attachment_text` for search, and the editor adds it as a quote below the
+  recording.
 - **Framing** is refused (`frame-ancestors 'none'`). `NICOTES_BROWSER_EXTENSION=true`
   allows `moz-extension:` and `chrome-extension:` ancestors for the sidebar extension
   (`extension/`): Firefox gives every install a random origin, so it can only be allowed by
@@ -502,6 +514,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
 | `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT,IMAGES}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
 | `NICOTES_READ_IMAGES` | `false` | Default for reading images with AI for search (overridable in Settings) |
+| `TRANSCRIBE_URL`, `TRANSCRIBE_KEY`, `TRANSCRIBE_MODEL` | —, —, `whisper-1` | OpenAI-compatible transcription service for voice notes (overridable in Settings) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
@@ -548,5 +561,5 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
     links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
-    PDFs and images; next: voice notes, canvas pages with drawing.
+    PDFs and images, ✅ voice notes with transcription; next: canvas pages with drawing.
 12. **Later** — multi-user.

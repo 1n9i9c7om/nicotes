@@ -84,7 +84,13 @@ export default defineConfig({
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel, storageState: join(import.meta.dirname, '.auth/user.json') },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel,
+        storageState: join(import.meta.dirname, '.auth/user.json'),
+        // A fake microphone (a beep) without a permission prompt, for voice notes.
+        launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+      },
       dependencies: ['setup'],
       testIgnore: /mobile\.spec\.ts/,
     },

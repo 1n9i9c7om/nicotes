@@ -8,6 +8,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
+  DEFAULT_TRANSCRIBE_MODEL,
   modelSetting,
   settingsUpdateSchema,
   type AiTask,
@@ -55,6 +56,9 @@ const KEYS = {
   reminderTimeZone: { key: 'reminders.timeZone', secret: false },
   telegramBotToken: { key: 'telegram.botToken', secret: true },
   readImages: { key: 'search.readImages', secret: false },
+  transcribeUrl: { key: 'transcribe.url', secret: false },
+  transcribeKey: { key: 'transcribe.apiKey', secret: true },
+  transcribeModel: { key: 'transcribe.model', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -134,6 +138,9 @@ export class SettingsStore {
       timeZone: pick('reminderTimeZone'),
       telegramToken: pick('telegramBotToken'),
       readImages: pick('readImages', 'false'),
+      transcribeUrl: pick('transcribeUrl'),
+      transcribeKey: pick('transcribeKey'),
+      transcribeModel: pick('transcribeModel', DEFAULT_TRANSCRIBE_MODEL),
     };
   }
 
@@ -171,6 +178,14 @@ export class SettingsStore {
       },
       daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
       tasks: { excludeTags: parseList(r.excludeTags.value), excludeTagsSource: r.excludeTags.source },
+      transcription: {
+        url: r.transcribeUrl.value,
+        urlSource: r.transcribeUrl.source,
+        keySet: r.transcribeKey.value !== null,
+        keySource: r.transcribeKey.source,
+        model: r.transcribeModel.value!,
+        modelSource: r.transcribeModel.source,
+      },
       search: { readImages: r.readImages.value === 'true', readImagesSource: r.readImages.source },
       reminders: {
         digestTime: r.digestTime.value,
@@ -206,6 +221,13 @@ export class SettingsStore {
       embeddingModel: r.embeddingModel.value!,
       readImages: r.readImages.value === 'true',
     };
+  }
+
+  /** The transcription service with its key, or null when none is set up. */
+  transcription(userId: string): { url: string; key: string | null; model: string } | null {
+    const r = this.resolve(userId);
+    if (!r.transcribeUrl.value) return null;
+    return { url: r.transcribeUrl.value.replace(/\/+$/, ''), key: r.transcribeKey.value, model: r.transcribeModel.value! };
   }
 
   /** Reminder settings with the bot token itself, for the reminder service only. */
@@ -355,6 +377,28 @@ export async function checkLocal(local: ProviderKeys['local']): Promise<Connecti
   }
 }
 
+/** A transcription service answers /models (OpenAI, Groq, Speaches, LocalAI all do). */
+export async function checkTranscription(service: { url: string; key: string | null; model: string } | null): Promise<ConnectionCheck> {
+  if (!service) return { ok: false, message: 'No address configured' };
+  try {
+    const res = await fetch(`${service.url}/models`, {
+      headers: service.key ? { authorization: `Bearer ${service.key}` } : {},
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, message: 'The service rejected the key' };
+    if (res.status === 404 && !/\/v1$/.test(service.url)) return { ok: false, message: 'Not found: the address usually ends in /v1' };
+    if (!res.ok) return { ok: false, message: `The service answered ${res.status}` };
+    const body = (await res.json().catch(() => ({}))) as { data?: { id: string }[] };
+    const ids = body.data?.map((m) => m.id) ?? [];
+    if (ids.length && !ids.includes(service.model)) {
+      return { ok: false, message: `Reachable, but it has no model “${service.model}” (it has ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? ', …' : ''})` };
+    }
+    return { ok: true, message: `Reachable · model ${service.model}` };
+  } catch (error) {
+    return { ok: false, message: `Cannot reach the service: ${(error as Error).cause ?? (error as Error).message}` };
+  }
+}
+
 export async function checkCrawl4ai(url: string | null, token: string | null): Promise<ConnectionCheck> {
   if (!url) return { ok: false, message: 'No crawl4ai URL configured — imports use the built-in extractor' };
   try {
@@ -396,9 +440,10 @@ export function settingsRoutes(store: SettingsStore) {
       return c.json(store.view(c.var.user.id));
     })
     .post('/check', async (c) => {
-      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'local', 'crawl4ai', 'searxng']) }));
+      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'local', 'crawl4ai', 'searxng', 'transcribe']) }));
       const cfg = store.effective(c.var.user.id);
       const checks = {
+        transcribe: () => checkTranscription(store.transcription(c.var.user.id)),
         openrouter: () => checkOpenRouter(cfg.openrouterApiKey),
         routeway: () => checkRouteway(cfg.keys.routeway),
         local: () => checkLocal(cfg.keys.local),
