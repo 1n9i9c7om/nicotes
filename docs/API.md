@@ -57,6 +57,20 @@ curl -s -H "Authorization: Bearer nct_…" -H "Content-Type: application/json" \
   -d "{\"pageId\": \"$PAGE\", \"text\": \"Call the plumber\"}" https://notes.example.com/api/tasks
 ```
 
+### Logbooks from your own scripts
+
+A page with a table whose first column is `Date` shows as charts in its View, one chart per
+column of numbers. Scripts can keep such a logbook by reading the page and writing it back
+with a new row (the adapters under Settings → Adapters do the same, but are managed only in
+the app, since they hold other services' tokens):
+
+```markdown
+| Date | Weight (kg) | Steps |
+| --- | --- | --- |
+| 2026-11-01 | 81.4 | 9120 |
+| 2026-11-02 | 81.1 | 11 304 |
+```
+
 ## Calendar feed
 
 `GET /api/calendar/<token>.ics` is an iCalendar feed of the open tasks with a due date

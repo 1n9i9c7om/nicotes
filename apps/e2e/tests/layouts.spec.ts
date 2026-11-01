@@ -81,3 +81,24 @@ test('a layout can be chosen by hand and set back to automatic', async ({ page }
   await pick.selectOption('');
   await expect(page.getByText('Detected automatically')).toBeVisible();
 });
+
+test('tables of numbers are drawn as charts, a value per point on hover', async ({ page }) => {
+  const nb = await createNotebook(page, uniq('Layouts NB'));
+  const table = ['| Date | Weight (kg) | Note |', '| --- | --- | --- |', '| 2026-10-01 | 81,4 | start |', '| 2026-10-08 | 80.9 | |', '| 2026-10-15 | 80.2 | |', '| 2026-10-22 | 79.6 | holiday |'];
+  const doc = await createPage(page, { notebookId: nb.id, title: uniq('Weight'), content: table.join('\n') });
+
+  await openView(page, doc.id);
+  await expect(page.getByRole('combobox', { name: 'Layout' })).toHaveValue('');
+  await expect(page.locator('.layout-data')).toBeVisible();
+  // One chart per numeric column; the text column is left out.
+  // Numbers are shown the browser's way ("79.6" or "79,6").
+  const chart = page.getByRole('img', { name: /^Weight \(kg\): 4 values from 79[.,]6 to 81[.,]4$/ });
+  await expect(chart).toBeVisible();
+  await expect(page.locator('.chart-card')).toHaveCount(1);
+  const box = (await chart.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 14, box.y + box.height / 2);
+  await expect(page.locator('.chart-tip')).toContainText('2026-10-22');
+  await expect(page.locator('.chart-tip')).toContainText(/79[.,]6 kg/);
+  // The table itself stays below the charts.
+  await expect(page.getByRole('table')).toContainText('holiday');
+});

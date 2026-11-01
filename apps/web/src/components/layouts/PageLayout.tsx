@@ -5,6 +5,7 @@ import { useLayoutActions, usePageLayout, useSettings } from '../../lib/queries'
 import { aiKeyFor } from '../../lib/ai';
 import { formatCost } from '../JobProgress';
 import { ChecklistLayout } from './ChecklistLayout';
+import { DataLayout } from './DataLayout';
 import { DocumentLayout } from './DocumentLayout';
 import { GuideLayout } from './GuideLayout';
 import { ReaderLayout } from './ReaderLayout';
@@ -17,6 +18,7 @@ const VIEWS: Record<LayoutType, ComponentType<LayoutProps>> = {
   recipe: RecipeLayout,
   steps: GuideLayout,
   reader: ReaderLayout,
+  data: DataLayout,
 };
 
 /** Below this confidence the heuristic asks the AI (once per page and visit). */

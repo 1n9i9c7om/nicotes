@@ -36,6 +36,7 @@ const replySchema = z.object({
   ingredients: z.array(z.string()).nullish(),
   steps: z.array(z.string()).nullish(),
   lists: z.array(z.string()).nullish(),
+  tables: z.array(z.string()).nullish(),
   reason: z.string().default(''),
 });
 
@@ -102,11 +103,13 @@ export async function analyzeLayout(
 - recipe: cooking or baking, with ingredients and preparation steps
 - steps: instructions to follow in order that are not a recipe (how-tos, setup guides)
 - reader: a story, essay or article meant to be read through, mostly prose
+- data: mainly tables of numbers to compare or follow over time (logbooks, measurements, budgets), shown as charts
 ${forced ? `The user chose the layout "${forced}": use it and pick the blocks for it.\n` : ''}
-Reply as {"type":"recipe","language":"de","servings":4,"ingredients":["b2"],"steps":["b4"],"lists":[],"reason":"…"}
+Reply as {"type":"recipe","language":"de","servings":4,"ingredients":["b2"],"steps":["b4"],"lists":[],"tables":[],"reason":"…"}
 - ingredients (recipe only): list or table blocks with the ingredients, in order (a nested list like "b5.2" counts as a list; leave out tables that only compare sources or variants)
 - steps (recipe and steps): list blocks (each item is one step, nested lists like "b5.2" too) or paragraph blocks (each is one step), in order; only the actual preparation, not tips, variations or sources
 - lists (checklist only): the list blocks that make up the checklist
+- tables (data only): the table blocks with numbers to chart
 - language: ISO 639-1 code of the note's language; servings: number of servings if the note says, else null
 - reason: one short sentence${language ? ` in ${languageName(language)}` : ''}
 
@@ -140,11 +143,13 @@ ${blocks.flatMap((b, i) => describe(b, i, subs)).join('\n') || '(empty page)'}`,
     ingredients: type === 'recipe' ? pick(data.ingredients, ['list', 'table']) : [],
     steps: type === 'recipe' || type === 'steps' ? pick(data.steps, ['list', 'paragraph']) : [],
     lists: type === 'checklist' ? pick(data.lists, ['list']) : [],
+    tables: type === 'data' ? pick(data.tables, ['table']) : [],
   };
   // A layout without its parts would show nothing useful: fill gaps from the heuristic.
   if (type === 'recipe' && !spec.ingredients.length) spec.ingredients = fallback.ingredients;
   if ((type === 'recipe' || type === 'steps') && !spec.steps.length) spec.steps = fallback.steps;
   if (type === 'checklist' && !spec.lists.length) spec.lists = fallback.lists;
+  if (type === 'data' && !spec.tables.length) spec.tables = fallback.tables;
   return { spec: layoutSpecSchema.parse(spec), reason: data.reason.trim(), cost: reply.usage.cost, model };
 }
 

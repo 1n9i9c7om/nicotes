@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { normalizeTag } from './tags';
 
+export * from './adapters';
 export * from './ai';
 export * from './assistant';
 export * from './blocks';
 export * from './canvas';
+export * from './charts';
 export * from './chat';
 export * from './citations';
 export * from './colors';

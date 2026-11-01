@@ -6,6 +6,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
+import { adapterRoutes } from './adapters/routes.js';
+import { AdapterService, type AdapterOptions } from './adapters/service.js';
 import { jobRoutes, JobRunner } from './ai/jobs.js';
 import { aiRoutes, organizeJob } from './ai/organize.js';
 import { researchJob } from './ai/research.js';
@@ -73,6 +75,8 @@ export interface AppOptions {
   reminders?: ReminderOptions;
   /** Tests: a fake for the model that reads images. */
   readImage?: ImageReader;
+  /** Tests: fake services for adapters, and the clock. */
+  adapters?: AdapterOptions;
 }
 
 export function createApp({
@@ -89,6 +93,7 @@ export function createApp({
   semanticQuietMs,
   reminders: reminderOptions,
   readImage,
+  adapters: adapterOptions,
 }: AppOptions) {
   const app = new Hono();
   const secrets = SecretBox.load(dataDir, secret);
@@ -99,6 +104,7 @@ export function createApp({
   const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
   const reminders = new ReminderService(db, settings, reminderOptions);
   const attachmentText = new AttachmentReader(db, dataDir, settings, readImage);
+  const adapters = new AdapterService(db, settings, secrets, adapterOptions);
   // The linked Telegram chat talks to the chat assistant (a conversation of its own).
   const chatDeps = { db, settings, jobs, semantic };
   reminders.useChat({
@@ -189,7 +195,7 @@ export function createApp({
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
   }
-  for (const area of ['settings', 'backups', 'tokens', 'security', 'shares', 'reminders']) {
+  for (const area of ['settings', 'backups', 'tokens', 'security', 'shares', 'reminders', 'adapters']) {
     app.use(`/api/${area}`, sessionOnly);
     app.use(`/api/${area}/*`, sessionOnly);
   }
@@ -216,6 +222,7 @@ export function createApp({
   app.route('/api/security', securityRoutes(db, secrets));
   app.route('/api/shares', shareRoutes(db, secrets));
   app.route('/api/reminders', reminderRoutes(reminders));
+  app.route('/api/adapters', adapterRoutes(adapters));
   app.route('/api/chat', chatRoutes(chatDeps));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
@@ -257,5 +264,5 @@ export function createApp({
     });
   }
 
-  return Object.assign(app, { jobs, semantic, backups, reminders, attachmentText });
+  return Object.assign(app, { jobs, semantic, backups, reminders, attachmentText, adapters });
 }

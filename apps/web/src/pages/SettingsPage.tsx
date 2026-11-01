@@ -22,6 +22,7 @@ import {
 import { formatCost } from '../components/JobProgress';
 import { api } from '../lib/api';
 import { ModelPicker } from '../components/ModelPicker';
+import { SettingsAdapters } from '../components/SettingsAdapters';
 import { SettingsBackups } from '../components/SettingsBackups';
 import { SettingsReminders } from '../components/SettingsReminders';
 import { SettingsSecurity } from '../components/SettingsSecurity';
@@ -622,6 +623,8 @@ export function SettingsPage() {
           />
         }
       />
+
+      <SettingsAdapters />
 
       <section className="settings-card">
         <h2>

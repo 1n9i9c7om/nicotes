@@ -62,6 +62,7 @@ export function setup(options: Partial<AppOptions> = {}) {
     backups: app.backups,
     reminders: app.reminders,
     attachmentText: app.attachmentText,
+    adapters: app.adapters,
     call,
     upload,
     postFile,

@@ -146,13 +146,32 @@ the semantic index, **related** pages.
 
 Next to Visual and Markdown, **View** shows a page the way its content wants to be used: a
 checklist to tick and drag around, a recipe with adjustable servings, timers (for a range
-like "20–30 minutes" you pick the time, starting in the middle) and a full-screen cook mode, a step-by-step guide, or a reader that reads stories aloud and
-highlights the current sentence. The layout is detected automatically; with an OpenRouter
+like "20–30 minutes" you pick the time, starting in the middle) and a full-screen cook mode, a step-by-step guide, a reader that reads stories aloud and
+highlights the current sentence, or **charts** of tables of numbers (a chart per column,
+with the value of each day on hover). The layout is detected automatically; with an OpenRouter
 key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
 yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
 
 In every mode, drag either edge of the page to make it wider or narrower (double-click the
 edge to reset); the width is remembered per browser.
+
+### Adapters
+
+Settings → **Adapters** brings data from other services into your notes once a day:
+
+- **Home Assistant:** sensor values of the day, such as solar energy produced, the average
+  outdoor temperature or the electricity drawn from the grid. Enter your Home Assistant
+  address and a long-lived access token (your profile → Security), then one sensor per line:
+  `sensor.solar_energy_today, Solar`, optionally followed by `average`, `min`, `max` or
+  `change` (how much a meter grew that day) instead of the value at that moment.
+- **Weather:** the day's forecast from [Open-Meteo](https://open-meteo.com) for a place you
+  name (no account needed): weather, high and low, rain, sunshine and wind.
+
+Each adapter writes into a **logbook**, a page in the "Logbooks" notebook with a table that
+gets a row per day (its View draws the columns as charts), or a line in the day's **journal**
+note. It runs every day at the time you choose, and **Run now** fetches today's values at
+once. Logbooks are ordinary pages: you can write around the table, and keep logbooks of your
+own (weight, meter readings) that show as charts too.
 
 ### Sharing
 

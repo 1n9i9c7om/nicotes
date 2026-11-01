@@ -485,7 +485,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   starts in the middle, adjustable with −/+ or a slider; cook mode also takes times from the
   lines shown under "You need"), **guide** (steps one at a time),
   **reader** (read aloud with the browser's speech synthesis, sentence and word highlighting,
-  position remembered) and **document** (clean read view).
+  position remembered), **charts** (tables of numbers, see below) and **document** (clean read
+  view).
 - **Blocks:** `shared/blocks.ts` splits Markdown into headings, lists (items with line ranges,
   depth, checkbox state), paragraphs, quotes, code, tables and images. Each block has a key
   from its kind, the headings above it and its position under them (`list:Ingredients:0`), so
@@ -508,6 +509,47 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   (`shared/listEdits.ts`: tick, set text, add, remove, move with nested items) applied to the
   editor's text, so they autosave, show up in version history and can be undone in the view.
   Recipe check-offs and servings are temporary on purpose: cooking should not change the note.
+
+- **Charts** (`shared/charts.ts`, `web/components/layouts/Charts.tsx`): a table's first
+  column is the x axis, every column whose cells are mostly numbers a series (decimal commas,
+  thousands separators and units like "12.3 kWh" or a header "Solar (kWh)" are understood).
+  Dates make a line, anything else bars from zero. Small multiples, one chart per column on
+  its own axis, never two scales in one chart; empty cells break the line. Hand-drawn SVG
+  (no chart library), sized to its card, with a crosshair and tooltip on hover or touch; the
+  table stays below as the exact view. The colours are a fixed categorical order checked for
+  colour-blind contrast on the dark surface. The heuristic picks this layout for pages whose
+  tables have three or more rows of numbers and little else.
+
+### Adapters
+
+- **What:** per-account connections to other services (`adapters` table) that write a day's
+  values into a logbook page or the journal. `type` picks the source, `config` holds its
+  plain settings as JSON, `secrets` its tokens as encrypted JSON (`SecretBox`, never sent back;
+  the API answers which secret fields are set). The routes (`/api/adapters`) are session
+  only, like settings.
+- **Sources** (`server/src/adapters/`): `read(ctx)` gets the config, secrets, the day in the
+  account's time zone and an injectable `fetch`, and returns values (`label`, `value`,
+  `unit`) plus an optional sentence for the journal. Home Assistant reads
+  `/api/states/<id>` for each sensor (value, unit, name) and one `/api/history/period` call
+  from local midnight for those that take a figure over the day: a time-weighted average,
+  minimum, maximum, or the growth of a meter (a drop of more than 10% counts as a reset).
+  Weather geocodes the place and reads Open-Meteo's daily forecast for that date. The fields a
+  source needs, with labels and help, are described in `shared/adapters.ts`, which the
+  settings form is built from.
+- **Writers** (`writers.ts`): a logbook is the first table whose first column is "Date";
+  the day's row is replaced or inserted in date order, new values add columns, and anything
+  else on the page is left alone. Without such a table one is appended. The page is created
+  in a "Logbooks" notebook on the first run (again if it was deleted). The journal gets one
+  `**<name>:** …` line per adapter, replaced when it runs again. Both save like the editor
+  (version, snapshot, link index).
+- **Schedule:** a check every minute runs adapters whose daily time has passed and whose
+  `last_run_date` is not today; a failed run is retried every 15 minutes that day. A new
+  adapter whose time already passed waits for the next day (the settings run it once right
+  away). Run now does not count as the day's run, so an evening adapter still records the
+  full day.
+- **Safety:** an adapter's address is the account's to choose, like the local model server,
+  so it may be on the home network. Changing the address requires entering the token again,
+  so a stored token cannot be sent somewhere else.
 
 ### Backups
 
@@ -600,6 +642,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
     links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
     PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw), ✅ a chat
-    assistant with tools for every feature (web and Telegram); next: adapters that log data
-    from other services, charts in page views.
+    assistant with tools for every feature (web and Telegram), ✅ adapters that log data
+    from other services (Home Assistant, weather), ✅ charts of tables in page views.
 12. **Later** — multi-user.
