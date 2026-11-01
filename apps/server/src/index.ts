@@ -30,6 +30,7 @@ const app = createApp({
   secret: config.secret,
   settingsEnv: config.env,
   importAllowPrivate: config.importAllowPrivate,
+  browserExtension: config.browserExtension,
   backups: config.backup,
 });
 

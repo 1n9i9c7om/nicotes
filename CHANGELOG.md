@@ -2,6 +2,24 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.4.0 — 2026-11-01
+
+**New**
+
+- **Nicotes in your browser's sidebar.** A new browser extension shows Nicotes in the
+  sidebar of Firefox, or in the side panel of Chrome and Edge, next to the page you are
+  reading. Click its toolbar button to open or close it. The first time, enter your Nicotes
+  address and allow the extension to access it, then sign in once inside the sidebar. You
+  can change the address later in the extension's options.
+- **Download the extension from the release.** Each release now offers the extension for
+  download. The Firefox version, when available, updates itself to new releases.
+
+**For administrators**
+
+- The sidebar only works when the server allows it. Set `NICOTES_BROWSER_EXTENSION=true`
+  in your `.env` and restart Nicotes. Without it, browsers refuse to show Nicotes inside
+  the extension.
+
 ## 0.3.3 — 2026-10-29
 
 **Fixes**

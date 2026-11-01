@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nicotes</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <iframe id="app" title="Nicotes" allow="clipboard-read; clipboard-write" hidden></iframe>
+    <main id="setup" class="page" hidden>
+      <section class="card">
+        <header class="card-head">
+          <img class="logo" src="icons/icon-128.png" alt="" />
+          <h1>Nicotes in the sidebar</h1>
+          <p class="lead">
+            Enter the address you open Nicotes at. Your browser then asks to let this extension
+            access that site, which keeps you signed in here.
+          </p>
+        </header>
+        <form>
+          <label class="field">
+            Nicotes address
+            <input name="address" type="text" inputmode="url" placeholder="https://notes.example.com" autocomplete="url" spellcheck="false" required />
+          </label>
+          <button class="btn" type="submit">Show Nicotes</button>
+          <p class="status" role="status"></p>
+        </form>
+        <footer class="note">
+          <h2>Server setting</h2>
+          <p>Nicotes must allow the extension: set <code>NICOTES_BROWSER_EXTENSION=true</code> and restart it.</p>
+          <p>To change the address later, open the extension's options.</p>
+        </footer>
+      </section>
+    </main>
+    <script type="module" src="sidebar.js"></script>
+  </body>
+</html>

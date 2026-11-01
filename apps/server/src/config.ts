@@ -29,6 +29,8 @@ export const config = {
   secret: process.env.NICOTES_SECRET || undefined,
   /** Lets imports fetch hosts on private networks (off by default: SSRF protection). */
   importAllowPrivate: process.env.NICOTES_IMPORT_ALLOW_PRIVATE === 'true',
+  /** Lets the browser extension show Nicotes in the browser's sidebar (off by default). */
+  browserExtension: process.env.NICOTES_BROWSER_EXTENSION === 'true',
   backup: {
     dir: resolve(process.env.NICOTES_BACKUP_DIR?.trim() || resolve(dataDir, 'backups')),
     /** 0 turns automatic backups off ("Back up now" still works). */
