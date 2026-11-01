@@ -367,6 +367,8 @@ export function useUpdateSettings() {
       }
       // Your own server's models join (or leave) the model lists.
       if (input.localAiUrl !== undefined || input.localAiKey !== undefined) qc.invalidateQueries({ queryKey: keys.models });
+      // Images are read again (or for the first time).
+      if (input.readImages !== undefined || input.imagesModel !== undefined) qc.invalidateQueries({ queryKey: ['attachment-search'] });
       // Another bot: its name and the (now disconnected) chat.
       if (input.telegramBotToken !== undefined) qc.invalidateQueries({ queryKey: keys.reminders });
     },

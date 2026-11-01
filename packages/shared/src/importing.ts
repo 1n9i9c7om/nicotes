@@ -12,7 +12,7 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
-export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout'] as const;
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout', 'images'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
@@ -41,6 +41,10 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
   layout: {
     label: 'Page layouts',
     hint: 'Recognises recipes, checklists, guides and stories for the interactive view. One short call per page.',
+  },
+  images: {
+    label: 'Reading images',
+    hint: 'Reads the text in images, or says what they show, so search finds them (when turned on under Search). Needs a model that accepts images; one call per image.',
   },
 };
 
@@ -111,6 +115,11 @@ export interface Settings {
   tasks: {
     excludeTags: string[];
     excludeTagsSource: SettingSource;
+  };
+  search: {
+    /** Opt-in: images are sent to the "Reading images" model, which writes down their text. */
+    readImages: boolean;
+    readImagesSource: SettingSource;
   };
   reminders: {
     /** "HH:MM": a summary of the day's tasks at that time; null when off. */
@@ -193,6 +202,8 @@ export const settingsUpdateSchema = z.object({
     .nullable()
     .optional(),
   telegramBotToken: optionalSecret,
+  imagesModel: modelId,
+  readImages: z.boolean().nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

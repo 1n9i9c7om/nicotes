@@ -273,6 +273,30 @@ export const attachments = sqliteTable(
 );
 
 /** Per-user key/value settings. Secret values are stored encrypted (see secrets.ts). */
+/**
+ * Text read from attachments for search: from PDFs and text files, and from images by an AI
+ * model when that is turned on. Mirrored into the FTS table `attachments_fts` by triggers.
+ */
+export const attachmentText = sqliteTable(
+  'attachment_text',
+  {
+    attachmentId: text('attachment_id')
+      .primaryKey()
+      .references(() => attachments.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'done' (text may be empty), 'skipped' (nothing to read, or images are off) or 'error'. */
+    status: text('status').notNull(),
+    /** 'pdf', 'text' or 'image'; null when skipped. */
+    source: text('source'),
+    text: text('text').notNull().default(''),
+    error: text('error'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('attachment_text_user_idx').on(t.userId, t.status)],
+);
+
 export const settings = sqliteTable(
   'settings',
   {

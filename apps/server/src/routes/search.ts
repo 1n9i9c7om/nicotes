@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { normalizeTag, type SearchResult } from '@nicotes/shared';
+import type { AttachmentReader } from '../attachmentText.js';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
 
@@ -23,8 +24,10 @@ export function parseQuery(input: string) {
   return { match: terms.join(' '), tagFilters };
 }
 
-export function searchRoutes(db: Db) {
-  return new Hono<AppEnv>().get('/', (c) => {
+export function searchRoutes(db: Db, reader: AttachmentReader) {
+  return new Hono<AppEnv>()
+    .get('/attachments', (c) => c.json(reader.status(c.var.user.id)))
+    .get('/', (c) => {
     const { match, tagFilters } = parseQuery(c.req.query('q') ?? '');
     const limit = Math.min(Number(c.req.query('limit')) || 20, 50);
     if (!match && tagFilters.length === 0) return c.json([]);
@@ -60,9 +63,34 @@ export function searchRoutes(db: Db) {
          ORDER BY p.updated_at DESC
          LIMIT @limit`;
 
-    const rows = db.$client
-      .prepare(sql)
-      .all({ ...tagParams, ...(match ? { match } : {}), userId: c.var.user.id, limit }) as SearchResult[];
-    return c.json(rows);
+    const params = { ...tagParams, ...(match ? { match } : {}), userId: c.var.user.id, limit };
+    const rows = db.$client.prepare(sql).all(params) as SearchResult[];
+    if (!match) return c.json(rows);
+
+    // Matches in the files pages show: PDFs, text files, images read by AI, file names.
+    const fileRows = db.$client
+      .prepare(
+        `SELECT p.id, p.notebook_id AS notebookId, p.title, a.id AS attachmentId, a.filename,
+                snippet(attachments_fts, -1, char(1), char(2), '…', 16) AS excerpt
+         FROM attachments_fts
+         JOIN attachments a ON a.id = attachments_fts.attachment_id
+         JOIN pages p ON p.user_id = a.user_id AND p.deleted_at IS NULL
+           AND instr(p.content, '/api/attachments/' || a.id) > 0
+         WHERE attachments_fts MATCH @match AND a.user_id = @userId
+         ${tagSql}
+         ORDER BY bm25(attachments_fts, 0.0, 4.0, 1.0)
+         LIMIT @limit`,
+      )
+      .all(params) as (SearchResult & { attachmentId: string; filename: string })[];
+    const seen = new Set(rows.map((r) => r.id));
+    const files: SearchResult[] = [];
+    for (const { attachmentId, filename, ...row } of fileRows) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      files.push({ ...row, attachment: { id: attachmentId, filename } });
+    }
+    // Pages matched by their own text come first; files keep at least a quarter of the places.
+    const keep = Math.max(limit - Math.min(files.length, Math.ceil(limit / 4)), 0);
+    return c.json([...rows.slice(0, keep), ...files].slice(0, limit));
   });
 }

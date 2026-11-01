@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Hash, MessageCircleQuestion, Search, Sparkles, TextSearch } from 'lucide-react';
+import { FileText, Hash, MessageCircleQuestion, Paperclip, Search, Sparkles, TextSearch } from 'lucide-react';
 import { MATCH_END, MATCH_START } from '@nicotes/shared';
 import { plainExcerpt } from '../lib/format';
 import { fuzzyFilter } from '../lib/fuzzy';
@@ -114,7 +114,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               key: `c:${r.id}`,
               kind: 'content',
               label: displayTitle(r.title),
-              detail: r.excerpt ? <Excerpt text={r.excerpt} /> : where(r.id, r.notebookId),
+              detail: r.attachment ? (
+                // Found in a file the page shows.
+                <>
+                  <span className="palette-file">
+                    <Paperclip size={12} /> {r.attachment.filename}
+                  </span>{' '}
+                  {r.excerpt && <Excerpt text={r.excerpt} />}
+                </>
+              ) : r.excerpt ? (
+                <Excerpt text={r.excerpt} />
+              ) : (
+                where(r.id, r.notebookId)
+              ),
               href: `/p/${r.id}`,
             }))
         : [];

@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, FileSearch, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { formatDuration, formatSize, timeAgo } from '../lib/format';
@@ -10,6 +11,7 @@ import {
   DEFAULT_OPENROUTER_MODEL,
   modelSetting,
   providerOf,
+  type AttachmentSearchStatus,
   type ConnectionCheck,
   type ModelInfo,
   type Settings,
@@ -17,6 +19,7 @@ import {
   type SettingsUpdate,
 } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
+import { api } from '../lib/api';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
 import { SettingsReminders } from '../components/SettingsReminders';
@@ -480,6 +483,13 @@ export function SettingsPage() {
         list={embeddingModels}
       />
 
+      <FileSearchCard
+        search={settings.data.search}
+        model={settings.data.models.images.model ?? openrouter.model}
+        pending={update.isPending}
+        save={save}
+      />
+
       {update.error && <p className="error">{update.error.message}</p>}
 
       <section className="settings-card" id="daily">
@@ -761,6 +771,61 @@ function SemanticCard({
             <RotateCcw size={14} /> Rebuild index
           </button>
         </div>
+      )}
+    </section>
+  );
+}
+
+/** Search in the PDFs, text files and (with AI) images that pages show. */
+function FileSearchCard({
+  search,
+  model,
+  pending,
+  save,
+}: {
+  search: Settings['search'];
+  /** The model that reads images. */
+  model: string;
+  pending: boolean;
+  save: (input: SettingsUpdate) => void;
+}) {
+  const status = useQuery({
+    queryKey: ['attachment-search'],
+    queryFn: () => api.get<AttachmentSearchStatus>('/search/attachments'),
+    // Follow along while files are being read.
+    refetchInterval: (q) => (q.state.data?.waiting ? 3000 : false),
+  });
+  const s = status.data;
+  return (
+    <section className="settings-card" id="file-search">
+      <h2>
+        <FileSearch size={18} /> Search in files
+      </h2>
+      <p className="muted">
+        Search also finds what is written in the PDFs and text files your pages show. Photos and scanned images are
+        pictures, not text: an AI model can read those too.
+      </p>
+      {s && (
+        <p className="muted" role="status">
+          {s.documents === 1 ? '1 document' : `${s.documents} documents`} searchable · {s.images.read}{' '}
+          {s.images.read === 1 ? 'image' : 'images'} read
+          {s.waiting > 0 && ` · ${s.waiting} ${s.waiting === 1 ? 'file' : 'files'} waiting`}
+        </p>
+      )}
+      <label className="check-row">
+        <input type="checkbox" checked={search.readImages} disabled={pending} onChange={(e) => save({ readImages: e.target.checked })} />
+        Read images with AI
+      </label>
+      <p className="setting-hint">
+        Each image is sent once to the “{AI_TASK_INFO.images.label}” model (<code>{model}</code>, see AI models), which
+        writes down its text or says what it shows. Off unless you turn it on, as the images leave your server, except to a
+        model on your own server. Scanned PDFs are not read.
+      </p>
+      {s && s.images.failed > 0 && s.lastError && (
+        <p className="check fail">
+          <XCircle size={15} /> {s.images.failed === 1 ? '1 image' : `${s.images.failed} images`} could not be read:{' '}
+          {s.lastError}
+        </p>
       )}
     </section>
   );
