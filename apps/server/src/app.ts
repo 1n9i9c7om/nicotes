@@ -14,6 +14,7 @@ import { askRoutes } from './ai/ask.js';
 import { assistantRoutes } from './ai/assistant.js';
 import { insightRoutes } from './ai/insight.js';
 import { layoutRoutes } from './ai/layout.js';
+import { AttachmentReader, type ImageReader } from './attachmentText.js';
 import { requireAuth } from './auth.js';
 import { bearerToken, tokenRoutes, tokenSignIn } from './tokens.js';
 import { backupRoutes } from './backup/routes.js';
@@ -65,6 +66,8 @@ export interface AppOptions {
   semanticQuietMs?: number;
   /** Tests: fake push services, Telegram and clock for reminders. */
   reminders?: ReminderOptions;
+  /** Tests: a fake for the model that reads images. */
+  readImage?: ImageReader;
 }
 
 export function createApp({
@@ -80,6 +83,7 @@ export function createApp({
   embedder,
   semanticQuietMs,
   reminders: reminderOptions,
+  readImage,
 }: AppOptions) {
   const app = new Hono();
   const secrets = SecretBox.load(dataDir, secret);
@@ -89,6 +93,7 @@ export function createApp({
   jobs.register('research', researchJob(db, importAllowPrivate));
   const semantic = new SemanticIndex(db, settings, embedder, semanticQuietMs);
   const reminders = new ReminderService(db, settings, reminderOptions);
+  const attachmentText = new AttachmentReader(db, dataDir, settings, readImage);
   const backups = new BackupService(
     db,
     dataDir,
@@ -174,8 +179,8 @@ export function createApp({
   app.route('/api/pages', pageRoutes(db));
   app.route('/api/pages', mentionRoutes(db));
   app.route('/api/tags', tagRoutes(db));
-  app.route('/api/search', searchRoutes(db));
-  app.route('/api/attachments', attachmentRoutes(db, dataDir));
+  app.route('/api/search', searchRoutes(db, attachmentText));
+  app.route('/api/attachments', attachmentRoutes(db, dataDir, () => void attachmentText.poke()));
   app.route('/api/settings', settingsRoutes(settings));
   app.route('/api/trash', trashRoutes(db));
   app.route('/api/export', exportRoutes(db, dataDir));
@@ -196,7 +201,7 @@ export function createApp({
   app.route('/api/ai', insightRoutes(db, settings, semantic));
   app.route('/api/ai', layoutRoutes(db, settings));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
-  app.route('/api/import/vault', vaultRoutes(db, dataDir));
+  app.route('/api/import/vault', vaultRoutes(db, dataDir, () => void attachmentText.poke()));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
   if (webDir && existsSync(join(webDir, 'index.html'))) {
@@ -229,5 +234,5 @@ export function createApp({
     });
   }
 
-  return Object.assign(app, { jobs, semantic, backups, reminders });
+  return Object.assign(app, { jobs, semantic, backups, reminders, attachmentText });
 }

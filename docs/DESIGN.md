@@ -201,6 +201,15 @@ and tsup respectively).
 - **Full-text search** uses an FTS5 table (title weighted 8×) kept in sync by triggers,
   keyed by page id. Every word becomes a quoted prefix term, so user input cannot inject
   FTS syntax; `#tag` words filter by tag.
+- **Search in files** (`attachmentText.ts`, table `attachment_text`, FTS table
+  `attachments_fts` over file name and text, kept in sync by triggers): a background reader
+  looks at every attachment once (after uploads and imports, and every minute for ones it
+  has not seen): PDFs through `unpdf` (pdf.js; up to 500 pages, 500k characters, 2 minutes;
+  scanned PDFs yield nothing), text files as UTF-8, images only with `readImages` on, sent as
+  a data URL to the `images` AI task's model, which writes down the text or describes the
+  picture (≤ 10 MB). Turning that on, or changing model or keys, retries images not read
+  yet. Search adds file matches for pages whose Markdown still links the file (keeping at
+  least a quarter of the results for them); a page matching by its own text is listed once.
 - **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
   and plain text display inline; everything else downloads.
 - **Framing** is refused (`frame-ancestors 'none'`). `NICOTES_BROWSER_EXTENSION=true`
@@ -491,7 +500,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT,IMAGES}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `NICOTES_READ_IMAGES` | `false` | Default for reading images with AI for search (overridable in Settings) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
@@ -537,6 +547,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     images into the registry.
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
-    links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import; next: search
-    inside images and PDFs, voice notes, canvas pages with drawing.
+    links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
+    PDFs and images; next: voice notes, canvas pages with drawing.
 12. **Later** — multi-user.

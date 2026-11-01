@@ -96,6 +96,11 @@ toolbar's highlighter button colours the selected text or its background from a 
 palette; colours are stored the way Obsidian writes them (`==highlight==`,
 `<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
 
+Search (<kbd>Ctrl</kbd> <kbd>K</kbd>) also looks inside the PDFs and text files your pages
+show. Photos and scanned images can be searched too once you turn on **Read images with AI**
+under Settings → Search in files: each image is then sent once to an AI model of your choice
+(or one on your own server), which writes down its text or says what it shows.
+
 ### Graph, journal and templates
 
 The **Graph** shows how pages connect through `[[links]]`, subpages and tags, filterable

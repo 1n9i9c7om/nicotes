@@ -43,6 +43,7 @@ const KEYS = {
   summaryModel: { key: 'ai.model.summary', secret: false },
   linksModel: { key: 'ai.model.links', secret: false },
   layoutModel: { key: 'ai.model.layout', secret: false },
+  imagesModel: { key: 'ai.model.images', secret: false },
   searxngUrl: { key: 'ai.searxngUrl', secret: false },
   aiCostLimit: { key: 'ai.costLimit', secret: false },
   dailyNotebookId: { key: 'daily.notebookId', secret: false },
@@ -53,6 +54,7 @@ const KEYS = {
   reminderDigestTime: { key: 'reminders.digestTime', secret: false },
   reminderTimeZone: { key: 'reminders.timeZone', secret: false },
   telegramBotToken: { key: 'telegram.botToken', secret: true },
+  readImages: { key: 'search.readImages', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -73,6 +75,8 @@ export interface ImportConfig {
   costLimit: number;
   semanticIndex: boolean;
   embeddingModel: string;
+  /** Images are read by the "images" model for search. */
+  readImages: boolean;
 }
 export type AiConfig = ImportConfig;
 
@@ -129,6 +133,7 @@ export class SettingsStore {
       digestTime: pick('reminderDigestTime'),
       timeZone: pick('reminderTimeZone'),
       telegramToken: pick('telegramBotToken'),
+      readImages: pick('readImages', 'false'),
     };
   }
 
@@ -166,6 +171,7 @@ export class SettingsStore {
       },
       daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
       tasks: { excludeTags: parseList(r.excludeTags.value), excludeTagsSource: r.excludeTags.source },
+      search: { readImages: r.readImages.value === 'true', readImagesSource: r.readImages.source },
       reminders: {
         digestTime: r.digestTime.value,
         timeZone: r.timeZone.value,
@@ -198,6 +204,7 @@ export class SettingsStore {
       costLimit: Number(r.costLimit.value) || DEFAULT_AI_COST_LIMIT,
       semanticIndex: r.semanticIndex.value === 'true',
       embeddingModel: r.embeddingModel.value!,
+      readImages: r.readImages.value === 'true',
     };
   }
 

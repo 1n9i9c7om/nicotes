@@ -182,6 +182,19 @@ export interface SearchResult {
   title: string;
   /** Excerpt with matches wrapped in MATCH_START / MATCH_END. */
   excerpt: string;
+  /** The match is in a file the page shows (a PDF, an image read by AI), not in its text. */
+  attachment?: { id: string; filename: string };
+}
+
+/** GET /api/search/attachments: how far reading files for search has come. */
+export interface AttachmentSearchStatus {
+  /** Files not looked at yet. */
+  waiting: number;
+  /** PDFs and text files whose text is searchable. */
+  documents: number;
+  images: { read: number; notRead: number; failed: number };
+  /** The latest reason a file could not be read. */
+  lastError: string | null;
 }
 
 // ---------- Attachments ----------

@@ -588,7 +588,7 @@ const MAX_VAULT_BYTES = 300 * 1024 * 1024;
 const MAX_NOTES = 20_000;
 
 /** /api/import/vault: upload a zip for a preview, then import it with the chosen layout. */
-export function vaultRoutes(db: Db, dataDir: string) {
+export function vaultRoutes(db: Db, dataDir: string, onImported: () => void = () => {}) {
   // Unpacked uploads wait here between preview and import; few, as they can be large.
   const uploads = new Pending<{ userId: string; vault: Vault }>(30 * 60 * 1000, 2);
   return new Hono<AppEnv>()
@@ -616,6 +616,8 @@ export function vaultRoutes(db: Db, dataDir: string) {
       const upload = uploads.get(input.id);
       if (!upload || upload.userId !== userId) throw new HTTPException(409, { message: 'The upload has expired, choose the zip again' });
       uploads.delete(input.id);
-      return c.json(await importVault(db, dataDir, userId, upload.vault, input.mode, input.title), 201);
+      const result = await importVault(db, dataDir, userId, upload.vault, input.mode, input.title);
+      onImported();
+      return c.json(result, 201);
     });
 }

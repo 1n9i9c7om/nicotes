@@ -55,7 +55,8 @@ export async function storeAttachment(
   return { id, url: urlFor(id, filename), filename, mime: file.mime, size: file.bytes.length };
 }
 
-export function attachmentRoutes(db: Db, dataDir: string) {
+/** `onStored` runs after each upload, e.g. to read the file for search. */
+export function attachmentRoutes(db: Db, dataDir: string, onStored: () => void = () => {}) {
 
   return new Hono<AppEnv>()
     .post(
@@ -88,6 +89,7 @@ export function attachmentRoutes(db: Db, dataDir: string) {
           mime: file.type || 'application/octet-stream',
           bytes: Buffer.from(await file.arrayBuffer()),
         });
+        onStored();
         return c.json(result, 201);
       },
     )

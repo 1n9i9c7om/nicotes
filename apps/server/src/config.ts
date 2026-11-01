@@ -56,11 +56,13 @@ export const config = {
     summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
     linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
     layoutModel: process.env.OPENROUTER_LAYOUT_MODEL?.trim() || undefined,
+    imagesModel: process.env.OPENROUTER_IMAGES_MODEL?.trim() || undefined,
     searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
     embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,
     semanticIndex: process.env.NICOTES_SEMANTIC_INDEX?.trim() || undefined,
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
+    readImages: process.env.NICOTES_READ_IMAGES?.trim() || undefined,
   },
 };
 
