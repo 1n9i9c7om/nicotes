@@ -63,6 +63,9 @@ export const config = {
     semanticIndex: process.env.NICOTES_SEMANTIC_INDEX?.trim() || undefined,
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
     readImages: process.env.NICOTES_READ_IMAGES?.trim() || undefined,
+    transcribeUrl: process.env.TRANSCRIBE_URL?.trim() || undefined,
+    transcribeKey: process.env.TRANSCRIBE_KEY?.trim() || undefined,
+    transcribeModel: process.env.TRANSCRIBE_MODEL?.trim() || undefined,
   },
 };
 

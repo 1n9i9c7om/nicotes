@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, FileSearch, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Mic, Sparkles, ExternalLink, FileDown, FileSearch, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
@@ -9,6 +9,7 @@ import {
   AI_TASKS,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_TRANSCRIBE_MODEL,
   modelSetting,
   providerOf,
   type AttachmentSearchStatus,
@@ -215,6 +216,7 @@ export function SettingsPage() {
   const checkLocal = useCheckConnection();
   const checkCrawl4ai = useCheckConnection();
   const checkSearxng = useCheckConnection();
+  const checkTranscribe = useCheckConnection();
   const batches = useBatches();
   const notebooks = useNotebooks();
   const allPages = usePages();
@@ -225,7 +227,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, reminders, semantic } = settings.data;
+  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, reminders, semantic, transcription } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -482,6 +484,62 @@ export function SettingsPage() {
         save={save}
         list={embeddingModels}
       />
+
+      <section className="settings-card" id="voice">
+        <h2>
+          <Mic size={18} /> Voice notes
+        </h2>
+        <p className="muted">
+          Record with the microphone button in the editor's toolbar; recordings are kept as attachments with a player in
+          the page. With a transcription service, what you said is also written below the recording, and search finds it.
+        </p>
+        <SettingField
+          key={`transcribe-url-${transcription.url}`}
+          label="Transcription service"
+          source={transcription.urlSource}
+          current={transcription.url}
+          placeholder="http://speaches:8000/v1"
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeUrl: v })}
+          hint={
+            <>
+              An OpenAI-compatible API with <code>/audio/transcriptions</code>: your own Whisper server (Speaches, LocalAI,
+              …), Groq (<code>https://api.groq.com/openai/v1</code>) or OpenAI (<code>https://api.openai.com/v1</code>).
+              Recordings are sent there.
+            </>
+          }
+        />
+        <SettingField
+          key={`transcribe-key-${transcription.keySource}`}
+          label="API key"
+          secret
+          source={transcription.keySource}
+          current={null}
+          placeholder="Not needed for most servers of your own"
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeKey: v })}
+        />
+        <SettingField
+          key={`transcribe-model-${transcription.model}`}
+          label="Model"
+          source={transcription.modelSource}
+          current={transcription.model}
+          placeholder={DEFAULT_TRANSCRIBE_MODEL}
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeModel: v })}
+          hint="whisper-1 or gpt-4o-mini-transcribe at OpenAI, whisper-large-v3-turbo at Groq, e.g. Systran/faster-whisper-small at Speaches."
+        />
+        <div className="setting-actions">
+          <button
+            className="btn"
+            disabled={checkTranscribe.isPending || !transcription.url}
+            onClick={() => checkTranscribe.mutate('transcribe')}
+          >
+            {checkTranscribe.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkTranscribe.data} />
+        </div>
+      </section>
 
       <FileSearchCard
         search={settings.data.search}

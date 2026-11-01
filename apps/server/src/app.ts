@@ -180,7 +180,10 @@ export function createApp({
   app.route('/api/pages', mentionRoutes(db));
   app.route('/api/tags', tagRoutes(db));
   app.route('/api/search', searchRoutes(db, attachmentText));
-  app.route('/api/attachments', attachmentRoutes(db, dataDir, () => void attachmentText.poke()));
+  app.route(
+    '/api/attachments',
+    attachmentRoutes(db, dataDir, () => void attachmentText.poke(), (userId) => settings.transcription(userId)),
+  );
   app.route('/api/settings', settingsRoutes(settings));
   app.route('/api/trash', trashRoutes(db));
   app.route('/api/export', exportRoutes(db, dataDir));

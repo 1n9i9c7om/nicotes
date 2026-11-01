@@ -12,6 +12,9 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
+/** OpenAI's name for Whisper; other services name their models differently. */
+export const DEFAULT_TRANSCRIBE_MODEL = 'whisper-1';
+
 export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout', 'images'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
@@ -116,6 +119,15 @@ export interface Settings {
     excludeTags: string[];
     excludeTagsSource: SettingSource;
   };
+  transcription: {
+    /** An OpenAI-compatible API with /audio/transcriptions (ending in /v1); null when off. */
+    url: string | null;
+    urlSource: SettingSource;
+    keySet: boolean;
+    keySource: SettingSource;
+    model: string;
+    modelSource: SettingSource;
+  };
   search: {
     /** Opt-in: images are sent to the "Reading images" model, which writes down their text. */
     readImages: boolean;
@@ -204,6 +216,9 @@ export const settingsUpdateSchema = z.object({
   telegramBotToken: optionalSecret,
   imagesModel: modelId,
   readImages: z.boolean().nullable().optional(),
+  transcribeUrl: optionalUrl,
+  transcribeKey: optionalSecret,
+  transcribeModel: z.string().trim().max(200).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 

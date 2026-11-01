@@ -196,7 +196,7 @@ export function publicShareRoutes(db: Db, dataDir: string) {
           .get() !== undefined;
       const file = linked ? db.select().from(attachments).where(and(eq(attachments.id, id), eq(attachments.userId, row.userId))).get() : undefined;
       if (!file) throw notFound('Attachment');
-      const res = attachmentResponse(dataDir, file, 'private, max-age=3600');
+      const res = attachmentResponse(dataDir, file, 'private, max-age=3600', c.req.header('range'));
       res.headers.set('X-Robots-Tag', 'noindex, nofollow');
       return res;
     });

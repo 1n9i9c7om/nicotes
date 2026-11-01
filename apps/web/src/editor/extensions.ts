@@ -6,6 +6,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import type { LinkBridge } from '../lib/links';
+import { AudioPlayers } from './audio';
 import { Citations } from './citations';
 import { Highlight, TextColor } from './colors';
 import { FileUploads, type Uploader } from './uploads';
@@ -38,6 +39,7 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     WikilinkSuggest.configure({ bridge: env.bridge ?? null }),
     FileUploads.configure({ upload: env.upload ?? null, onError: env.onUploadError ?? console.error }),
     Citations,
+    AudioPlayers,
     Markdown.configure({ markedOptions: { gfm: true } }),
   ];
 }

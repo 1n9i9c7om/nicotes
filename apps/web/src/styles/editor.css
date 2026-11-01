@@ -395,3 +395,56 @@
 .hide-sources .ProseMirror .citation {
   display: none;
 }
+
+/* ---------- Voice notes ---------- */
+
+.prose .voice-player {
+  display: block;
+  width: min(100%, 420px);
+  height: 40px;
+  margin: 6px 0 2px;
+}
+
+.voice-recorder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.voice-recorder .error {
+  margin: 0;
+}
+
+.voice-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-status.live {
+  color: var(--text);
+}
+
+.voice-status.live svg {
+  color: #f87171;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.voice-actions {
+  display: flex;
+  gap: 6px;
+}

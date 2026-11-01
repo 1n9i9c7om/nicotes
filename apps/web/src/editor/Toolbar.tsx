@@ -1,6 +1,9 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { COLOR_LABELS, COLORS, type Color } from '@nicotes/shared';
+import { duration, recordingSupported, VoiceRecorder } from '../components/VoiceRecorder';
+import { api } from '../lib/api';
+import { useSettings } from '../lib/queries';
 import type { Uploader } from './uploads';
 import { isImage } from './uploads';
 import {
@@ -15,6 +18,8 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Loader2,
+  Mic,
   Minus,
   Paperclip,
   Quote,
@@ -106,8 +111,29 @@ interface ToolbarProps {
   onUploadError?: (error: Error) => void;
 }
 
+/** Adds a quote with `text` after the block that holds the link to `href`. */
+function insertAfterLink(editor: Editor, href: string, text: string) {
+  let after: number | null = null;
+  editor.state.doc.descendants((node, pos) => {
+    if (after !== null) return false;
+    if (node.isText && node.marks.some((m) => m.type.name === 'link' && m.attrs.href === href)) {
+      const $pos = editor.state.doc.resolve(pos);
+      after = $pos.after($pos.depth);
+    }
+  });
+  if (after === null) return;
+  editor
+    .chain()
+    .insertContentAt(after, { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+    .run();
+}
+
 export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
   const [linkOpen, setLinkOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState<string | null>(null);
+  const settings = useSettings();
+  const canTranscribe = !!settings.data?.transcription.url;
   const [colorsOpen, setColorsOpen] = useState(false);
   const [href, setHref] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -126,6 +152,28 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
       }
     }
     if (fileInput.current) fileInput.current.value = '';
+  };
+
+  /** A finished recording: kept as an attachment, linked at the cursor, then written down. */
+  const addVoiceNote = async (file: File, seconds: number) => {
+    if (!upload) return;
+    try {
+      setVoiceBusy('Saving the recording…');
+      const att = await upload(file);
+      const link = { type: 'text', text: `🎙️ Voice note (${duration(seconds)})`, marks: [{ type: 'link', attrs: { href: att.url } }] };
+      // On an empty line it goes there; otherwise into a paragraph of its own below.
+      const { $from } = editor.state.selection;
+      if ($from.parent.isTextblock && $from.parent.content.size === 0) editor.chain().focus().insertContent(link).run();
+      else editor.chain().focus().insertContentAt($from.after($from.depth), { type: 'paragraph', content: [link] }).run();
+      if (!canTranscribe) return;
+      setVoiceBusy('Writing down what you said…');
+      const { text } = await api.post<{ text: string }>(`/attachments/${att.id}/transcribe`);
+      if (text) insertAfterLink(editor, att.url, text);
+    } catch (error) {
+      onUploadError?.(new Error(`Voice note: ${(error as Error).message}`));
+    } finally {
+      setVoiceBusy(null);
+    }
   };
 
   const state = useEditorState({
@@ -250,7 +298,21 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
           </ToolButton>
         )}
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attachFiles(e.target.files)} />
+        {upload && recordingSupported() && (
+          <ToolButton label="Record a voice note" active={recording} disabled={!!voiceBusy} onClick={() => setRecording(!recording)}>
+            <Mic size={16} />
+          </ToolButton>
+        )}
       </div>
+
+      {recording && <VoiceRecorder onDone={(file, seconds) => void addVoiceNote(file, seconds)} onClose={() => setRecording(false)} />}
+      {voiceBusy && (
+        <div className="voice-recorder" role="status">
+          <span className="voice-status">
+            <Loader2 size={15} className="spin" /> {voiceBusy}
+          </span>
+        </div>
+      )}
 
       {state.table && (
         <div className="tool-group table-tools">
