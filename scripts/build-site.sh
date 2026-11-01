@@ -15,3 +15,6 @@ cp -R site/. "$out/"
 cp -R docs/images/. "$out/images/"
 cp -R docs/brand/. "$out/brand/"
 sed -i "s/{{VERSION}}/$version/g" "$out/index.html"
+# security.txt must expire within a year; every deployment renews it.
+expires="$(date -u -d "@$(($(date +%s) + 365 * 24 * 3600))" +%Y-%m-%dT%H:%M:%SZ)"
+sed -i "s/{{EXPIRES}}/$expires/" "$out/.well-known/security.txt"

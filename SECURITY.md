@@ -7,14 +7,17 @@ update to it before reporting a problem.
 
 ## Reporting a vulnerability
 
-Please don't report security problems in public issues. Instead, open a
+Please don't report security problems in public issues. Instead, use
+[GitHub's private vulnerability reporting](https://github.com/1n9i9c7om/nicotes/security/advisories/new)
+on the project's GitHub mirror. You need a GitHub account; only the maintainers can read the
+report. If you have an account on git.nico.software, a
 [confidential issue](https://git.nico.software/1n9i9c7om/nicotes/-/issues/new?issue[confidential]=true)
-(the "This issue is confidential" box is ticked by the link), so only the maintainers can
-read it.
+works as well.
 
 A good report says which version you run (Settings → About), what an attacker can do, and
-the steps to reproduce it. Once a fix is released, the issue is made public and the
-changelog mentions the fix.
+the steps to reproduce it. Once a fix is released, the advisory is published and the
+changelog mentions the fix. The same contact is listed in
+[security.txt](https://pages.nico.software/1n9i9c7om/nicotes/.well-known/security.txt).
 
 ## Running Nicotes safely
 
