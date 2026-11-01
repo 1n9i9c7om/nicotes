@@ -38,6 +38,20 @@ After a build, run specs directly with `npm run e2e -w apps/e2e -- tests/editor.
 browser. Failures leave a trace in `apps/e2e/test-results`
 (`npx playwright show-trace <file>`).
 
+## Dependencies
+
+- **One React:** Excalidraw 0.18 (canvas pages) pins `@radix-ui/react-tabs` 1.0.x, whose
+  peer range ends at React 18, so npm would put a React 18 at the top of `node_modules`
+  for it and keep the app's React 19 in `apps/web`. The root `package.json` therefore lists
+  `react` and `react-dom` 19 as dev dependencies (one React 19 for everything), and Vite
+  dedupes them as well. Check `npm ls react` after changing either.
+- **Excalidraw's fonts** are copied from the package into `dist/excalidraw/fonts` at build
+  time (a small plugin in `apps/web/vite.config.ts`) and served by Nicotes; the CDN it would
+  use otherwise is blocked by the CSP.
+- **Windows and npm:** `npm install <package>` sometimes drops the `@esbuild/*` entries of
+  other platforms from `package-lock.json` (npm/cli#4828). Compare the lockfile with
+  `git diff` after adding a dependency and put missing entries back before committing.
+
 ## Database schema changes
 
 Edit `apps/server/src/db/schema.ts`, then run `npm run db:generate -w apps/server` and commit

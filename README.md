@@ -33,6 +33,7 @@ it upfront.
 - 🤖 **Optional AI** through OpenRouter, Routeway or your own model server (Ollama, LM Studio …): ask your notes, research the web, an assistant whose changes you review like a diff.
 - 📱 **On every screen**: installable on your phone, and in the sidebar of Firefox, Chrome and Edge.
 - 💾 **Your data, on your server**: one container, daily backups and a Markdown export that opens in Obsidian.
+- ✏️ **Canvas pages** to draw, sketch and arrange freely, and **voice notes** that write themselves down.
 - 🔗 **Read-only links** to a page or a notebook, for people without an account.
 - 🔐 **Locked down**: two-step sign-in with an authenticator app, and passkeys.
 
@@ -95,6 +96,12 @@ Pages are Markdown, edited either formatted (**Visual**) or as source (**Markdow
 toolbar's highlighter button colours the selected text or its background from a small
 palette; colours are stored the way Obsidian writes them (`==highlight==`,
 `<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
+
+**Canvas pages:** "New canvas" in a notebook's or page's ⋯ menu makes a page to draw on, as
+in OneNote: pen and highlighter (with pen pressure), shapes, arrows, text and pasted
+images, powered by [Excalidraw](https://excalidraw.com). Text on a canvas is found by
+search, `[[Page]]` links on shapes open that page, and canvases export (and import) as
+Obsidian Excalidraw drawings.
 
 **Voice notes:** the microphone button in the toolbar records straight into the page (the
 recording is kept as an attachment, with a player). With a transcription service set up

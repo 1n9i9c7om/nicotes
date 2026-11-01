@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { Hono } from 'hono';
+import { isCanvas } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { attachments, notebooks, pages } from '../db/schema.js';
@@ -34,11 +35,10 @@ function uniqueNamer() {
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
-function frontmatter(fields: Record<string, unknown>): string {
-  // JSON strings and arrays are valid YAML, which keeps quoting rules simple.
-  const lines = Object.entries(fields).map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
-  return `---\n${lines.join('\n')}\n---\n\n`;
-}
+// JSON strings and arrays are valid YAML, which keeps quoting rules simple.
+const yaml = (fields: Record<string, unknown>) => Object.entries(fields).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n');
+
+const frontmatter = (fields: Record<string, unknown>) => `---\n${yaml(fields)}\n---\n\n`;
 
 export function exportRoutes(db: Db, dataDir: string) {
   return new Hono<AppEnv>().get('/', async (c) => {
@@ -106,20 +106,23 @@ export function exportRoutes(db: Db, dataDir: string) {
     }
 
     const writePage = (page: (typeof rows)[number], folder: string, name: string) => {
-      const path = `${folder}/${name}.md`;
+      // Canvas pages are Obsidian Excalidraw drawings, which that plugin finds by this name.
+      const canvas = isCanvas(page.content);
+      const path = `${folder}/${name}${canvas ? '.excalidraw' : ''}.md`;
       const up = '../'.repeat(path.split('/').length - 1);
       const content = page.content.replace(ATTACHMENT_LINK, (link, id: string) => {
         const target = attachmentPaths.get(id);
         return target ? up + encodeURI(target) : link;
       });
-      const head = frontmatter({
+      const fields = {
         id: page.id,
         title: page.title,
         tags: tags.get(page.id) ?? [],
         created: iso(page.createdAt),
         updated: iso(page.updatedAt),
-      });
-      files[path] = strToU8(head + content);
+      };
+      // A drawing has frontmatter of its own: the fields join it.
+      files[path] = strToU8(canvas ? content.replace(/^---[ \t]*\r?\n/, `---\n${yaml(fields)}\n`) : frontmatter(fields) + content);
     };
 
     const writeLevel = (key: string, folder: string) => {

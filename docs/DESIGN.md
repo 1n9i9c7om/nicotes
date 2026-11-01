@@ -213,6 +213,21 @@ and tsup respectively).
 - **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF,
   plain text and audio display inline; everything else downloads. Byte ranges (`Range`,
   206/416) are supported, which Safari needs for audio and video.
+- **Canvas pages** (`components/CanvasEditor.tsx`, `lib/canvas.ts`, shared `canvas.ts`):
+  Excalidraw, loaded on demand (≈340 kB gzip). A canvas page's Markdown is the Obsidian
+  Excalidraw format: frontmatter `excalidraw-plugin: parsed` (which marks a canvas; the page
+  list reports it as `canvas` from the first 2000 characters), `## Text Elements` with each
+  text (and `[[link]]` on shapes) as `text ^elementId` so FTS and the link index see them,
+  `## Embedded Files` with `fileId: ![name](attachment url)`, and the scene as
+  `compressed-json` (LZString base64, 256-character lines, deleted elements dropped, files
+  empty). Images pasted into a canvas are uploaded as attachments on save and fetched into
+  the scene when it opens, so page versions stay small. Saves are debounced (Excalidraw
+  reports every pointer move); the text tools, summary and assistant are hidden for canvases.
+  Export writes `Title.excalidraw.md` with the export fields merged into the drawing's
+  frontmatter; the vault import turns `.excalidraw.md` files (Obsidian's, with JSON or
+  compressed JSON) back into canvas pages. Fonts are served from `/excalidraw/fonts`; the
+  CDN fallback each font names is removed before the FontFace is created (Chrome checks every
+  address against the CSP at that point). Shared links show canvases read-only.
 - **Voice notes** (`components/VoiceRecorder.tsx`, `editor/audio.ts`, `ai/transcribe.ts`):
   MediaRecorder records Opus in WebM (Chrome, Firefox) or AAC in MP4 (Safari), at most 30
   minutes, uploaded as an attachment and linked as `[🎙️ Voice note (m:ss)](…)` (its own
@@ -561,5 +576,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
     links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
-    PDFs and images, ✅ voice notes with transcription; next: canvas pages with drawing.
+    PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw); next: a
+    chatbot for every feature (web and Telegram), adapters that log data from other services.
 12. **Later** — multi-user.

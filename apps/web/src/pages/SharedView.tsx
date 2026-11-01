@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Eye, Menu as MenuIcon, X } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { buildLinkContext, resolveWikilink, sharePath, type PublicShare, type PublicSharePage } from '@nicotes/shared';
+import { buildLinkContext, isCanvas, resolveWikilink, sharePath, type PublicShare, type PublicSharePage } from '@nicotes/shared';
 import logo from '../logo.svg';
 import { editorExtensions } from '../editor/extensions';
 import { api } from '../lib/api';
+import { loadCanvasEditor } from '../lib/excalidraw';
 import type { LinkBridge } from '../lib/links';
 import { displayTitle } from '../lib/tree';
+
+// Excalidraw is large: only shared canvas pages load it.
+const CanvasEditor = lazy(loadCanvasEditor);
 
 const dateOf = (time: number) => new Date(time).toLocaleDateString('en', { dateStyle: 'long' });
 
@@ -96,7 +100,13 @@ export function SharedView() {
           {current ? (
             <article className="page-body shared-page">
               <h1 className="shared-title">{displayTitle(current.title)}</h1>
-              <ReadOnlyPage key={current.id} page={current} bridge={bridge!} />
+              {isCanvas(current.content) ? (
+                <Suspense fallback={<div className="canvas-host canvas-loading" aria-busy="true" />}>
+                  <CanvasEditor key={current.id} content={current.content} readOnly onOpenLink={(t) => bridge!.open(t)} />
+                </Suspense>
+              ) : (
+                <ReadOnlyPage key={current.id} page={current} bridge={bridge!} />
+              )}
               <p className="shared-updated">Last changed {dateOf(current.updatedAt)}</p>
             </article>
           ) : (

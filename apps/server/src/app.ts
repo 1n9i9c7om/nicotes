@@ -223,7 +223,8 @@ export function createApp({
       serveStatic({
         root: webDir,
         onFound: (path, c) => {
-          c.header('Cache-Control', 'no-cache');
+          // Excalidraw's fonts change only with Excalidraw itself.
+          c.header('Cache-Control', path.includes('/excalidraw/fonts/') ? 'public, max-age=604800' : 'no-cache');
           if (path.endsWith('.webmanifest')) c.header('Content-Type', 'application/manifest+json');
         },
       }),

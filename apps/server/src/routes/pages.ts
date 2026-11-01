@@ -33,6 +33,8 @@ const summaryColumns = {
   parentId: pages.parentId,
   title: pages.title,
   sortOrder: pages.sortOrder,
+  // Like isCanvas() in @nicotes/shared: frontmatter that names the Excalidraw plugin.
+  canvas: sql<boolean>`(substr(${pages.content}, 1, 3) = '---' AND instr(substr(${pages.content}, 1, 2000), 'excalidraw-plugin:') > 0)`.mapWith(Boolean),
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
 };
