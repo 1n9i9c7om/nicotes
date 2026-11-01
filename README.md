@@ -4,8 +4,8 @@
 
 **Self-hosted notes that are easy to group and link, somewhere between OneNote and Obsidian.**
 
-[![Pipeline](https://git.nico.software/1n9i9c7om/nicotes/badges/main/pipeline.svg)](https://git.nico.software/1n9i9c7om/nicotes/-/pipelines)
-[![Latest release](https://git.nico.software/1n9i9c7om/nicotes/-/badges/release.svg)](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
+[![Pipeline](https://img.shields.io/gitlab/pipeline-status/1n9i9c7om%2Fnicotes?gitlab_url=https%3A%2F%2Fgit.nico.software&branch=main&logo=gitlab&label=pipeline)](https://git.nico.software/1n9i9c7om/nicotes/-/pipelines)
+[![Latest release](https://img.shields.io/gitlab/v/release/1n9i9c7om%2Fnicotes?gitlab_url=https%3A%2F%2Fgit.nico.software&sort=semver&label=release)](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
 [![Docker](https://img.shields.io/badge/runs%20on-Docker-2496ED?logo=docker&logoColor=white)](#quick-start)
 [![Node 24+](https://img.shields.io/badge/node-24%2B-5FA04E?logo=nodedotjs&logoColor=white)](#development)
 [![React + TypeScript](https://img.shields.io/badge/React-TypeScript-3178C6?logo=typescript&logoColor=white)](#development)
@@ -352,9 +352,10 @@ To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0`
 
 ## Contributing
 
-Bug reports, ideas and merge requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains
-how to set things up and where changes go. Please report security problems privately, as
-described in [SECURITY.md](SECURITY.md).
+Bug reports and ideas go to the [issue tracker on GitHub](https://github.com/1n9i9c7om/nicotes/issues);
+pull requests are welcome too. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to set things
+up and where changes go. Please report security problems privately, as described in
+[SECURITY.md](SECURITY.md).
 
 Nicotes is developed on [git.nico.software](https://git.nico.software/1n9i9c7om/nicotes);
 [GitHub](https://github.com/1n9i9c7om/nicotes) has a read-only mirror of the code. Releases,
