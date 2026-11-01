@@ -62,8 +62,11 @@ docker compose up -d
 ```
 
 Open http://localhost:3000 and sign in. Nicotes refuses to start with the example
-password, so pick your own. Data lives in the `nicotes-data` volume (SQLite database,
-attachments and the key that encrypts stored API keys); see [Backups](#backups).
+password, so pick your own. `.env` starts with three required settings: that account and
+whether you reach Nicotes over HTTPS. Everything after them is optional and commented out;
+most of it can also be set later under Settings in the app. Data lives in the
+`nicotes-data` volume (SQLite database, attachments and the key that encrypts stored API
+keys); see [Backups](#backups).
 
 **Updating:** `docker compose pull && docker compose up -d`. The image comes from the
 project's container registry (`registry.nico.software/1n9i9c7om/nicotes`):
@@ -207,7 +210,8 @@ The extension in `extension/` shows Nicotes in the browser's sidebar, the way Bi
 does, in Firefox, Chrome and Edge. It shows the normal app (in its phone layout), with its
 own sign-in.
 
-1. Allow it on the server: set `NICOTES_BROWSER_EXTENSION=true` in `.env` and restart Nicotes.
+1. Allow it on the server: set `NICOTES_BROWSER_EXTENSION=true` in `.env` and run
+   `docker compose up -d` again.
 2. Download it from the [releases on git.nico.software](https://git.nico.software/1n9i9c7om/nicotes/-/releases)
    (each release links the extension), or take `extension/` from the repository.
 3. Install it:
