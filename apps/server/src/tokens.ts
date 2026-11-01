@@ -72,6 +72,7 @@ export function tokenSignIn(db: Db) {
       failures.fail(key);
       throw new HTTPException(401, { message: 'Unknown or expired API token' });
     }
+    if (access.scope === 'calendar') throw new HTTPException(403, { message: 'This token only opens the calendar feed' });
     if (access.scope === 'read' && !['GET', 'HEAD'].includes(c.req.method)) {
       throw new HTTPException(403, { message: 'This API token may only read' });
     }

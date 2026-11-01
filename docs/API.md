@@ -13,7 +13,7 @@ curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
 ```
 
 - **Read only** tokens may use `GET` requests only; **Read and write** tokens may also
-  create and change things.
+  create and change things. Calendar tokens only open the calendar feed (below).
 - No token can open Settings, the backups or the token list (`/api/settings`,
   `/api/backups`, `/api/tokens`): those need a signed-in browser.
 - A wrong token is answered with `401`; after 20 wrong tokens from one address within 15
@@ -54,6 +54,13 @@ PAGE=$(curl -s -H "Authorization: Bearer nct_…" -H "Content-Type: application/
 curl -s -H "Authorization: Bearer nct_…" -H "Content-Type: application/json" \
   -d "{\"pageId\": \"$PAGE\", \"text\": \"Call the plumber\"}" https://notes.example.com/api/tasks
 ```
+
+## Calendar feed
+
+`GET /api/calendar/<token>.ics` is an iCalendar feed of the open tasks with a due date
+(all-day events). It needs no `Authorization` header: the calendar token in the address,
+created under Settings → Tasks → Calendar subscription, is the key. Calendar tokens work
+nowhere else, and an unknown token answers `404`.
 
 ## Export
 

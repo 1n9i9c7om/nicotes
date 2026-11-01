@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { CalendarDays, ListChecks, Plus, Search, X } from 'lucide-react';
-import { resolveWikilink, type PageTask, type TaskStatus } from '@nicotes/shared';
+import { resolveWikilink, stripTaskMarkup, TASK_INLINE_LINK, taskPlainText, type PageTask, type TaskStatus } from '@nicotes/shared';
 import { localDate, useDailyNote } from '../lib/daily';
 import { useLinkContext } from '../lib/links';
 import { useAddTask, useNotebooks, useSettings, useTasks, useUpdateTask } from '../lib/queries';
@@ -253,10 +253,9 @@ export function DuePicker({
   );
 }
 
-const INLINE = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]|\[([^\]\n]*)\]\([^)\n]*\)/g;
-const plain = (text: string) => text.replace(/\*\*|__|~~|`/g, '');
-const plainText = (text: string) =>
-  plain(text.replace(INLINE, (_m, target?: string, label?: string, linkText?: string) => (label ?? target ?? linkText ?? '').trim()));
+const INLINE = TASK_INLINE_LINK;
+const plain = stripTaskMarkup;
+const plainText = taskPlainText;
 
 /** Task text with [[links]] clickable and Markdown syntax dropped. */
 function TaskText({ text, notebookId }: { text: string; notebookId: string }) {

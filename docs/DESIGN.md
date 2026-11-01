@@ -105,6 +105,13 @@ and tsup respectively).
   more tokens. Token requests skip the CSRF content-type rule (browsers never send the
   header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
   `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
+- **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
+  scope `calendar` (refused as a bearer token; Settings shows the address once and "New
+  address" replaces the old token). It lists open tasks with a due date — the same set as
+  the task list, including its tag exclusions — as all-day VEVENTs: SUMMARY is the task as
+  plain text, DESCRIPTION/URL link to the page (origin from `X-Forwarded-Proto/Host` behind
+  a proxy), CATEGORIES the notebook, UID a hash of page, text and date. Text is escaped and
+  lines folded at 75 octets (RFC 5545); unknown tokens get 404 and are rate-limited per IP.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
   `409` so two tabs never silently overwrite each other.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new

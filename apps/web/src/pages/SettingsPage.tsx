@@ -20,6 +20,7 @@ import { formatCost } from '../components/JobProgress';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsBackups } from '../components/SettingsBackups';
 import { SettingsTokens } from '../components/SettingsTokens';
+import { SettingsCalendar } from '../components/SettingsCalendar';
 import {
   exportUrl,
   useAuthStatus,
@@ -531,6 +532,7 @@ export function SettingsPage() {
           onSave={(v) => save({ tasksExcludeTags: v === null ? null : v.split(/[\s,]+/).filter(Boolean) })}
           hint="Comma-separated tags; save it empty to include everything. “Clear” goes back to the default (recipe)."
         />
+        <SettingsCalendar />
       </section>
 
       <section className="settings-card">
