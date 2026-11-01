@@ -44,9 +44,10 @@ import type {
   TaskCreate,
   TaskUpdate,
   TrashItem,
+  LoginResult,
   User,
 } from '@nicotes/shared';
-import { parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
+import { isTwoFactorChallenge, parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
 import { api } from './api';
 
 export const keys = {
@@ -94,13 +95,22 @@ function dropUserData(qc: QueryClient) {
 export const useAuthStatus = () =>
   useQuery({ queryKey: keys.auth, queryFn: () => api.get<AuthStatus>('/auth/status'), staleTime: Infinity });
 
-export function useSignIn(mode: 'login' | 'setup') {
+/** Switches the app to a user who has just signed in. */
+export function useFinishSignIn() {
   const qc = useQueryClient();
+  return (user: User) => {
+    dropUserData(qc);
+    qc.setQueryData<AuthStatus>(keys.auth, { user, setupRequired: false });
+  };
+}
+
+/** Signing in may stop halfway with a two-step challenge; the Login page continues from there. */
+export function useSignIn(mode: 'login' | 'setup') {
+  const finish = useFinishSignIn();
   return useMutation({
-    mutationFn: (input: Credentials) => api.post<User>(`/auth/${mode}`, input),
-    onSuccess: (user) => {
-      dropUserData(qc);
-      qc.setQueryData<AuthStatus>(keys.auth, { user, setupRequired: false });
+    mutationFn: (input: Credentials) => api.post<LoginResult>(`/auth/${mode}`, input),
+    onSuccess: (result) => {
+      if (!isTwoFactorChallenge(result)) finish(result);
     },
   });
 }

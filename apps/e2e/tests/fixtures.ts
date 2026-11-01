@@ -3,6 +3,9 @@ import { expect, type Locator, type Page } from '@playwright/test';
 /** The account the main test server creates on start (NICOTES_ADMIN_USER / _PASSWORD). */
 export const ADMIN = { username: 'e2e', password: 'e2e-password-123' };
 
+/** The account of the server for sign-in security tests (two-step sign-in, passkeys). */
+export const SECURE = { username: 'guarded', password: 'guarded-password-123' };
+
 /** All tests share one server and account, so every title they create is unique. */
 export function uniq(prefix: string): string {
   return `${prefix} ${Math.random().toString(36).slice(2, 8)}`;

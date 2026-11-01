@@ -100,9 +100,9 @@ and tsup respectively).
 - **API tokens** (`tokens.ts`, table `api_tokens`): `nct_` + 32 random bytes, shown once,
   stored as SHA-256 with their last four characters for the list. Sent as
   `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
-  to GET/HEAD. `/api/settings`, `/api/backups` and `/api/tokens` only accept the session
-  (403 for a token), so a token can neither read stored AI keys nor the key file, nor make
-  more tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security` and `/api/tokens` only
+  accept the session (403 for a token), so a token can neither read stored AI keys nor the
+  key file, change how the account signs in, nor make more tokens. Token requests skip the CSRF content-type rule (browsers never send the
   header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
   `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
 - **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
@@ -112,6 +112,27 @@ and tsup respectively).
   plain text, DESCRIPTION/URL link to the page (origin from `X-Forwarded-Proto/Host` behind
   a proxy), CATEGORIES the notebook, UID a hash of page, text and date. Text is escaped and
   lines folded at 75 octets (RFC 5545); unknown tokens get 404 and are rate-limited per IP.
+- **Two-step sign-in** (`twoFactor.ts`, `routes/security.ts`; tables `two_factor`,
+  `recovery_codes`): TOTP per RFC 6238 (HMAC-SHA1, 30 s, 6 digits, ±1 step), implemented
+  with `node:crypto`. The 20-byte secret is encrypted with the SecretBox key; `last_step`
+  remembers the step of the last accepted code, so no code works twice. With TOTP on,
+  `POST /api/auth/login` answers `{twoFactor, ticket, passkey}` instead of starting a
+  session; `POST /api/auth/login/code` finishes with a TOTP or recovery code. Tickets live
+  5 minutes in memory and allow 5 wrong codes; wrong TOTP codes also count per account
+  (10 per 6 hours, across tickets), recovery codes do not (50 bits each, so guessing is
+  hopeless). Ten recovery codes, SHA-256 hashed, deleted when used.
+- **Passkeys** (`passkeys.ts`, table `passkeys`, `@simplewebauthn/server`): discoverable
+  credentials with user verification required, so a passkey counts as both steps and signs
+  in without a username; with a ticket, it replaces the code instead. The RP ID is the host
+  name of the request's `Origin`; each passkey stores it and only signs in for that host,
+  so a phishing page (other origin, other RP ID) cannot use it. Challenges live 5 minutes in
+  memory, keyed by a `flow` id returned with the options. Counter and `last_used_at` are
+  updated on use. Algorithms are listed explicitly (EdDSA, ES256, RS256).
+- **Sign-in security settings** (`/api/security`, session only): changes need the password
+  again, which unlocks them for 10 minutes for that session (in memory), so a session left
+  open cannot lock the owner out or add a passkey. `reset-2fa.js <user> [--passkeys]` turns
+  TOTP off from the server and ends the account's sessions. API tokens are not affected by
+  any of this; they are separate credentials with their own scope.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
   `409` so two tabs never silently overwrite each other.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new

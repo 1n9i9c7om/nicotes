@@ -30,3 +30,11 @@ export function clientIp(c: Context): string {
     return 'unknown';
   }
 }
+
+/** The address the request was made to, also behind a reverse proxy. */
+export function requestOrigin(c: Context): string {
+  const url = new URL(c.req.url);
+  const proto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim();
+  const host = c.req.header('x-forwarded-host')?.split(',')[0]?.trim();
+  return `${proto ?? url.protocol.replace(':', '')}://${host ?? url.host}`;
+}
