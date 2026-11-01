@@ -120,16 +120,18 @@ does, in Firefox, Chrome and Edge. It shows the normal app (in its phone layout)
 own sign-in.
 
 1. Allow it on the server: set `NICOTES_BROWSER_EXTENSION=true` in `.env` and restart Nicotes.
-2. Install it:
-   - **Firefox:** release Firefox only installs signed extensions. Pack the folder with
-     `npx web-ext build -s extension -i "*.test.js"` and sign the zip on
+2. Download it from the project's **Releases** page (each release links the extension), or
+   take `extension/` from the repository.
+3. Install it:
+   - **Firefox:** release Firefox only installs signed extensions. Open the release's signed
+     `.xpi` in Firefox. Without one, sign the zip yourself on
      [addons.mozilla.org](https://addons.mozilla.org/developers/) as "On your own" (unlisted;
-     automatic and free), then open the signed `.xpi` in Firefox. To try it without signing,
-     open `about:debugging` → This Firefox → "Load Temporary Add-on…" and pick
-     `extension/manifest.json` (it is removed when Firefox restarts).
-   - **Chrome / Edge:** open `chrome://extensions` (`edge://extensions`), turn on developer
-     mode, choose "Load unpacked" and pick the `extension` folder.
-3. Click the Nicotes button in the toolbar (or the Nicotes icon in Firefox's sidebar) and enter
+     automatic and free). To try it without signing, open `about:debugging` → This Firefox →
+     "Load Temporary Add-on…" and pick its `manifest.json` (it is removed when Firefox
+     restarts).
+   - **Chrome / Edge:** unpack the zip, open `chrome://extensions` (`edge://extensions`), turn
+     on developer mode, choose "Load unpacked" and pick the unpacked folder.
+4. Click the Nicotes button in the toolbar (or the Nicotes icon in Firefox's sidebar) and enter
    the address you open Nicotes at. The browser asks to let the extension access that site,
    which keeps you signed in in the sidebar. To change the address later, open the extension's
    options (Firefox: `about:addons` → Nicotes → Options).
@@ -219,7 +221,9 @@ Database schema changes: edit `apps/server/src/db/schema.ts`, then
 - `develop` is where work comes together: every change starts as a feature branch off
   `develop` and is merged back into it.
 - A release merges `develop` into `main` and tags it `vX.Y.Z` (bump the `version` fields in the
-  `package.json` files first). Settings → About shows the running version and build.
+  `package.json` files and `extension/manifest.json` first, and add the version to
+  `CHANGELOG.md`, which becomes the release notes). Settings → About shows the running
+  version and build.
 
 GitLab CI (`.gitlab-ci.yml`) builds the Docker image on a runner with the host's Docker
 socket and pushes it to the project's container registry:
@@ -233,3 +237,17 @@ socket and pushes it to the project's container registry:
 
 So `main-latest` is always the newest release, and `v1.2.3` pins an older one, e.g.
 `image: <registry>/1n9i9c7om/nicotes:main-latest` in docker-compose instead of `build: .`.
+
+The pipeline also packs the browser extension (`extension/`) into a zip, kept as a job
+artifact on every pipeline. It fails when `extension/manifest.json`'s version differs from
+`package.json` (or, on a tag, from the tag), so bump it with the others. A tag `v1.2.3`
+then:
+
+- uploads the zip to the project's package registry (generic package `nicotes-extension`,
+  version `1.2.3`);
+- creates the GitLab release `Nicotes 1.2.3` once the image is pushed, with that version's
+  `CHANGELOG.md` section as its notes and the extension linked;
+- with the CI/CD variables `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` (an
+  [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
+  masked), also has Mozilla sign the extension as "On your own" and adds the signed `.xpi`,
+  which release Firefox installs. Mozilla signs each version only once.
