@@ -100,9 +100,10 @@ and tsup respectively).
 - **API tokens** (`tokens.ts`, table `api_tokens`): `nct_` + 32 random bytes, shown once,
   stored as SHA-256 with their last four characters for the list. Sent as
   `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
-  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security` and `/api/tokens` only
-  accept the session (403 for a token), so a token can neither read stored AI keys nor the
-  key file, change how the account signs in, nor make more tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security`, `/api/shares` and
+  `/api/tokens` only accept the session (403 for a token), so a token can neither read
+  stored AI keys nor the key file, change how the account signs in, publish notes, nor make
+  more tokens. Token requests skip the CSRF content-type rule (browsers never send the
   header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
   `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
 - **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
@@ -112,6 +113,17 @@ and tsup respectively).
   plain text, DESCRIPTION/URL link to the page (origin from `X-Forwarded-Proto/Host` behind
   a proxy), CATEGORIES the notebook, UID a hash of page, text and date. Text is escaped and
   lines folded at 75 octets (RFC 5545); unknown tokens get 404 and are rate-limited per IP.
+- **Shared links** (`routes/shares.ts`, table `shares`): a read-only link to a page (with
+  or without its subtree) or a notebook. The 18-byte token is looked up by SHA-256 and also
+  stored encrypted (SecretBox), so the owner can copy the link again. `/api/shares` is
+  session only; `GET /api/public/shares/<token>` needs no account and returns the live,
+  untrashed pages in tree order (pages added later are included). Attachment addresses in
+  the Markdown are rewritten to `/api/public/shares/<token>/attachments/<id>`, which serves
+  a file only if a shared page links to it (same sandboxed headers as normal downloads).
+  Unknown and expired tokens answer 404 and count against a per-IP limit (30 per 15
+  minutes); responses are `no-store` with `X-Robots-Tag: noindex`, as is the SPA shell
+  under `/s/`. The web app renders `/s/<token>/<page>` outside the sign-in, with TipTap
+  read-only and a link bridge that only resolves pages inside the share.
 - **Two-step sign-in** (`twoFactor.ts`, `routes/security.ts`; tables `two_factor`,
   `recovery_codes`): TOTP per RFC 6238 (HMAC-SHA1, 30 s, 6 digits, ±1 step), implemented
   with `node:crypto`. The 20-byte secret is encrypted with the SecretBox key; `last_step`
@@ -496,4 +508,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     that page only, approved hunk by hunk; read scopes for the assistant and Ask; version
     history with diffs against the previous version and partial restore. GitLab CI builds
     images into the registry.
-11. **Later** — multi-user.
+11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
+    tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
+    links; next: task reminders (web push, Telegram), Obsidian vault import, search inside
+    images and PDFs, voice notes, canvas pages with drawing.
+12. **Later** — multi-user.

@@ -15,12 +15,13 @@ import './styles/layouts.css';
 import './styles/assistant.css';
 import './styles/models.css';
 import './styles/colors.css';
+import './styles/shared.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import { App } from './App';
+import { Root } from './App';
 import { ApiError } from './lib/api';
 import './lib/install';
 import { registerSW } from 'virtual:pwa-register';
@@ -53,7 +54,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <Root />
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

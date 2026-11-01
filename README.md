@@ -33,6 +33,7 @@ it upfront.
 - 🤖 **Optional AI** through OpenRouter, Routeway or your own model server (Ollama, LM Studio …): ask your notes, research the web, an assistant whose changes you review like a diff.
 - 📱 **On every screen**: installable on your phone, and in the sidebar of Firefox, Chrome and Edge.
 - 💾 **Your data, on your server**: one container, daily backups and a Markdown export that opens in Obsidian.
+- 🔗 **Read-only links** to a page or a notebook, for people without an account.
 - 🔐 **Locked down**: two-step sign-in with an authenticator app, and passkeys.
 
 <table>
@@ -125,6 +126,15 @@ yourself. Changes made in a view (ticking, adding, reordering) edit the page its
 
 In every mode, drag either edge of the page to make it wider or narrower (double-click the
 edge to reset); the width is remembered per browser.
+
+### Sharing
+
+**Share…** in a page's or notebook's ⋯ menu creates a read-only link: anyone who has it can
+read the page (with its subpages, if you like) or the whole notebook, without an account,
+and nothing else. Links between shared pages work; links to anything else show as plain
+text. A link can expire after a day, a week or 30 days, and can be turned off at any time.
+Shared pages show a **Shared** button, and Settings → **Shared links** lists every link
+with how often it was opened. Shared pages stay out of search engines.
 
 ### Ask your notes (optional)
 

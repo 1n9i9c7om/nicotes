@@ -11,6 +11,7 @@ import {
   FilePlus,
   FileText,
   FolderInput,
+  Globe,
   Hash,
   House,
   LogOut,
@@ -50,6 +51,7 @@ import { Menu } from './Menu';
 import { ConfirmDialog } from './Modal';
 import { MoveDialog } from './MoveDialog';
 import { NotebookDialog } from './NotebookDialog';
+import { ShareDialog } from './ShareDialog';
 
 type DropPosition = 'before' | 'after' | 'inside';
 type Drag = { kind: 'page' | 'notebook'; id: string };
@@ -282,6 +284,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
   const navigate = useNavigate();
   const deleteNotebook = useDeleteNotebook();
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const roots = s.tree.children.get(rootKey(notebook.id)) ?? [];
   const open = s.expanded[notebook.id] ?? true;
   const drop = s.dropTarget?.id === notebook.id ? s.dropTarget.position : null;
@@ -347,6 +350,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
                 icon: <FileDown size={15} />,
                 onSelect: () => (window.location.href = exportUrl(notebook.id)),
               },
+              { label: 'Share…', icon: <Globe size={15} />, onSelect: () => setSharing(true) },
               {
                 label: 'Delete notebook',
                 icon: <Trash2 size={15} />,
@@ -374,6 +378,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
       )}
 
       {editing && <NotebookDialog notebook={notebook} onClose={() => setEditing(false)} />}
+      {sharing && <ShareDialog kind="notebook" targetId={notebook.id} title={notebook.title} onClose={() => setSharing(false)} />}
     </div>
   );
 }

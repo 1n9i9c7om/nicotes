@@ -19,6 +19,7 @@ export * from './mentions';
 export * from './recipe';
 export * from './sections';
 export * from './security';
+export * from './sharing';
 export * from './system';
 export * from './tasks';
 export * from './tokens';

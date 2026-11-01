@@ -53,6 +53,31 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** Read-only links to a page (optionally with its subpages) or a whole notebook. */
+export const shares = sqliteTable(
+  'shares',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'page' or 'notebook'. */
+    kind: text('kind').notNull(),
+    /** The page or notebook id; shares of deleted ones are removed with them. */
+    targetId: text('target_id').notNull(),
+    includeChildren: integer('include_children', { mode: 'boolean' }).notNull().default(false),
+    /** SHA-256 of the token in the link, for looking it up. */
+    tokenHash: text('token_hash').notNull().unique(),
+    /** The token encrypted, so the owner can copy the link again. */
+    token: text('token').notNull(),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at'),
+    viewCount: integer('view_count').notNull().default(0),
+    lastViewedAt: integer('last_viewed_at'),
+  },
+  (t) => [index('shares_user_idx').on(t.userId), index('shares_target_idx').on(t.targetId)],
+);
+
 /** Two-step sign-in with an authenticator app (TOTP); a row means it is on. */
 export const twoFactor = sqliteTable('two_factor', {
   userId: text('user_id')

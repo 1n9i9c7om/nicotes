@@ -19,6 +19,8 @@
 .token-form input,
 .token-form select,
 .token-created input,
+.share-link input,
+.share-expiry select,
 .import-url,
 .import-text {
   width: 100%;
@@ -35,6 +37,8 @@
 .token-form input,
 .token-form select,
 .token-created input,
+.share-link input,
+.share-expiry select,
 .import-url {
   height: 40px;
   padding: 0 12px;
@@ -51,6 +55,8 @@
 .token-form input:focus,
 .token-form select:focus,
 .token-created input:focus,
+.share-link input:focus,
+.share-expiry select:focus,
 .import-url:focus,
 .import-text:focus {
   outline: none;

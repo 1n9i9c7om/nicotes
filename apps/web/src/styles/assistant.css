@@ -326,7 +326,8 @@
   }
 
   .assistant-toggle span,
-  .sources-toggle span {
+  .sources-toggle span,
+  .shared-toggle span {
     display: none;
   }
 }

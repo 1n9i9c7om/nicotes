@@ -1,0 +1,254 @@
+/* ---------- Shared links (read-only pages for visitors) ---------- */
+
+.shared {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.shared-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.shared-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shared-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shared-layout {
+  flex: 1;
+  display: flex;
+}
+
+.shared-nav {
+  position: sticky;
+  top: 52px;
+  align-self: flex-start;
+  width: 260px;
+  max-height: calc(100vh - 52px);
+  flex-shrink: 0;
+  padding: 16px 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.shared-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shared-nav ul ul {
+  padding-left: 14px;
+}
+
+.shared-nav a {
+  display: block;
+  padding: 5px 10px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shared-nav a:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+
+.shared-nav a.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.shared-nav-toggle {
+  display: none;
+}
+
+.shared-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.shared-title {
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.shared-page .prose {
+  padding-bottom: 32px;
+}
+
+.shared-updated {
+  margin: 0 0 48px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.shared-empty {
+  margin-top: 15vh;
+  text-align: center;
+}
+
+.shared-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.shared-footer img {
+  width: 16px;
+  height: 16px;
+}
+
+.shared-missing {
+  text-align: center;
+  justify-items: center;
+}
+
+/* Links to pages that were not shared read as plain text. */
+.prose .wikilink.unshared {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  cursor: text;
+}
+
+.prose .wikilink.unshared::before,
+.prose .wikilink.unshared::after {
+  content: none;
+}
+
+/* ---------- Sharing (owner side) ---------- */
+
+.shared-toggle {
+  color: var(--accent-strong);
+}
+
+.share-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+}
+
+.share-link input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.share-link-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.share-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.share-form .check-row {
+  flex-basis: 100%;
+}
+
+.share-expiry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 800px) {
+  .shared-nav-toggle {
+    display: inline-grid;
+  }
+
+  .shared-nav {
+    display: none;
+    position: fixed;
+    inset: 52px 0 0;
+    z-index: 4;
+    width: auto;
+    max-height: none;
+    border-right: none;
+    background: var(--bg-elev);
+  }
+
+  .shared-nav.open {
+    display: block;
+  }
+
+  .shared-bar {
+    padding: 0 12px;
+  }
+
+  .shared-page {
+    padding: 24px 16px 0;
+  }
+
+  .shared-title {
+    font-size: 28px;
+  }
+
+  .share-link-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

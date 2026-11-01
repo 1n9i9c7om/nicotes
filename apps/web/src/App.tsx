@@ -16,12 +16,23 @@ import { OrganizePage } from './pages/OrganizePage';
 import { ResearchPage } from './pages/ResearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SharePage } from './pages/SharePage';
+import { SharedView } from './pages/SharedView';
 import { TagView } from './pages/TagView';
 import { TasksPage } from './pages/TasksPage';
 
 // force-graph is large; the graph page loads on demand.
 const GraphPage = lazy(() => import('./pages/GraphPage').then((m) => ({ default: m.GraphPage })));
 import { TrashPage } from './pages/TrashPage';
+
+/** Shared links open without an account; everything else is the app behind the sign-in. */
+export function Root() {
+  return (
+    <Routes>
+      <Route path="s/:token/:pageId?" element={<SharedView />} />
+      <Route path="*" element={<App />} />
+    </Routes>
+  );
+}
 
 export function App() {
   const { data, isPending, isError, refetch } = useAuthStatus();
