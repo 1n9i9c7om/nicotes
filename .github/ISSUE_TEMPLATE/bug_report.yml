@@ -1,0 +1,27 @@
+name: Bug report
+description: Something in Nicotes doesn't work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → About shows the version and build.
+      placeholder: 0.4.1 (abc1234)
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Browser and device
+      description: And whether it happens in the browser, the installed phone app or the browser sidebar.
+      placeholder: Firefox 159 on Windows, browser sidebar
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead. Screenshots help.
+    validations:
+      required: true
