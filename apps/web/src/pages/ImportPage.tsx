@@ -8,6 +8,7 @@ import {
   type ImportProfile,
 } from '@nicotes/shared';
 import { TagChips } from '../components/TagEditor';
+import { VaultImport } from '../components/VaultImport';
 import { VisualEditor } from '../editor/VisualEditor';
 import { uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
@@ -120,7 +121,10 @@ export function ImportPage() {
         <h1>
           <Download size={26} /> Import
         </h1>
-        <p className="muted">Turn a web page into a note: recipes, articles, products, events or anything else.</p>
+        <p className="muted">
+          Turn a web page into a note: recipes, articles, products, events or anything else. Or bring your notes over from
+          Obsidian.
+        </p>
       </header>
 
       {!result && (
@@ -205,6 +209,8 @@ export function ImportPage() {
           </div>
         </form>
       )}
+
+      {!result && <VaultImport />}
 
       {result && (
         <div className="import-result">

@@ -21,6 +21,7 @@ import { BackupService, type BackupOptions } from './backup/service.js';
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
 import { importRoutes } from './import/routes.js';
+import { vaultRoutes } from './import/vault.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { authRoutes } from './routes/auth.js';
 import { calendarRoutes } from './routes/calendar.js';
@@ -147,7 +148,9 @@ export function createApp({
     await next();
   });
   const jsonLimit = bodyLimit({ maxSize: 10 * 1024 * 1024 });
-  app.use('/api/*', (c, next) => (c.req.path.startsWith('/api/attachments') ? next() : jsonLimit(c, next)));
+  // Uploads set their own limits.
+  const ownLimit = (path: string) => path.startsWith('/api/attachments') || path === '/api/import/vault/preview';
+  app.use('/api/*', (c, next) => (ownLimit(c.req.path) ? next() : jsonLimit(c, next)));
 
   // Signed in by session, or by API token where scripts may reach (not settings with their
   // keys, backups with the key file, sign-in security, or the tokens themselves).
@@ -193,6 +196,7 @@ export function createApp({
   app.route('/api/ai', insightRoutes(db, settings, semantic));
   app.route('/api/ai', layoutRoutes(db, settings));
   app.route('/api/import', importRoutes({ db, dataDir, settings, allowPrivate: importAllowPrivate }));
+  app.route('/api/import/vault', vaultRoutes(db, dataDir));
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
   if (webDir && existsSync(join(webDir, 'index.html'))) {

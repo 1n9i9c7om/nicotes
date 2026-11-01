@@ -251,6 +251,19 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   API key and crawl4ai token are AES-256-GCM encrypted with `NICOTES_SECRET` or a key file
   generated in the data directory, and never returned to the browser.
 - The import page is a route (`/import?url=…`) so the PWA share target can use it.
+- **Vault import** (`import/vault.ts`): a zip (up to 300 MB; files over 25 MB and hidden
+  folders such as `.obsidian` are skipped; a single top folder names the vault) is unpacked
+  with fflate and kept in memory for 30 minutes between preview and import. Notes: YAML
+  frontmatter (scalars, lists, block text) gives title, tags, created/updated (as the
+  export writes them); other properties become `**key:** value` lines; a first `# Heading`
+  equal to the title is dropped. Tags come from properties and inline `#tags` outside code.
+  Layout: top-level folders → notebooks (or one notebook), subfolders → parent pages, a
+  note named like its folder (beside it or inside it) → that parent; alphabetical order.
+  Links: `[[Note#Heading|alias]]` → `[[Note|alias]]`, note embeds → links, file embeds and
+  relative Markdown links → attachment links (resolved from the note's folder, the vault
+  root, then by file name anywhere, like Obsidian), `[x](Note.md)` → `[[Note|x]]`, and links
+  by file name to a note with another title are rewritten to the title. Files no note uses
+  are listed as skipped. Pages are inserted in one transaction; links are indexed after.
 
 ### History, trash, export and PWA
 
@@ -524,6 +537,6 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     images into the registry.
 11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
     tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
-    links, ✅ task reminders (web push, Telegram); next: Obsidian vault import, search inside
-    images and PDFs, voice notes, canvas pages with drawing.
+    links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import; next: search
+    inside images and PDFs, voice notes, canvas pages with drawing.
 12. **Later** — multi-user.

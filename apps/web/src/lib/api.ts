@@ -46,6 +46,21 @@ export async function uploadFile(file: File, pageId?: string): Promise<Attachmen
   return data as Attachment;
 }
 
+/** Uploads one file to an API route (multipart, with the CSRF header), e.g. a zip to import. */
+export async function postFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.set('file', file);
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'x-requested-with': 'nicotes' },
+    body: form,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data as T;
+}
+
 /** POSTs JSON and reads the server-sent events of the response, one parsed `data:` object at a time. */
 export async function postStream<E>(path: string, body: unknown, onEvent: (event: E) => void, signal?: AbortSignal) {
   const res = await fetch(`/api${path}`, {
