@@ -15,6 +15,7 @@ import { assistantRoutes } from './ai/assistant.js';
 import { insightRoutes } from './ai/insight.js';
 import { layoutRoutes } from './ai/layout.js';
 import { requireAuth } from './auth.js';
+import { bearerToken, tokenRoutes, tokenSignIn } from './tokens.js';
 import { backupRoutes } from './backup/routes.js';
 import { BackupService, type BackupOptions } from './backup/service.js';
 import type { Config } from './config.js';
@@ -124,8 +125,9 @@ export function createApp({
   // CSRF defence: state-changing API calls must be JSON (or bodiless). Cross-site forms
   // cannot send application/json without a CORS preflight, which this server never allows.
   // Uploads are multipart, so they must carry a custom header instead (also preflighted).
+  // Requests with an API token are exempt: browsers never add one to a request by themselves.
   app.use('/api/*', async (c, next) => {
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !bearerToken(c)) {
       const type = c.req.header('content-type')?.toLowerCase();
       const json = !type || type.startsWith('application/json');
       const upload = type?.startsWith('multipart/form-data') && c.req.header('x-requested-with') === 'nicotes';
@@ -136,12 +138,19 @@ export function createApp({
   const jsonLimit = bodyLimit({ maxSize: 10 * 1024 * 1024 });
   app.use('/api/*', (c, next) => (c.req.path.startsWith('/api/attachments') ? next() : jsonLimit(c, next)));
 
-  const auth = requireAuth(db, secureCookies);
+  // Signed in by session, or by API token where scripts may reach (not settings with their
+  // keys, backups with the key file, or the tokens themselves).
+  const auth = requireAuth(db, secureCookies, tokenSignIn(db));
+  const sessionOnly = requireAuth(db, secureCookies);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes(db, secureCookies));
-  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'settings', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system', 'backups']) {
+  for (const area of ['notebooks', 'pages', 'tags', 'search', 'attachments', 'import', 'trash', 'export', 'jobs', 'ai', 'graph', 'daily', 'tasks', 'semantic', 'system']) {
     app.use(`/api/${area}`, auth);
     app.use(`/api/${area}/*`, auth);
+  }
+  for (const area of ['settings', 'backups', 'tokens']) {
+    app.use(`/api/${area}`, sessionOnly);
+    app.use(`/api/${area}/*`, sessionOnly);
   }
   app.route('/api/notebooks', notebookRoutes(db));
   app.route('/api/pages', pageRoutes(db));
@@ -159,6 +168,7 @@ export function createApp({
   app.route('/api/system', systemRoutes(db, dataDir));
   app.route('/api/semantic', semanticRoutes(db, semantic));
   app.route('/api/backups', backupRoutes(backups));
+  app.route('/api/tokens', tokenRoutes(db));
   app.route('/api/ai', aiRoutes(db, jobs));
   app.route('/api/ai', askRoutes(db, settings, semantic));
   app.route('/api/ai', assistantRoutes(db, settings, semantic, importAllowPrivate));

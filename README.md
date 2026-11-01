@@ -240,6 +240,15 @@ own sign-in.
    which keeps you signed in in the sidebar. To change the address later, open the extension's
    options (Firefox: `about:addons` → Nicotes → Options).
 
+## Scripts and other apps
+
+Under Settings → **API tokens** you can create tokens for scripts and other apps, such as an
+iOS shortcut that adds a task to today's journal, Home Assistant, or a backup script. A
+token is shown once; send it as `Authorization: Bearer nct_…`. **Read only** tokens can only
+look at your notes, **Read and write** ones can change them too. No token can change
+settings, download backups or create other tokens, and each one can be revoked at any time.
+[docs/API.md](docs/API.md) lists what the API can do, with examples.
+
 ## Backups
 
 Nicotes backs itself up once a day: a consistent copy of the database (taken while it runs),

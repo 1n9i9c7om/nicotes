@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { HTTPException } from 'hono/http-exception';
 import { credentialsSchema, loginSchema, type AuthStatus } from '@nicotes/shared';
 import {
@@ -15,19 +14,11 @@ import {
 } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { users } from '../db/schema.js';
-import { readJson } from '../http.js';
+import { clientIp, readJson } from '../http.js';
 
 // A fixed hash so unknown usernames cost as much time as wrong passwords.
 const DUMMY_HASH =
   'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$' + Buffer.alloc(64).toString('base64');
-
-function clientIp(c: Parameters<typeof getConnInfo>[0]): string {
-  try {
-    return getConnInfo(c).remote.address ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 
 export function authRoutes(db: Db, secure: boolean) {
   const limiter = new LoginLimiter();

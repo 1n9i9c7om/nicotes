@@ -31,6 +31,28 @@ export const sessions = sqliteTable(
   (t) => [index('sessions_user_idx').on(t.userId)],
 );
 
+/** Personal access tokens for scripts and other apps (`Authorization: Bearer nct_…`). */
+export const apiTokens = sqliteTable(
+  'api_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** SHA-256 of the token; the token itself is shown once, when it is created. */
+    tokenHash: text('token_hash').notNull().unique(),
+    /** Its last four characters, so a list can tell tokens apart. */
+    hint: text('hint').notNull(),
+    /** 'read' (GET only) or 'write'. */
+    scope: text('scope').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+    expiresAt: integer('expires_at'),
+  },
+  (t) => [index('api_tokens_user_idx').on(t.userId)],
+);
+
 export const notebooks = sqliteTable(
   'notebooks',
   {

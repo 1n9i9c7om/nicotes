@@ -42,5 +42,8 @@ export function setup(options: Partial<AppOptions> = {}) {
   const rawPost = (path: string, body: unknown) =>
     app.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  return { db, jobs: app.jobs, semantic: app.semantic, backups: app.backups, call, upload, raw, rawPost, logout: () => (cookie = '') };
+  /** A request without the session cookie, e.g. with an API token. */
+  const request = (path: string, init?: RequestInit) => app.request(path, init);
+
+  return { db, jobs: app.jobs, semantic: app.semantic, backups: app.backups, call, upload, raw, rawPost, request, logout: () => (cookie = '') };
 }

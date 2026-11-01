@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { HTTPException } from 'hono/http-exception';
 import type { z } from 'zod';
 
@@ -20,3 +21,12 @@ export async function readJson<T extends z.ZodType>(c: Context, schema: T): Prom
 }
 
 export const notFound = (what: string) => new HTTPException(404, { message: `${what} not found` });
+
+/** The caller's IP address, for rate limits ("unknown" where the runtime does not tell). */
+export function clientIp(c: Context): string {
+  try {
+    return getConnInfo(c).remote.address ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
