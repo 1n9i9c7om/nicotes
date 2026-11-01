@@ -143,16 +143,31 @@ extension:build:
         exit 1
       fi
     - mkdir -p dist build && cp -r extension build/extension && rm build/extension/*.test.js
-    - UPDATE_URL="${EXTENSION_UPDATE_URL:-${CI_PAGES_URL:+$CI_PAGES_URL/updates.json}}"
-    - |
-      if [ -n "$UPDATE_URL" ]; then
-        node scripts/extension-update-url.mjs build/extension/manifest.json "$UPDATE_URL"
-        echo "Firefox update_url: $UPDATE_URL"
-      else
-        echo "No GitLab Pages and no EXTENSION_UPDATE_URL: the extension gets no update_url."
-      fi
-    - cd build/extension && zip -r -X "../../dist/$EXTENSION_PACKAGE-$VERSION.zip" . && cd ../..
     - echo "EXTENSION_VERSION=$VERSION" > extension.env
+    - UPDATE_URL="${EXTENSION_UPDATE_URL:-${CI_PAGES_URL:+$CI_PAGES_URL/updates.json}}"
+    # Firefox only accepts an https:// update_url. Without one the extension still works but
+    # doesn't update itself; a tag that gets signed must have one (signing can't be redone).
+    - |
+      case "$UPDATE_URL" in
+        https://*)
+          node scripts/extension-update-url.mjs build/extension/manifest.json "$UPDATE_URL"
+          echo "EXTENSION_UPDATE_BASE=${UPDATE_URL%/*}" >> extension.env
+          echo "Firefox update_url: $UPDATE_URL"
+          ;;
+        *)
+          if [ -z "$UPDATE_URL" ]; then
+            reason="GitLab Pages is not enabled and EXTENSION_UPDATE_URL is not set"
+          else
+            reason="the update URL $UPDATE_URL is not https:// (CI_PAGES_URL is ${CI_PAGES_URL:-unset}); serve Pages over HTTPS or set EXTENSION_UPDATE_URL"
+          fi
+          if [ -n "${CI_COMMIT_TAG:-}" ] && [ -n "${AMO_JWT_ISSUER:-}" ] && [ -n "${AMO_JWT_SECRET:-}" ]; then
+            echo "No update_url for the signed extension: $reason."
+            exit 1
+          fi
+          echo "WARNING: the extension gets no update_url: $reason."
+          ;;
+      esac
+    - cd build/extension && zip -r -X "../../dist/$EXTENSION_PACKAGE-$VERSION.zip" . && cd ../..
   artifacts:
     name: $EXTENSION_PACKAGE-$CI_COMMIT_REF_SLUG
     paths:
@@ -204,24 +219,43 @@ extension:sign-firefox:
 # looks for updates (the update_url in the signed manifest). Pages must be visible to everyone
 # (Settings → General → Visibility → Pages), also for a private project, because Firefox
 # checks without signing in. Each deployment replaces the site, so it holds the newest version.
+#
+# Branches: a manual run publishes a preview with the unsigned zip instead, to check that
+# Pages serves updates.json publicly over HTTPS. It lists the branch's current version, so
+# installed copies never update to it; the next release replaces it.
 pages:
   stage: release
   image: node:24-alpine
   interruptible: false
-  needs: [extension:build, extension:sign-firefox]
+  needs:
+    - job: extension:build
+    - job: extension:sign-firefox
+      optional: true
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $AMO_JWT_ISSUER && $AMO_JWT_SECRET
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
   script:
     - |
       if [ -z "${CI_PAGES_URL:-}" ]; then
         echo "GitLab Pages is not enabled on this instance; nothing to publish."
         exit 1
       fi
+      echo "GitLab Pages URL: $CI_PAGES_URL"
+    - BASE="${EXTENSION_UPDATE_BASE:-$CI_PAGES_URL}"
     - mkdir -p public
     - XPI="$EXTENSION_PACKAGE-$EXTENSION_VERSION.xpi"
-    - cp "$(ls signed/*.xpi | head -n 1)" "public/$XPI"
-    - node scripts/extension-updates.mjs build/extension/manifest.json "public/$XPI" "$CI_PAGES_URL/$XPI" > public/updates.json
+    - |
+      if ls signed/*.xpi >/dev/null 2>&1; then
+        cp "$(ls signed/*.xpi | head -n 1)" "public/$XPI"
+      else
+        echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
+        cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
+      fi
+    - node scripts/extension-updates.mjs build/extension/manifest.json "public/$XPI" "$BASE/$XPI" > public/updates.json
     - cat public/updates.json
+    - echo "Check $BASE/updates.json in a private browser window; it must open without signing in."
   artifacts:
     paths:
       - public
