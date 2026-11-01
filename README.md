@@ -336,8 +336,8 @@ then:
   warning) and a tag that would be signed fails, since a version can only be signed once.
 
 To check Pages before a release, run the manual `pages` job in a branch pipeline (e.g. on
-`develop`). It publishes a preview of the landing page with the unsigned zip and that
-branch's version, so installed copies don't update to it, and prints the addresses of the
+`develop`). It publishes a preview of the landing page (without its Firefox button) with
+the unsigned zip and that branch's version, so installed copies don't update to it, and prints the addresses of the
 page and of `updates.json`. Both must open in a private browser window, without signing
 in. The next release replaces the preview. Each deployment replaces the whole site, so a
 release without the AMO keys removes an earlier `updates.json`.

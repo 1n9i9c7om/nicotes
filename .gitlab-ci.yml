@@ -255,6 +255,8 @@ pages:
       elif [ -z "${CI_COMMIT_TAG:-}" ]; then
         echo "Preview: publishing the unsigned zip as $XPI (Firefox won't install it)."
         cp "dist/$EXTENSION_PACKAGE-$EXTENSION_VERSION.zip" "public/$XPI"
+        # The landing page then hides its Firefox install button.
+        sed -i 's/<html lang="en">/<html lang="en" data-preview>/' public/index.html
       fi
     - |
       if [ -f "public/$XPI" ]; then
