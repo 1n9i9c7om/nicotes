@@ -292,9 +292,11 @@ Database schema changes: edit `apps/server/src/db/schema.ts`, then
 - `develop` is where work comes together: every change starts as a feature branch off
   `develop` and is merged back into it.
 - A release merges `develop` into `main` and tags it `vX.Y.Z` (bump the `version` fields in the
-  `package.json` files and `extension/manifest.json` first, and add the version to
-  `CHANGELOG.md`, which becomes the release notes). Settings → About shows the running
-  version and build.
+  `package.json` files first, and add the version to `CHANGELOG.md`, which becomes the
+  release notes). Settings → About shows the running version and build.
+- The browser extension has its own version in `extension/manifest.json`. Bump it only when
+  something in `extension/` changes; releases without changes there reuse the extension
+  that is already signed.
 
 GitLab CI (`.gitlab-ci.yml`) builds the Docker image on a runner with the host's Docker
 socket and pushes it to the project's container registry:
@@ -310,40 +312,40 @@ So `main-latest` is always the newest release, and `v1.2.3` pins an older one;
 `docker-compose.yml` uses `main-latest` unless `NICOTES_TAG` says otherwise.
 
 The pipeline also packs the browser extension (`extension/`) into a zip, kept as a job
-artifact on every pipeline. It fails when `extension/manifest.json`'s version differs from
-`package.json` (or, on a tag, from the tag), so bump it with the others. A tag `v1.2.3`
-then:
+artifact on every pipeline. If that extension version is already released but `extension/`
+differs from it, branch pipelines warn and a tag fails: bump the extension's version. A tag
+`v1.2.3` (whose `package.json` must say `1.2.3`) then:
 
 - uploads the zip to the project's package registry (generic package `nicotes-extension`,
-  version `1.2.3`);
-- creates the GitLab release `Nicotes 1.2.3` once the image is pushed, with that version's
-  `CHANGELOG.md` section as its notes and the extension linked;
+  the extension's version), unless an earlier release already did;
 - with the CI/CD variables `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` (an
   [addons.mozilla.org API key](https://addons.mozilla.org/developers/addon/api/key/), both
-  masked), also has Mozilla sign the extension as "On your own" and adds the signed `.xpi`,
-  which release Firefox installs. Mozilla signs each version only once.
+  masked and protected, with `v*` tags protected so they get them), has Mozilla sign the
+  extension as "On your own" and uploads the signed `.xpi`, which release Firefox installs.
+  Mozilla signs each version only once; an extension version that is already signed is
+  taken from the package registry instead;
+- creates the GitLab release `Nicotes 1.2.3` once the image is pushed, with that version's
+  `CHANGELOG.md` section as its notes and the extension linked;
 - publishes the landing page (`site/`, with the logo and screenshots from `docs/`) on the
-  project's GitLab Pages;
-- with those keys, also publishes the signed `.xpi` and an update manifest (`updates.json`)
-  next to it, and the landing page offers the `.xpi` for Firefox. The packed extension's `update_url` points there, so an
-  installed copy updates itself (Firefox checks about once a day). Firefox checks without
-  signing in, so set **Settings → General → Visibility → Pages** to "Everyone"; the
-  repository itself can stay private. Pages must be enabled on the GitLab instance and
-  served over HTTPS (Firefox ignores `http://` update URLs). If the project's Pages address
-  isn't HTTPS, give the Pages site a custom domain with HTTPS (Settings → Pages → Domains)
-  and set the CI/CD variable `EXTENSION_UPDATE_URL` to `https://<that domain>/updates.json`.
-  Without an HTTPS address, branch builds pack the extension without `update_url` (with a
-  warning) and a tag that would be signed fails, since a version can only be signed once.
+  project's GitLab Pages, with the signed `.xpi` and an update manifest (`updates.json`)
+  next to it; the landing page offers the `.xpi` for Firefox. The packed extension's
+  `update_url` points there, so an installed copy updates itself (Firefox checks about once
+  a day). Without a signed `.xpi` of the current extension version, the extension files
+  already on Pages are kept, so installed copies are never offered an unsigned version.
+
+Firefox checks for updates without signing in, so set **Settings → General → Visibility →
+Pages** to "Everyone". Pages must be enabled on the GitLab instance and served over HTTPS
+(Firefox ignores `http://` update URLs). If the project's Pages address isn't HTTPS, give
+the Pages site a custom domain with HTTPS (Settings → Pages → Domains) and set the CI/CD
+variable `EXTENSION_UPDATE_URL` to `https://<that domain>/updates.json`. Without an HTTPS
+address, branch builds pack the extension without `update_url` (with a warning) and a tag
+that would be signed fails, since a version can only be signed once.
 
 To update the landing page between releases, run the manual `pages` job in a branch
-pipeline (e.g. on `develop`). If the signed `.xpi` of that branch's version is already in
-the package registry (from its release), it is published as on a release. Otherwise the
-job publishes a preview without the Firefox button, with the unsigned zip and that
-branch's version, so installed copies don't update to it; the next release replaces it.
-Either way the job prints the addresses of the page and of `updates.json`, which must open
-in a private browser window, without signing in. Each deployment replaces the whole site,
-so a release without the AMO keys and without a signed `.xpi` removes an earlier
-`updates.json`.
+pipeline (e.g. on `develop`). It publishes the page with the signed extension of the
+current extension version if a release signed it, and otherwise keeps the extension files
+already on Pages. The job prints the addresses of the page and of `updates.json`, which
+must open in a private browser window, without signing in.
 
 To look at the landing page locally, run `sh scripts/build-site.sh public 0.0.0` and open
 `public/index.html`.
