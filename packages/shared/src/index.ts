@@ -21,6 +21,7 @@ export * from './layout';
 export * from './listEdits';
 export * from './mentions';
 export * from './recipe';
+export * from './recurring';
 export * from './reminders';
 export * from './sections';
 export * from './security';

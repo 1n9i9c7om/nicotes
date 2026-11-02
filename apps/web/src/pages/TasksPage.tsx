@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { AlarmClock, CalendarDays, ListChecks, Plus, Search, X } from 'lucide-react';
+import { AlarmClock, CalendarDays, ListChecks, Plus, Repeat, Search, X } from 'lucide-react';
 import { resolveWikilink, stripTaskMarkup, TASK_INLINE_LINK, taskPlainText, type PageTask, type TaskStatus } from '@nicotes/shared';
 import { localDate, useDailyNote } from '../lib/daily';
 import { useLinkContext } from '../lib/links';
@@ -197,6 +197,12 @@ function TaskRow({
               <AlarmClock size={12} />
               {task.remind.slice(0, 10) === task.due ? '' : `${dueLabel(task.remind.slice(0, 10), today)} `}
               {task.remind.slice(11)}
+            </span>
+          )}
+          {task.repeat && !task.done && (
+            <span className="task-remind" title="Repeats: ticking it off adds the next one">
+              <Repeat size={12} />
+              {task.repeat}
             </span>
           )}
         </span>

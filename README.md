@@ -131,6 +131,12 @@ out (Settings → Tasks). Under Settings → Tasks → **Calendar subscription**
 address for Google Calendar, Apple Calendar, Thunderbird and the like: open tasks with a due
 date show up there as all-day events.
 
+**Recurring tasks:** add a rule like `🔁 every week`, `🔁 every monday, thursday`,
+`🔁 every month on the 1st` or `🔁 every 2 weeks when done` (counted from the day you tick it
+off). Ticking one off, wherever you do it, adds the next one above it with the due date moved
+on; the ticked one stays as a record. This is the syntax of Obsidian's Tasks plugin, so
+imported vaults keep working.
+
 **Reminders:** write `⏰ 09:00` after a task with a due date (or `⏰ 2026-11-04 09:00` after
 any task) to be reminded then, and/or get a summary of the day's tasks every morning.
 Settings → **Reminders** sends them as notifications to your phone or computer (on iPhone

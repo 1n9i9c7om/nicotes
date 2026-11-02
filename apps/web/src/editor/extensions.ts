@@ -9,6 +9,7 @@ import type { LinkBridge } from '../lib/links';
 import { AudioPlayers } from './audio';
 import { Citations } from './citations';
 import { Highlight, TextColor } from './colors';
+import { RecurringTasks } from './recurring';
 import { FileUploads, type Uploader } from './uploads';
 import { Wikilink } from './wikilink';
 import { WikilinkSuggest } from './WikilinkSuggest';
@@ -30,6 +31,7 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    RecurringTasks,
     TableKit.configure({ table: { resizable: false } }),
     Image.configure({ allowBase64: false }),
     Highlight,

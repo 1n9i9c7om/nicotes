@@ -284,7 +284,7 @@ export class TelegramBot {
       if (!task || lineHash(task.raw) !== hash) {
         await answer('That task changed or is already done.');
       } else {
-        updateTask(this.db, userId, { pageId: pageId!, line: task.line, raw: task.raw, done: true });
+        updateTask(this.db, userId, { pageId: pageId!, line: task.line, raw: task.raw, done: true }, this.today(userId));
         await answer(`Done: ${clip(taskPlainText(task.text), 60)}`);
       }
       return edit(this.todoView(userId));

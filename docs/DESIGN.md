@@ -417,6 +417,14 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   rewrites it and saves a version. Due dates use Obsidian's `📅 YYYY-MM-DD`
   (`due:` / `@` are read too). Quick add fills today's daily note (placeholder task, a
   "Tasks" section, or the end).
+- **Recurring tasks** (`shared/recurring.ts`): `🔁 <rule>` as in Obsidian's Tasks plugin.
+  `tickTaskLine` ticks a line off and, for an open recurring task, inserts the next
+  occurrence above it: the due date moves to the rule's next date after it (after today
+  with "when done", or for undated tasks, which then get one), and dated reminders keep
+  their distance to it. Every way of ticking uses it: the task API (Tasks page, Telegram,
+  chat; with the account's date), the views (`setItemChecked`) and the editor, where a
+  ProseMirror plugin (`editor/recurring.ts`) spots a task item whose checkbox went on and
+  inserts a copy with the dates moved, in the same undo step.
 - **Semantic index** (opt-in per user, OpenRouter embeddings, default
   `openai/text-embedding-3-small` at 512 dimensions): a background indexer embeds pages
   whose version, title or model changed, once typing has paused for 30 s, in passages of

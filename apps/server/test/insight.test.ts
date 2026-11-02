@@ -144,6 +144,18 @@ describe('tasks', () => {
     expect(stale.status).toBe(409);
   });
 
+  it('adds the next occurrence of a recurring task it ticks off, and reopens tasks', async () => {
+    const home = await create('Home', '- [ ] Water plants 🔁 every week 📅 2026-11-02');
+    const [water] = await tasks();
+    expect(water).toMatchObject({ text: 'Water plants', repeat: 'every week' });
+    const res = await api.call<Page>('PATCH', '/api/tasks', { pageId: home.id, line: water!.line, raw: water!.raw, done: true });
+    expect(res.body.content).toBe('- [ ] Water plants 🔁 every week 📅 2026-11-09\n- [x] Water plants 🔁 every week 📅 2026-11-02');
+
+    const [done] = await tasks('done');
+    const reopened = await api.call<Page>('PATCH', '/api/tasks', { pageId: home.id, line: done!.line, raw: done!.raw, done: false });
+    expect(reopened.body.content).toBe('- [ ] Water plants 🔁 every week 📅 2026-11-09\n- [ ] Water plants 🔁 every week 📅 2026-11-02');
+  });
+
   it('adds a task to a page', async () => {
     const day = await create('2026-10-20', '## Notes\n\n\n## Tasks\n\n- [ ] ');
     const res = await api.call<Page>('POST', '/api/tasks', { pageId: day.id, text: 'Call the bakery', due: '2026-10-22' });

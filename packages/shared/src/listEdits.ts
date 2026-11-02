@@ -1,4 +1,5 @@
 import type { ListItem } from './blocks';
+import { tickTaskLine } from './recurring';
 
 /**
  * Edits of list items in a page's Markdown, used by interactive layouts (the checklist view).
@@ -12,9 +13,18 @@ function splitLines(markdown: string) {
   return markdown.split('\n');
 }
 
-/** Ticks or unticks an item; a plain item becomes a task item. */
-export function setItemChecked(markdown: string, item: ListItem, checked: boolean): string {
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * Ticks or unticks an item; a plain item becomes a task item. Ticking off a recurring task adds
+ * its next occurrence above it (`today` counts for "when done" rules and undated tasks).
+ */
+export function setItemChecked(markdown: string, item: ListItem, checked: boolean, today = localToday()): string {
   const lines = splitLines(markdown);
+  if (checked && /\[ \]/.test(lines[item.line] ?? '')) return tickTaskLine(lines, item.line, today).join('\n');
   lines[item.line] = lines[item.line]!.replace(
     PREFIX,
     (_m, indent: string, marker: string, space: string) => `${indent}${marker}${space}[${checked ? 'x' : ' '}] `,
