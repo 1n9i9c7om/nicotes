@@ -1,5 +1,31 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Mic, Sparkles, ExternalLink, FileDown, FileSearch, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import {
+  Blocks,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Copy,
+  Cpu,
+  ExternalLink,
+  FileDown,
+  FileSearch,
+  HardDrive,
+  Info,
+  ListChecks,
+  LogOut,
+  Mic,
+  NotebookText,
+  PlugZap,
+  RotateCcw,
+  Server,
+  Smartphone,
+  Sparkles,
+  Telescope,
+  UserRound,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
@@ -209,350 +235,158 @@ function ModelField({
   );
 }
 
+/** What every tab gets: the account's settings and a way to change them. */
+interface TabProps {
+  settings: Settings;
+  save: (input: SettingsUpdate) => void;
+  pending: boolean;
+}
+
+interface SettingsTab {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  /** The ids of its cards and settings: a link to one of them (/settings#models) opens this tab. */
+  sections: string[];
+  Panel: ComponentType<TabProps>;
+}
+
+const TABS: SettingsTab[] = [
+  { id: 'account', label: 'Account', icon: UserRound, sections: ['account', 'security', 'passkeys', 'tokens', 'shared-links'], Panel: AccountTab },
+  { id: 'notes', label: 'Notes & tasks', icon: NotebookText, sections: ['daily', 'tasks', 'calendar', 'file-search'], Panel: NotesTab },
+  { id: 'ai', label: 'AI', icon: Sparkles, sections: ['openrouter', 'routeway', 'local-models', 'models', 'research', 'semantic'], Panel: AiTab },
+  { id: 'integrations', label: 'Integrations', icon: Blocks, sections: ['reminders', 'voice', 'adapters', 'crawl4ai'], Panel: IntegrationsTab },
+  { id: 'app', label: 'App & data', icon: HardDrive, sections: ['app', 'offline', 'export', 'backups', 'about'], Panel: AppTab },
+];
+
+/** Arrow keys, Home and End move between the tabs; Enter or Space opens one. */
+function moveFocus(e: KeyboardEvent<HTMLElement>) {
+  const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
+  const at = tabs.indexOf(document.activeElement as HTMLElement);
+  if (at < 0) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    tabs[at]!.click();
+    return;
+  }
+  const to = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  tabs[(to + tabs.length) % tabs.length]!.focus();
+}
+
 export function SettingsPage() {
-  const auth = useAuthStatus();
   const settings = useSettings();
   const update = useUpdateSettings();
-  const signOut = useSignOut();
-  const checkOpenRouter = useCheckConnection();
-  const checkRouteway = useCheckConnection();
-  const checkLocal = useCheckConnection();
-  const checkCrawl4ai = useCheckConnection();
-  const checkSearxng = useCheckConnection();
-  const checkTranscribe = useCheckConnection();
-  const batches = useBatches();
-  const notebooks = useNotebooks();
-  const allPages = usePages();
-  const templates = (allPages.data ?? []).filter((p) => p.tags.includes(TEMPLATE_TAG));
-  const undo = useUndoBatch();
-  const models = useModels(true);
-  const embeddingModels = useModels(true, 'embedding');
-  const installPrompt = useInstallPrompt();
+  const { tab: param } = useParams();
+  const { hash, key } = useLocation();
+  const navigate = useNavigate();
+  const root = useRef<HTMLDivElement>(null);
+  const tabList = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const section = hash.slice(1);
+  const owner = TABS.find((t) => t.sections.includes(section));
+  const tab = owner ?? TABS.find((t) => t.id === param) ?? TABS[0]!;
+  const ready = !!settings.data;
+
+  // The address names the tab, for reloading and Back: /settings#models becomes /settings/ai#models.
+  useEffect(() => {
+    if (tab.id !== param && (param !== undefined || owner)) navigate(`/settings/${tab.id}${hash}`, { replace: true });
+  }, [tab.id, param, owner, hash, navigate]);
+
+  // A link to a section scrolls to it; cards that load data of their own show up a little later.
+  useEffect(() => {
+    if (!ready || !section) return;
+    let frame = 0;
+    const until = performance.now() + 3000;
+    const find = () => {
+      const target = panel.current?.querySelector(`#${CSS.escape(section)}`);
+      if (target) target.scrollIntoView({ block: 'start' });
+      else if (performance.now() < until) frame = requestAnimationFrame(find);
+    };
+    find();
+    return () => cancelAnimationFrame(frame);
+  }, [ready, section, tab.id, key]);
+
+  // Another tab opens at the top of the page (before the shorter one would leave the view
+  // somewhere in the middle), and on phones, where the tabs scroll sideways, its name in view.
+  useLayoutEffect(() => {
+    tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (!section) root.current?.scrollIntoView({ block: 'start' });
+  }, [ready, tab.id]);
 
   if (!settings.data) return null;
-  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, reminders, semantic, transcription } = settings.data;
-  const save = (input: SettingsUpdate) => update.mutate(input);
+  const { Panel } = tab;
 
   return (
-    <div className="content settings">
+    <div className="content settings" ref={root}>
       <header className="content-header">
         <h1>Settings</h1>
         <p className="muted">Stored per account. Keys and tokens are encrypted and never sent back to the browser.</p>
       </header>
 
-      <section className="settings-card">
-        <h2>
-          <PlugZap size={18} /> OpenRouter
-        </h2>
-        <p className="muted">
-          Runs the AI features with OpenRouter's models and computes the embeddings for the semantic index. Without any
-          AI key, imports still work as plain page clips.
-        </p>
-
-        <SettingField
-          key={`key-${openrouter.apiKeySource}`}
-          label="API key"
-          secret
-          source={openrouter.apiKeySource}
-          current={null}
-          placeholder="sk-or-…"
-          pending={update.isPending}
-          onSave={(v) => save({ openrouterApiKey: v })}
-          hint={
-            <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
-              Create a key at openrouter.ai <ExternalLink size={12} />
-            </a>
-          }
-        />
-        <div className="setting-actions">
-          <button className="btn" disabled={checkOpenRouter.isPending} onClick={() => checkOpenRouter.mutate('openrouter')}>
-            {checkOpenRouter.isPending ? 'Testing…' : 'Test connection'}
-          </button>
-          <CheckResult result={checkOpenRouter.data} />
-        </div>
-      </section>
-
-      <section className="settings-card" id="routeway">
-        <h2>
-          <PlugZap size={18} /> Routeway
-        </h2>
-        <p className="muted">
-          Optional second service: an OpenAI-compatible gateway with its own models and prices. Its models appear in the
-          model pickers below, marked Routeway; each feature uses the service of the model you pick for it.
-        </p>
-        <SettingField
-          key={`rw-key-${routeway.apiKeySource}`}
-          label="API key"
-          secret
-          source={routeway.apiKeySource}
-          current={null}
-          placeholder="sk-…"
-          pending={update.isPending}
-          onSave={(v) => save({ routewayApiKey: v })}
-          hint={
-            <a href="https://routeway.ai" target="_blank" rel="noreferrer">
-              Create a key at routeway.ai <ExternalLink size={12} />
-            </a>
-          }
-        />
-        <div className="setting-actions">
-          <button className="btn" disabled={checkRouteway.isPending} onClick={() => checkRouteway.mutate('routeway')}>
-            {checkRouteway.isPending ? 'Testing…' : 'Test connection'}
-          </button>
-          <CheckResult result={checkRouteway.data} />
-        </div>
-      </section>
-
-      <section className="settings-card" id="local-models">
-        <h2>
-          <Server size={18} /> Your own model server
-        </h2>
-        <p className="muted">
-          Runs AI features on a server you control, so your notes don't leave your network: Ollama, LM Studio,
-          LocalAI, vLLM or anything else with an OpenAI-compatible API. Its models appear in the model pickers below,
-          marked Own server, and cost nothing. They can't search the web; research then needs SearXNG or uses the
-          model's own knowledge.
-        </p>
-        <SettingField
-          key={`local-url-${local.urlSource}-${local.url}`}
-          label="Address"
-          source={local.urlSource}
-          current={local.url}
-          placeholder="http://ollama:11434/v1"
-          pending={update.isPending}
-          onSave={(v) => save({ localAiUrl: v })}
-          hint="The address of its OpenAI API, usually ending in /v1. Ollama: http://<host>:11434/v1, LM Studio: http://<host>:1234/v1."
-        />
-        <SettingField
-          key={`local-key-${local.apiKeySource}`}
-          label="API key (optional)"
-          secret
-          source={local.apiKeySource}
-          current={null}
-          unsetLabel="None"
-          pending={update.isPending}
-          onSave={(v) => save({ localAiKey: v })}
-          hint="Only if your server asks for one."
-        />
-        <div className="setting-actions">
-          <button className="btn" disabled={checkLocal.isPending} onClick={() => checkLocal.mutate('local')}>
-            {checkLocal.isPending ? 'Testing…' : 'Test connection'}
-          </button>
-          <CheckResult result={checkLocal.data} />
-        </div>
-      </section>
-
-      <section className="settings-card models-card" id="models">
-        <h2>
-          <Cpu size={18} /> AI models
-        </h2>
-        <p className="muted">
-          Each AI feature can use its own model from OpenRouter, Routeway or your own server; unset ones use the
-          default model. Prices are per million tokens, input / output.
-        </p>
-        <ModelField
-          label="Default model"
-          source={openrouter.modelSource}
-          value={openrouter.model}
-          placeholder={DEFAULT_OPENROUTER_MODEL}
-          list={models}
-          kind="chat"
-          pending={update.isPending}
-          onSave={(v) => save({ openrouterModel: v })}
-          hint={<ModelHint id={openrouter.model} models={models.data?.models} text={`Clear to go back to ${DEFAULT_OPENROUTER_MODEL}.`} />}
-        />
-        {AI_TASKS.map((task) => {
-          const own = settings.data!.models[task];
-          return (
-            <ModelField
-              key={task}
-              label={AI_TASK_INFO[task].label}
-              source={own.source}
-              value={own.model}
-              placeholder={`Default · ${models.data?.models.find((m) => m.id === openrouter.model)?.name ?? openrouter.model}`}
-              unsetLabel="Uses default"
-              allowDefault
-              list={models}
-              kind="chat"
-              pending={update.isPending}
-              onSave={(v) => save({ [modelSetting(task)]: v } as SettingsUpdate)}
-              hint={<ModelHint id={own.model} models={models.data?.models} text={AI_TASK_INFO[task].hint} />}
-            />
-          );
-        })}
-        {models.error && <p className="setting-hint">The model lists are unavailable, so models and prices are not shown.</p>}
-        {models.data?.errors.map((e) => (
-          <p key={e} className="setting-hint">
-            {e} — its models are missing from the lists.
-          </p>
-        ))}
-      </section>
-
-      <section className="settings-card">
-        <h2>
-          <PlugZap size={18} /> crawl4ai
-        </h2>
-        <p className="muted">
-          Optional. A self-hosted crawl4ai renders JavaScript-heavy pages before import. Without it, Nicotes fetches pages
-          itself and extracts the main content with Readability.
-        </p>
-        <SettingField
-          key={`url-${crawl4ai.url}`}
-          label="URL"
-          source={crawl4ai.urlSource}
-          current={crawl4ai.url}
-          placeholder="http://crawl4ai:11235"
-          pending={update.isPending}
-          onSave={(v) => save({ crawl4aiUrl: v })}
-        />
-        <SettingField
-          key={`token-${crawl4ai.tokenSource}`}
-          label="API token"
-          secret
-          source={crawl4ai.tokenSource}
-          current={null}
-          pending={update.isPending}
-          onSave={(v) => save({ crawl4aiToken: v })}
-          hint="The CRAWL4AI_API_TOKEN of your crawl4ai container (required since crawl4ai 0.9)."
-        />
-        <div className="setting-actions">
-          <button className="btn" disabled={checkCrawl4ai.isPending} onClick={() => checkCrawl4ai.mutate('crawl4ai')}>
-            {checkCrawl4ai.isPending ? 'Testing…' : 'Test connection'}
-          </button>
-          <CheckResult result={checkCrawl4ai.data} />
-        </div>
-      </section>
-
-      <section className="settings-card">
-        <h2>
-          <Telescope size={18} /> Research &amp; AI
-        </h2>
-        <p className="muted">
-          Research searches the web via SearXNG when configured, otherwise via the web search of the research model's
-          service (OpenRouter's web plugin, about $0.01 per search, or Routeway's “@online”). Every AI run stops once it reaches the cost limit.
-        </p>
-        <SettingField
-          key={`sx-${ai.searxngUrl}`}
-          label="SearXNG URL"
-          source={ai.searxngUrlSource}
-          current={ai.searxngUrl}
-          placeholder="http://nas.local:8888"
-          pending={update.isPending}
-          onSave={(v) => save({ searxngUrl: v })}
-          hint="Optional. The instance must allow the JSON format (search.formats: [html, json])."
-        />
-        <SettingField
-          key={`cost-${ai.costLimit}`}
-          label="Cost limit per run (USD)"
-          source={ai.costLimitSource}
-          current={String(ai.costLimit)}
-          pending={update.isPending}
-          onSave={(v) => save({ aiCostLimit: v === null ? null : Number(v.replace(',', '.')) })}
-        />
-        <div className="setting-actions">
-          <button className="btn" disabled={checkSearxng.isPending} onClick={() => checkSearxng.mutate('searxng')}>
-            {checkSearxng.isPending ? 'Testing…' : 'Test SearXNG'}
-          </button>
-          <CheckResult result={checkSearxng.data} />
-        </div>
-        {!!batches.data?.length && (
-          <div className="setting">
-            <span className="setting-label">Recent AI changes</span>
-            <ul className="trash-list">
-              {batches.data.slice(0, 8).map((b) => (
-                <li key={b.id} className="trash-item">
-                  <div className="trash-info">
-                    <span className="trash-title">{b.summary}</span>
-                    <span className="trash-meta">
-                      {timeAgo(b.createdAt)}
-                      {b.undoneAt && ` · undone ${timeAgo(b.undoneAt)}`}
-                    </span>
-                  </div>
-                  {!b.undoneAt && (
-                    <button className="btn btn-sm" disabled={undo.isPending} onClick={() => undo.mutate(b.id)}>
-                      <RotateCcw size={14} /> Undo
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      <SemanticCard
-        semantic={semantic}
-        ready={serviceReady(settings.data, semantic.model)}
-        pending={update.isPending}
-        save={save}
-        list={embeddingModels}
-      />
-
-      <section className="settings-card" id="voice">
-        <h2>
-          <Mic size={18} /> Voice notes
-        </h2>
-        <p className="muted">
-          Record with the microphone button in the editor's toolbar; recordings are kept as attachments with a player in
-          the page. With a transcription service, what you said is also written below the recording, and search finds it.
-        </p>
-        <SettingField
-          key={`transcribe-url-${transcription.url}`}
-          label="Transcription service"
-          source={transcription.urlSource}
-          current={transcription.url}
-          placeholder="http://speaches:8000/v1"
-          pending={update.isPending}
-          onSave={(v) => save({ transcribeUrl: v })}
-          hint={
-            <>
-              An OpenAI-compatible API with <code>/audio/transcriptions</code>: your own Whisper server (Speaches, LocalAI,
-              …), Groq (<code>https://api.groq.com/openai/v1</code>) or OpenAI (<code>https://api.openai.com/v1</code>).
-              Recordings are sent there.
-            </>
-          }
-        />
-        <SettingField
-          key={`transcribe-key-${transcription.keySource}`}
-          label="API key"
-          secret
-          source={transcription.keySource}
-          current={null}
-          placeholder="Not needed for most servers of your own"
-          pending={update.isPending}
-          onSave={(v) => save({ transcribeKey: v })}
-        />
-        <SettingField
-          key={`transcribe-model-${transcription.model}`}
-          label="Model"
-          source={transcription.modelSource}
-          current={transcription.model}
-          placeholder={DEFAULT_TRANSCRIBE_MODEL}
-          pending={update.isPending}
-          onSave={(v) => save({ transcribeModel: v })}
-          hint="whisper-1 or gpt-4o-mini-transcribe at OpenAI, whisper-large-v3-turbo at Groq, e.g. Systran/faster-whisper-small at Speaches."
-        />
-        <div className="setting-actions">
-          <button
-            className="btn"
-            disabled={checkTranscribe.isPending || !transcription.url}
-            onClick={() => checkTranscribe.mutate('transcribe')}
+      <div className="settings-tabs" role="tablist" aria-label="Settings" ref={tabList} onKeyDown={moveFocus}>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <Link
+            key={id}
+            to={`/settings/${id}`}
+            id={`settings-tab-${id}`}
+            role="tab"
+            aria-selected={id === tab.id}
+            aria-controls="settings-panel"
+            tabIndex={id === tab.id ? 0 : -1}
+            className={id === tab.id ? 'settings-tab active' : 'settings-tab'}
           >
-            {checkTranscribe.isPending ? 'Testing…' : 'Test connection'}
+            <Icon size={16} />
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      <div className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab.id}`} ref={panel}>
+        <Panel settings={settings.data} save={(input) => update.mutate(input)} pending={update.isPending} />
+        {update.error && <p className="error">{update.error.message}</p>}
+      </div>
+    </div>
+  );
+}
+
+function AccountTab() {
+  const auth = useAuthStatus();
+  const signOut = useSignOut();
+  return (
+    <>
+      <section className="settings-card" id="account">
+        <h2>
+          <UserRound size={18} /> Account
+        </h2>
+        <div className="setting-actions">
+          <span>
+            Signed in as <strong>{auth.data?.user?.username}</strong>
+          </span>
+          <button className="btn" onClick={() => signOut.mutate()}>
+            <LogOut size={15} /> Sign out
           </button>
-          <CheckResult result={checkTranscribe.data} />
         </div>
       </section>
 
-      <FileSearchCard
-        search={settings.data.search}
-        model={settings.data.models.images.model ?? openrouter.model}
-        pending={update.isPending}
-        save={save}
-      />
+      <SettingsSecurity />
 
-      {update.error && <p className="error">{update.error.message}</p>}
+      <SettingsTokens />
 
+      <SettingsShares />
+    </>
+  );
+}
+
+function NotesTab({ settings, save, pending }: TabProps) {
+  const notebooks = useNotebooks();
+  const allPages = usePages();
+  const templates = (allPages.data ?? []).filter((p) => p.tags.includes(TEMPLATE_TAG));
+  const { daily, tasks } = settings;
+
+  return (
+    <>
       <section className="settings-card" id="daily">
         <h2>
           <CalendarDays size={18} /> Daily notes
@@ -601,7 +435,7 @@ export function SettingsPage() {
           source={tasks.excludeTagsSource}
           current={tasks.excludeTags.join(', ')}
           placeholder="nothing left out"
-          pending={update.isPending}
+          pending={pending}
           allowEmpty
           onSave={(v) => save({ tasksExcludeTags: v === null ? null : v.split(/[\s,]+/).filter(Boolean) })}
           hint="Comma-separated tags; save it empty to include everything. “Clear” goes back to the default (recipe)."
@@ -609,6 +443,246 @@ export function SettingsPage() {
         <SettingsCalendar />
       </section>
 
+      <FileSearchCard
+        search={settings.search}
+        model={settings.models.images.model ?? settings.openrouter.model}
+        pending={pending}
+        save={save}
+      />
+    </>
+  );
+}
+
+function AiTab({ settings, save, pending }: TabProps) {
+  const checkOpenRouter = useCheckConnection();
+  const checkRouteway = useCheckConnection();
+  const checkLocal = useCheckConnection();
+  const checkSearxng = useCheckConnection();
+  const batches = useBatches();
+  const undo = useUndoBatch();
+  const models = useModels(true);
+  const embeddingModels = useModels(true, 'embedding');
+  const { openrouter, routeway, local, ai, semantic } = settings;
+
+  return (
+    <>
+      <section className="settings-card" id="openrouter">
+        <h2>
+          <PlugZap size={18} /> OpenRouter
+        </h2>
+        <p className="muted">
+          Runs the AI features with OpenRouter's models and computes the embeddings for the semantic index. Without any
+          AI key, imports still work as plain page clips.
+        </p>
+
+        <SettingField
+          key={`key-${openrouter.apiKeySource}`}
+          label="API key"
+          secret
+          source={openrouter.apiKeySource}
+          current={null}
+          placeholder="sk-or-…"
+          pending={pending}
+          onSave={(v) => save({ openrouterApiKey: v })}
+          hint={
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
+              Create a key at openrouter.ai <ExternalLink size={12} />
+            </a>
+          }
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkOpenRouter.isPending} onClick={() => checkOpenRouter.mutate('openrouter')}>
+            {checkOpenRouter.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkOpenRouter.data} />
+        </div>
+      </section>
+
+      <section className="settings-card" id="routeway">
+        <h2>
+          <PlugZap size={18} /> Routeway
+        </h2>
+        <p className="muted">
+          Optional second service: an OpenAI-compatible gateway with its own models and prices. Its models appear in the
+          model pickers below, marked Routeway; each feature uses the service of the model you pick for it.
+        </p>
+        <SettingField
+          key={`rw-key-${routeway.apiKeySource}`}
+          label="API key"
+          secret
+          source={routeway.apiKeySource}
+          current={null}
+          placeholder="sk-…"
+          pending={pending}
+          onSave={(v) => save({ routewayApiKey: v })}
+          hint={
+            <a href="https://routeway.ai" target="_blank" rel="noreferrer">
+              Create a key at routeway.ai <ExternalLink size={12} />
+            </a>
+          }
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkRouteway.isPending} onClick={() => checkRouteway.mutate('routeway')}>
+            {checkRouteway.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkRouteway.data} />
+        </div>
+      </section>
+
+      <section className="settings-card" id="local-models">
+        <h2>
+          <Server size={18} /> Your own model server
+        </h2>
+        <p className="muted">
+          Runs AI features on a server you control, so your notes don't leave your network: Ollama, LM Studio,
+          LocalAI, vLLM or anything else with an OpenAI-compatible API. Its models appear in the model pickers below,
+          marked Own server, and cost nothing. They can't search the web; research then needs SearXNG or uses the
+          model's own knowledge.
+        </p>
+        <SettingField
+          key={`local-url-${local.urlSource}-${local.url}`}
+          label="Address"
+          source={local.urlSource}
+          current={local.url}
+          placeholder="http://ollama:11434/v1"
+          pending={pending}
+          onSave={(v) => save({ localAiUrl: v })}
+          hint="The address of its OpenAI API, usually ending in /v1. Ollama: http://<host>:11434/v1, LM Studio: http://<host>:1234/v1."
+        />
+        <SettingField
+          key={`local-key-${local.apiKeySource}`}
+          label="API key (optional)"
+          secret
+          source={local.apiKeySource}
+          current={null}
+          unsetLabel="None"
+          pending={pending}
+          onSave={(v) => save({ localAiKey: v })}
+          hint="Only if your server asks for one."
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkLocal.isPending} onClick={() => checkLocal.mutate('local')}>
+            {checkLocal.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkLocal.data} />
+        </div>
+      </section>
+
+      <section className="settings-card models-card" id="models">
+        <h2>
+          <Cpu size={18} /> AI models
+        </h2>
+        <p className="muted">
+          Each AI feature can use its own model from OpenRouter, Routeway or your own server; unset ones use the
+          default model. Prices are per million tokens, input / output.
+        </p>
+        <ModelField
+          label="Default model"
+          source={openrouter.modelSource}
+          value={openrouter.model}
+          placeholder={DEFAULT_OPENROUTER_MODEL}
+          list={models}
+          kind="chat"
+          pending={pending}
+          onSave={(v) => save({ openrouterModel: v })}
+          hint={<ModelHint id={openrouter.model} models={models.data?.models} text={`Clear to go back to ${DEFAULT_OPENROUTER_MODEL}.`} />}
+        />
+        {AI_TASKS.map((task) => {
+          const own = settings.models[task];
+          return (
+            <ModelField
+              key={task}
+              label={AI_TASK_INFO[task].label}
+              source={own.source}
+              value={own.model}
+              placeholder={`Default · ${models.data?.models.find((m) => m.id === openrouter.model)?.name ?? openrouter.model}`}
+              unsetLabel="Uses default"
+              allowDefault
+              list={models}
+              kind="chat"
+              pending={pending}
+              onSave={(v) => save({ [modelSetting(task)]: v } as SettingsUpdate)}
+              hint={<ModelHint id={own.model} models={models.data?.models} text={AI_TASK_INFO[task].hint} />}
+            />
+          );
+        })}
+        {models.error && <p className="setting-hint">The model lists are unavailable, so models and prices are not shown.</p>}
+        {models.data?.errors.map((e) => (
+          <p key={e} className="setting-hint">
+            {e} — its models are missing from the lists.
+          </p>
+        ))}
+      </section>
+
+      <section className="settings-card" id="research">
+        <h2>
+          <Telescope size={18} /> Research &amp; AI
+        </h2>
+        <p className="muted">
+          Research searches the web via SearXNG when configured, otherwise via the web search of the research model's
+          service (OpenRouter's web plugin, about $0.01 per search, or Routeway's “@online”). Every AI run stops once it reaches the cost limit.
+        </p>
+        <SettingField
+          key={`sx-${ai.searxngUrl}`}
+          label="SearXNG URL"
+          source={ai.searxngUrlSource}
+          current={ai.searxngUrl}
+          placeholder="http://nas.local:8888"
+          pending={pending}
+          onSave={(v) => save({ searxngUrl: v })}
+          hint="Optional. The instance must allow the JSON format (search.formats: [html, json])."
+        />
+        <SettingField
+          key={`cost-${ai.costLimit}`}
+          label="Cost limit per run (USD)"
+          source={ai.costLimitSource}
+          current={String(ai.costLimit)}
+          pending={pending}
+          onSave={(v) => save({ aiCostLimit: v === null ? null : Number(v.replace(',', '.')) })}
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkSearxng.isPending} onClick={() => checkSearxng.mutate('searxng')}>
+            {checkSearxng.isPending ? 'Testing…' : 'Test SearXNG'}
+          </button>
+          <CheckResult result={checkSearxng.data} />
+        </div>
+        {!!batches.data?.length && (
+          <div className="setting">
+            <span className="setting-label">Recent AI changes</span>
+            <ul className="trash-list">
+              {batches.data.slice(0, 8).map((b) => (
+                <li key={b.id} className="trash-item">
+                  <div className="trash-info">
+                    <span className="trash-title">{b.summary}</span>
+                    <span className="trash-meta">
+                      {timeAgo(b.createdAt)}
+                      {b.undoneAt && ` · undone ${timeAgo(b.undoneAt)}`}
+                    </span>
+                  </div>
+                  {!b.undoneAt && (
+                    <button className="btn btn-sm" disabled={undo.isPending} onClick={() => undo.mutate(b.id)}>
+                      <RotateCcw size={14} /> Undo
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <SemanticCard semantic={semantic} ready={serviceReady(settings, semantic.model)} pending={pending} save={save} list={embeddingModels} />
+    </>
+  );
+}
+
+function IntegrationsTab({ settings, save, pending }: TabProps) {
+  const checkTranscribe = useCheckConnection();
+  const checkCrawl4ai = useCheckConnection();
+  const { reminders, transcription, crawl4ai } = settings;
+
+  return (
+    <>
       <SettingsReminders
         reminders={reminders}
         save={save}
@@ -620,38 +694,115 @@ export function SettingsPage() {
             source={reminders.telegramTokenSource}
             current={null}
             placeholder="123456789:AA…"
-            pending={update.isPending}
+            pending={pending}
             onSave={(v) => save({ telegramBotToken: v })}
           />
         }
       />
 
-      <SettingsAdapters />
-
-      <section className="settings-card">
+      <section className="settings-card" id="voice">
         <h2>
-          <FileDown size={18} /> Export
+          <Mic size={18} /> Voice notes
         </h2>
         <p className="muted">
-          A zip of Markdown files, one folder per notebook, with tags and dates in each file's header and attachments
-          included. It opens as an Obsidian vault. Single notebooks can be exported from their ⋯ menu.
+          Record with the microphone button in the editor's toolbar; recordings are kept as attachments with a player in
+          the page. With a transcription service, what you said is also written below the recording, and search finds it.
         </p>
+        <SettingField
+          key={`transcribe-url-${transcription.url}`}
+          label="Transcription service"
+          source={transcription.urlSource}
+          current={transcription.url}
+          placeholder="http://speaches:8000/v1"
+          pending={pending}
+          onSave={(v) => save({ transcribeUrl: v })}
+          hint={
+            <>
+              An OpenAI-compatible API with <code>/audio/transcriptions</code>: your own Whisper server (Speaches, LocalAI,
+              …), Groq (<code>https://api.groq.com/openai/v1</code>) or OpenAI (<code>https://api.openai.com/v1</code>).
+              Recordings are sent there.
+            </>
+          }
+        />
+        <SettingField
+          key={`transcribe-key-${transcription.keySource}`}
+          label="API key"
+          secret
+          source={transcription.keySource}
+          current={null}
+          placeholder="Not needed for most servers of your own"
+          pending={pending}
+          onSave={(v) => save({ transcribeKey: v })}
+        />
+        <SettingField
+          key={`transcribe-model-${transcription.model}`}
+          label="Model"
+          source={transcription.modelSource}
+          current={transcription.model}
+          placeholder={DEFAULT_TRANSCRIBE_MODEL}
+          pending={pending}
+          onSave={(v) => save({ transcribeModel: v })}
+          hint="whisper-1 or gpt-4o-mini-transcribe at OpenAI, whisper-large-v3-turbo at Groq, e.g. Systran/faster-whisper-small at Speaches."
+        />
         <div className="setting-actions">
-          <a className="btn" href={exportUrl()} download>
-            <FileDown size={15} /> Download everything
-          </a>
+          <button
+            className="btn"
+            disabled={checkTranscribe.isPending || !transcription.url}
+            onClick={() => checkTranscribe.mutate('transcribe')}
+          >
+            {checkTranscribe.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkTranscribe.data} />
         </div>
       </section>
 
-      <SettingsBackups />
+      <SettingsAdapters />
 
-      <SettingsShares />
+      <section className="settings-card" id="crawl4ai">
+        <h2>
+          <PlugZap size={18} /> crawl4ai
+        </h2>
+        <p className="muted">
+          Optional. A self-hosted crawl4ai renders JavaScript-heavy pages before import. Without it, Nicotes fetches pages
+          itself and extracts the main content with Readability.
+        </p>
+        <SettingField
+          key={`url-${crawl4ai.url}`}
+          label="URL"
+          source={crawl4ai.urlSource}
+          current={crawl4ai.url}
+          placeholder="http://crawl4ai:11235"
+          pending={pending}
+          onSave={(v) => save({ crawl4aiUrl: v })}
+        />
+        <SettingField
+          key={`token-${crawl4ai.tokenSource}`}
+          label="API token"
+          secret
+          source={crawl4ai.tokenSource}
+          current={null}
+          pending={pending}
+          onSave={(v) => save({ crawl4aiToken: v })}
+          hint="The CRAWL4AI_API_TOKEN of your crawl4ai container (required since crawl4ai 0.9)."
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkCrawl4ai.isPending} onClick={() => checkCrawl4ai.mutate('crawl4ai')}>
+            {checkCrawl4ai.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkCrawl4ai.data} />
+        </div>
+      </section>
+    </>
+  );
+}
 
-      <SettingsTokens />
+function AppTab() {
+  const auth = useAuthStatus();
+  const installPrompt = useInstallPrompt();
 
-      <SettingsSecurity />
-
-      <section className="settings-card">
+  return (
+    <>
+      <section className="settings-card" id="app">
         <h2>
           <Smartphone size={18} /> App
         </h2>
@@ -677,20 +828,25 @@ export function SettingsPage() {
         {auth.data?.user && <OfflineSetting user={auth.data.user} />}
       </section>
 
-      <section className="settings-card">
-        <h2>Account</h2>
+      <section className="settings-card" id="export">
+        <h2>
+          <FileDown size={18} /> Export
+        </h2>
+        <p className="muted">
+          A zip of Markdown files, one folder per notebook, with tags and dates in each file's header and attachments
+          included. It opens as an Obsidian vault. Single notebooks can be exported from their ⋯ menu.
+        </p>
         <div className="setting-actions">
-          <span>
-            Signed in as <strong>{auth.data?.user?.username}</strong>
-          </span>
-          <button className="btn" onClick={() => signOut.mutate()}>
-            <LogOut size={15} /> Sign out
-          </button>
+          <a className="btn" href={exportUrl()} download>
+            <FileDown size={15} /> Download everything
+          </a>
         </div>
       </section>
 
+      <SettingsBackups />
+
       <AboutCard />
-    </div>
+    </>
   );
 }
 
@@ -881,7 +1037,8 @@ function FileSearchCard({
         Read images with AI
       </label>
       <p className="setting-hint">
-        Each image is sent once to the “{AI_TASK_INFO.images.label}” model (<code>{model}</code>, see AI models), which
+        Each image is sent once to the “{AI_TASK_INFO.images.label}” model (<code>{model}</code>, see{' '}
+        <Link to="/settings#models">AI models</Link>), which
         writes down its text or says what it shows. Off unless you turn it on, as the images leave your server, except to a
         model on your own server. Scanned PDFs are not read.
       </p>
@@ -929,7 +1086,7 @@ function OfflineSetting({ user }: { user: User }) {
     }
   };
   return (
-    <div className="setting">
+    <div className="setting" id="offline">
       <label className="offline-toggle">
         <input type="checkbox" checked={offline.enabled} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
         Keep notes on this device to read and edit them offline

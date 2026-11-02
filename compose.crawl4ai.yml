@@ -2,7 +2,7 @@
 #
 #   docker compose -f compose.crawl4ai.yml up -d
 #
-# Then set CRAWL4AI_URL (or Settings → Import) to http://localhost:11235 for `npm run dev`,
+# Then set CRAWL4AI_URL (or Settings → Integrations → crawl4ai) to http://localhost:11235 for `npm run dev`,
 # or http://crawl4ai:11235 when Nicotes runs in the same compose project.
 services:
   crawl4ai:

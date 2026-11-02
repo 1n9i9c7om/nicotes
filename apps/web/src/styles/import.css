@@ -92,6 +92,90 @@
   color: var(--accent);
 }
 
+/* The row of tabs stays in view (below the top bar on phones); a link to a card stops below it. */
+.settings {
+  --settings-tabs-height: 48px;
+  scroll-margin-top: var(--mobile-bar-height);
+}
+
+.settings .content-header {
+  margin-bottom: 24px;
+}
+
+.settings-tabs {
+  position: sticky;
+  top: var(--mobile-bar-height);
+  z-index: 12;
+  display: flex;
+  gap: 4px;
+  height: var(--settings-tabs-height);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+  background: rgb(10 14 22 / 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tab {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.settings-tab svg {
+  color: var(--text-faint);
+  transition: color 0.15s;
+}
+
+.settings-tab:hover,
+.settings-tab:hover svg {
+  color: var(--text-strong);
+}
+
+.settings-tab.active {
+  color: var(--accent-strong);
+}
+
+.settings-tab.active svg {
+  color: var(--accent);
+}
+
+/* The open tab is underlined in the brand gradient. */
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--gradient);
+}
+
+/* Inside, since the row clips what reaches past it. */
+.settings-tab:focus-visible {
+  box-shadow: inset var(--focus-ring);
+}
+
+.settings-panel,
+.settings-panel [id] {
+  scroll-margin-top: calc(var(--mobile-bar-height) + var(--settings-tabs-height) + 16px);
+}
+
 .setting {
   display: grid;
   gap: 6px;
@@ -299,6 +383,22 @@
   .settings-card,
   .import-card {
     padding: 18px 16px;
+  }
+
+  /* Edge to edge, so the tabs scroll sideways under the screen's edges; the labels say enough. */
+  .settings-tabs {
+    gap: 0;
+    margin-inline: -16px;
+    padding-inline: 6px;
+    scroll-padding-inline: 16px;
+  }
+
+  .settings-tab {
+    padding: 0 10px;
+  }
+
+  .settings-tab svg {
+    display: none;
   }
 
   .setting-row {

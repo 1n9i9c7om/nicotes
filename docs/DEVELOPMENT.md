@@ -78,6 +78,13 @@ target and time. Use `getJson` for requests, so network trouble and error status
 readable messages, and `ctx.fetch`, so tests can answer with a fake service (see
 `apps/server/test/adapters.test.ts`).
 
+## Adding a settings card
+
+The settings page is split into tabs (`TABS` in `apps/web/src/pages/SettingsPage.tsx`), each
+with its own component, and the open tab is in the address (`/settings/ai`). Give a new card an
+`id` and list it in its tab's `sections`: links like `/settings#models` then open that tab and
+scroll to the card, from anywhere in the app.
+
 ## Database schema changes
 
 Edit `apps/server/src/db/schema.ts`, then run `npm run db:generate -w apps/server` and commit

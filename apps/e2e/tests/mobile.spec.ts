@@ -56,3 +56,26 @@ test('the top bar stays in view while scrolling, with the page bar below it', as
   await menu.click();
   await expect(sidebar(page)).toBeInViewport();
 });
+
+test('the settings tabs scroll sideways below the top bar, and links find their card', async ({ page }) => {
+  await page.goto('/settings#adapters');
+  await expect(page).toHaveURL(/\/settings\/integrations#adapters$/);
+  const tabs = page.getByRole('tablist', { name: 'Settings' });
+  await expect(tabs.getByRole('tab', { name: 'Integrations' })).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('#adapters')).toBeInViewport();
+  const bar = (await page.locator('.mobile-bar').boundingBox())!;
+  const row = (await tabs.boundingBox())!;
+  const card = (await page.locator('#adapters').boundingBox())!;
+  expect(row.y).toBeCloseTo(bar.y + bar.height, 0);
+  expect(card.y).toBeGreaterThanOrEqual(row.y + row.height);
+  // The row of tabs is as wide as the screen and the page does not scroll sideways.
+  expect(row.width).toBeCloseTo(page.viewportSize()!.width, 0);
+  expect(await page.locator('.main').evaluate((main) => main.scrollWidth - main.clientWidth)).toBe(0);
+
+  // Another tab opens at the top of the page.
+  await tabs.getByRole('tab', { name: 'App & data' }).click();
+  await expect(page).toHaveURL(/\/settings\/app$/);
+  await expect(tabs.getByRole('tab', { name: 'App & data' })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeInViewport();
+  await expect(page.getByRole('heading', { name: 'App', exact: true })).toBeInViewport();
+});
