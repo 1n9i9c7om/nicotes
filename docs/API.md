@@ -14,9 +14,10 @@ curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
 
 - **Read only** tokens may use `GET` requests only; **Read and write** tokens may also
   create and change things. Calendar tokens only open the calendar feed (below).
-- No token can open Settings, the backups, sign-in security, shared links, reminders or the
-  token list (`/api/settings`, `/api/backups`, `/api/security`, `/api/shares`,
-  `/api/reminders`, `/api/tokens`): those need a signed-in browser. Two-step sign-in does not apply to tokens; a token is a credential of
+- No token can open Settings, the backups, sign-in security, shared links, reminders,
+  adapters or the token list (`/api/settings`, `/api/backups`, `/api/security`,
+  `/api/shares`, `/api/reminders`, `/api/adapters`, `/api/tokens`): those need a signed-in
+  browser. Two-step sign-in does not apply to tokens; a token is a credential of
   its own, so keep it as safe as a password.
 - A wrong token is answered with `401`; after 20 wrong tokens from one address within 15
   minutes, with `429` for a while.
@@ -47,6 +48,11 @@ curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
 | `GET /api/tasks?status=open` | Every checkbox from every page (`open`, `done` or `all`) |
 | `POST /api/daily` `{ "date": "2026-11-01" }` | Today's (or any day's) journal note; creates it if needed. Answers `{ "page": { "id": … }, "created": … }` |
 | `POST /api/tasks` `{ "pageId": "…", "text": "Buy milk", "due": "2026-11-03" }` | Adds a task to a page (`due` is optional) |
+| `PATCH /api/tasks` `{ "pageId": "…", "line": 4, "raw": "- [ ] Buy milk", "done": true }` | Ticks a task off (or reopens it with `false`) and/or sets `due` (a date, or `null`); `line` and `raw` come from `GET /api/tasks`, and a changed line answers `409`. A repeating task gets its next occurrence added |
+
+Task text can carry what the app shows: `📅 2026-11-03` (due date), `⏰ 09:00` or
+`⏰ 2026-11-03 09:00` (reminder) and `🔁 every week` (repeat), e.g.
+`"text": "Water the plants 🔁 every week"`.
 
 Adding a task to today's journal note, e.g. from a shortcut:
 
@@ -71,6 +77,19 @@ the app, since they hold other services' tokens):
 | 2026-11-01 | 81.4 | 9120 |
 | 2026-11-02 | 81.1 | 11 304 |
 ```
+
+## Chat
+
+The chat assistant can be used from scripts too (it needs an AI service set up in the app):
+
+| Request | What it does |
+|---|---|
+| `POST /api/chat` `{ "text": "What's due today?" }` | Sends a message; the answer streams as server-sent events, one JSON object per `data:` line: `user`, `action` (each step it takes), then `answer` (with `entry.content`) or `error` |
+| `GET /api/chat` | The conversation so far |
+| `DELETE /api/chat` | Forgets the conversation |
+
+A token shares the web app's conversation of its account. Sending a message needs a
+read-and-write token, since the chat can change notes.
 
 ## Calendar feed
 

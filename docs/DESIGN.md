@@ -14,7 +14,8 @@ docker-compose.
 - **Markdown is the content format.** The database is the source of truth; every page
   body is Markdown and can be exported as `.md` at any time.
 - **Single container.** One image, one `/data` volume, no external services required.
-  Optional integrations (OpenRouter, crawl4ai) are enabled by configuration.
+  Optional integrations (AI services, crawl4ai, SearXNG, Telegram, transcription,
+  adapters) are enabled by configuration.
 - **Multi-user ready.** Single user today, but every owned row carries a `user_id` and
   all access goes through the authenticated session.
 
@@ -35,6 +36,9 @@ User ─┬─ Notebook ── Page ── Page (children, any depth)
 | Attachment | Files under `/data/attachments/<id>`, embedded in Markdown as `/api/attachments/<id>/<name>`. |
 | Task       | Not stored separately: `- [ ]` lines in pages, read on demand and edited in place. |
 | Semantic index | Optional embeddings of page passages (`page_chunks`, `page_index`), plus AI summaries (`page_summaries`). |
+| Share      | A read-only link to a page (with or without subpages) or a notebook (`shares`). |
+| Adapter    | A connection to another service that writes a logbook page or journal lines daily (`adapters`). |
+| Chat message | The chat's conversation per channel, web or Telegram (`chat_messages`). |
 
 ### Example: a topic hub (here: games)
 
@@ -65,7 +69,8 @@ makes the sub-articles count as tagged too (search, graph filter, organize).
 │  • REST API: auth, notebooks, pages, (search, import…)     │
 │  • Serves the built SPA                                     │
 │  • Import pipeline → crawl4ai (optional) / Readability      │
-│                    → OpenRouter (optional)                  │
+│                    → AI service (optional)                  │
+│  • Background: backups, reminders, adapters, indexing      │
 └───────────────────────────┬────────────────────────────────┘
                             │
              /data/nicotes.db (SQLite, WAL, FTS5)
@@ -101,9 +106,10 @@ and tsup respectively).
   stored as SHA-256 with their last four characters for the list. Sent as
   `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
   to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security`, `/api/shares`,
-  `/api/reminders` and `/api/tokens` only accept the session (403 for a token), so a token
-  can neither read stored AI keys nor the key file, change how the account signs in,
-  publish notes, nor make more tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  `/api/reminders`, `/api/adapters` and `/api/tokens` only accept the session (403 for a
+  token), so a token can neither read stored AI keys nor the key file, change how the
+  account signs in, publish notes, reach the tokens of other services, nor make more
+  tokens. Token requests skip the CSRF content-type rule (browsers never send the
   header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
   `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
 - **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
@@ -125,7 +131,8 @@ and tsup respectively).
   loads `push-sw.js` for `push` and `notificationclick`), and Telegram through the user's
   own bot (token in settings or `TELEGRAM_BOT_TOKEN`). Linking a chat needs no public
   address: a one-time code in a `t.me/<bot>?start=<code>` link, read by long polling
-  `getUpdates` only while a code waits; a new token unlinks the chat.
+  `getUpdates` (while a code waits, and afterwards for the chat, see Telegram chat below); a
+  new token unlinks the chat.
 - **Shared links** (`routes/shares.ts`, table `shares`): a read-only link to a page (with
   or without its subtree) or a notebook. The 18-byte token is looked up by SHA-256 and also
   stored encrypted (SecretBox), so the owner can copy the link again. `/api/shares` is
@@ -159,7 +166,9 @@ and tsup respectively).
   TOTP off from the server and ends the account's sessions. API tokens are not affected by
   any of this; they are separate credentials with their own scope.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
-  `409` so two tabs never silently overwrite each other.
+  `409` with the current page, so two tabs never silently overwrite each other. The editor
+  then merges both versions line by line (`mergeText`) when they don't touch the same
+  lines, and shows the conflict banner (keep mine / load theirs) when they do.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new
   parent and index and the server renumbers siblings in a transaction.
 
@@ -170,8 +179,9 @@ and tsup respectively).
   - *Visual* — TipTap with `@tiptap/markdown` (formatted as you type).
   - *Source* — CodeMirror 6 with Markdown highlighting.
   The toggle is remembered per browser. Markdown dialect: GFM (tables, task lists,
-  strikethrough) + `[[wikilinks]]` + callouts + colours. Round-tripping between views must
-  be lossless for that dialect; this is covered by tests.
+  strikethrough) + `[[wikilinks]]` and `![[embeds]]` + colours + Obsidian Tasks markers
+  (`📅`, `⏰`, `🔁`). Round-tripping between views must be lossless for that dialect; this
+  is covered by tests.
 - **Colours** (`packages/shared/src/colors.ts`, `editor/colors.ts`): a fixed palette
   (yellow, orange, red, purple, blue, green) stored as Obsidian writes it — `==text==` for
   the default (yellow) highlight, `<mark style="background: green">` for other highlights,
@@ -180,7 +190,8 @@ and tsup respectively).
   `styles/colors.css`; the read-only renderer shows them too, and plain-text uses
   (excerpts, read-aloud, semantic index) strip them. The full-text index still contains the
   tag words.
-- **Autosave** with debounce and a visible status (saved / saving / conflict / offline).
+- **Autosave** with debounce and a visible status (editing / saving / saved / saved on this
+  device / conflict).
 - **Theme:** dark, blue/cyan accents, defined as CSS custom properties.
 - **Responsive:** sidebar collapses into a drawer on narrow screens.
 
@@ -282,7 +293,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Profiles:** Recipe (ingredients checklist, numbered steps, sections), Article (summary
   + key points, optional full text), Product (specs table, pros/cons), Event, Generic.
   "Detect" uses the JSON-LD `@type`, else a short classification call.
-- **LLM:** OpenRouter chat completions in JSON mode; the expected shape is given as a
+- **LLM:** chat completions of the import model's service in JSON mode; the expected shape is given as a
   TypeScript type in the prompt and validated with Zod, with one corrective retry
   (`z-ai/glm-5.3-flashx` has JSON mode but no strict schema support). Output keeps the
   page's language; page text is capped at 40k characters. Token usage is shown.
@@ -305,7 +316,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   equal to the title is dropped. Tags come from properties and inline `#tags` outside code.
   Layout: top-level folders → notebooks (or one notebook), subfolders → parent pages, a
   note named like its folder (beside it or inside it) → that parent; alphabetical order.
-  Links: `[[Note#Heading|alias]]` → `[[Note|alias]]`, note embeds → links, file embeds and
+  Links: `[[Note#Part#Heading^block|alias]]` → `[[Note#Heading|alias]]` (innermost heading,
+  no block ids), note embeds stay embeds, file embeds and
   relative Markdown links → attachment links (resolved from the note's folder, the vault
   root, then by file name anywhere, like Obsidian), `[x](Note.md)` → `[[Note|x]]`, and links
   by file name to a note with another title are rewritten to the title. Files no note uses
@@ -368,10 +380,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 
 ### AI assistants
 
-- **Models per feature:** import, organize, research, ask, summaries and link suggestions
-  each resolve their own model (settings > environment variable > the default model), so
-  cheap extraction and demanding writing can use different models. Settings shows
-  OpenRouter's prices next to each and warns about ids missing from its model list.
+- **Models per feature:** import, organize, research, the chat (task id `ask`), the page
+  assistant, summaries, link suggestions, layouts and reading images each resolve their own
+  model (settings > environment variable > the default model), so cheap extraction and
+  demanding writing can use different models. Settings shows prices next to each and warns
+  about ids missing from the model lists.
 - **Services:** chat models run on OpenRouter, Routeway or the user's own
   OpenAI-compatible server (`ai/llm.ts`). A model id `routeway:<id>` goes to
   `https://api.routeway.ai/v1` with the Routeway key, `local:<id>` to
@@ -388,7 +401,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   from its price list. `GET /api/settings/models` merges both public model lists (cached
   for an hour, `refresh=1` reloads; a service that is down is left out and reported) into
   one list with prices, context size and tool / reasoning / free flags for the picker.
-  Embeddings stay on OpenRouter.
+  Routeway is not used for embeddings.
 
 - **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
   time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
@@ -463,7 +476,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   chat; with the account's date), the views (`setItemChecked`) and the editor, where a
   ProseMirror plugin (`editor/recurring.ts`) spots a task item whose checkbox went on and
   inserts a copy with the dates moved, in the same undo step.
-- **Semantic index** (opt-in per user, OpenRouter embeddings, default
+- **Semantic index** (opt-in per user, embeddings from OpenRouter or the own server, default
   `openai/text-embedding-3-small` at 512 dimensions): a background indexer embeds pages
   whose version, title or model changed, once typing has paused for 30 s, in passages of
   ≤ 1200 characters split by heading (title and heading path are embedded with each
@@ -479,8 +492,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
   wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
   `create_page`, `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
-  `pageId:line`), `add_task` (today's journal unless a page is named; due date and `⏰`
-  reminder), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
+  `pageId:line`), `add_task` (today's journal unless a page is named; due date, `⏰`
+  reminder and `🔁` repeat rule), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
   per day, journal days), `start_research`, `research_status`. Arguments are validated
   with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
   `{error}` and show as failed steps. Up to 8 rounds per message, the last with
@@ -538,7 +551,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Layout spec:** type, language, servings and block keys for ingredients, steps and checklist
   lists (`shared/layout.ts`). A heuristic picks one instantly (ingredient/step headings in
   several languages, share of checkboxes, amount of prose, numbered lists) with a confidence;
-  below 0.75, and with an API key, the AI is asked once (`POST /api/ai/layout/:pageId`). It
+  below 0.75, and with an AI service for the layout model, the AI is asked once
+  (`POST /api/ai/layout/:pageId`). It
   sees one line per block with numbered ids and answers with the type and ids, which the server
   checks and turns into keys; missing parts come from the heuristic. Users can pick a type by
   hand (`PUT`) or go back to automatic (`DELETE`); choices live in `page_layouts`.
@@ -632,11 +646,11 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
 | `LOCAL_AI_URL` / `LOCAL_AI_KEY` | — | Your own OpenAI-compatible model server (address ending in `/v1`, optional key) for `local:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
-| `TELEGRAM_BOT_TOKEN` | — | Bot for task reminders in Telegram (overridable in Settings) |
+| `TELEGRAM_BOT_TOKEN` | — | Bot for task reminders and the chat in Telegram (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT,IMAGES}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT,IMAGES}_MODEL` | default model | Model per AI feature, `ASK` being the chat (overridable in Settings → AI models) |
 | `NICOTES_READ_IMAGES` | `false` | Default for reading images with AI for search (overridable in Settings) |
 | `TRANSCRIBE_URL`, `TRANSCRIBE_KEY`, `TRANSCRIBE_MODEL` | —, —, `whisper-1` | OpenAI-compatible transcription service for voice notes (overridable in Settings) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
@@ -645,6 +659,9 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
 | `NICOTES_BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where backups are written |
 | `NICOTES_BACKUP_PATH` | `nicotes-backups` volume | Docker Compose only: host folder mounted at `/backups` |
+| `NICOTES_TAG`, `NICOTES_HTTP_PORT` | `main-latest`, `3000` | Docker Compose only: image tag to run and the port on the host |
+| `SEARXNG_SECRET` | — | Docker Compose only: secret of the optional SearXNG container (`compose.searxng.yml`) |
+| `WEB_DIR` | `../web/dist` | Built web app the server serves (development) |
 | `NICOTES_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups; `0` turns them off |
 | `NICOTES_BACKUP_KEEP_DAILY` / `NICOTES_BACKUP_KEEP_WEEKLY` | `7` / `4` | Retention: newest backup per day / per week |
 
@@ -688,5 +705,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
     PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw), ✅ a chat
     assistant with tools for every feature (web and Telegram), ✅ adapters that log data
-    from other services (Home Assistant, weather), ✅ charts of tables in page views.
-12. **Later** — multi-user.
+    from other services (Home Assistant, weather), ✅ charts of tables in page views, ✅
+    recurring tasks, ✅ print and PDF, ✅ embedded pages and sections, ✅ offline reading and
+    editing.
+12. **Later** — multi-user; perhaps adapters for Withings or Google Health (they need an
+    OAuth app).
