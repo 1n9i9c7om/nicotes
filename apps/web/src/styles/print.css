@@ -1,0 +1,131 @@
+/* Printing a page, or saving it as PDF: the page on white paper, without the app around it. */
+
+.print-title,
+.canvas-print {
+  display: none;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #fff;
+    --bg-sidebar: #fff;
+    --bg-elev: #fff;
+    --bg-elev-2: #f2f4f7;
+    --bg-hover: #f2f4f7;
+    --bg-active: #e9edf3;
+    --border: #d4dae3;
+    --border-strong: #b6c0cd;
+    --text-strong: #0b1220;
+    --text: #1d2635;
+    --text-muted: #4a5568;
+    --text-faint: #6b7586;
+    --accent: #0e7490;
+    --accent-strong: #0e7490;
+    --accent-soft: rgb(14 116 144 / 0.1);
+    --accent-softer: rgb(14 116 144 / 0.05);
+    --code: #0b5c75;
+    --code-bg: #f2f4f7;
+    --danger: #b91c1c;
+    --success: #15803d;
+    --warning: #a16207;
+    --shadow: none;
+  }
+
+  @page {
+    margin: 16mm 15mm;
+  }
+
+  /* The app scrolls inside its panes; on paper everything flows. */
+  html,
+  body,
+  #root,
+  .shell,
+  .main,
+  .page,
+  .page-split,
+  .page-main {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  .sidebar,
+  .mobile-bar,
+  .drawer-backdrop,
+  .page-bar,
+  .banner,
+  .toolbar,
+  .page-title,
+  .tag-add,
+  .page-summary,
+  .connections,
+  .local-graph,
+  .page-width-handle,
+  .assistant,
+  .layout-bar,
+  .chart-tip,
+  .chart-hover,
+  .page-body button,
+  .canvas-body:has(.canvas-print) .canvas-host {
+    display: none !important;
+  }
+
+  .page-body {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-title {
+    display: block;
+    margin: 0 0 8pt;
+    font-size: 22pt;
+    line-height: 1.2;
+    color: var(--text-strong);
+  }
+
+  .canvas-print {
+    display: block;
+  }
+
+  .canvas-print svg {
+    width: 100%;
+    height: auto;
+    max-height: 245mm;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    break-after: avoid;
+  }
+
+  pre,
+  blockquote,
+  tr,
+  figure,
+  img,
+  li,
+  .chart-card {
+    break-inside: avoid;
+  }
+
+  img {
+    max-width: 100%;
+  }
+}

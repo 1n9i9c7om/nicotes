@@ -15,6 +15,7 @@ import {
   LayoutTemplate,
   Link2,
   Loader2,
+  Printer,
   Sparkles,
   Wand2,
   Waypoints,
@@ -61,6 +62,7 @@ import {
 import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
 import { loadCanvasEditor } from '../lib/excalidraw';
+import { printPage } from '../lib/print';
 import { NotFound } from './NotFound';
 
 // Excalidraw is large: canvas pages load it on demand.
@@ -186,6 +188,19 @@ function PageEditor({ page }: { page: Page }) {
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state]);
 
+  // Ctrl+P prints the page the way the menu does (a canvas needs preparing first).
+  const print = () => void printPage(displayTitle(title));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        print();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // Auto-grow the title textarea.
   useEffect(() => {
     const el = titleInput.current;
@@ -243,6 +258,7 @@ function PageEditor({ page }: { page: Page }) {
               { label: 'Show in graph', icon: <Waypoints size={15} />, onSelect: () => navigate(`/graph?focus=${page.id}&depth=2`) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
               { label: 'Share…', icon: <Globe size={15} />, onSelect: () => setSharing(true) },
+              { label: 'Print or save as PDF', icon: <Printer size={15} />, onSelect: print },
               {
                 label: 'Summarize with AI',
                 icon: <Sparkles size={15} />,
@@ -335,6 +351,7 @@ function PageEditor({ page }: { page: Page }) {
             style={pageWidth && !canvas ? { maxWidth: pageWidth } : undefined}
           >
             {!canvas && <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />}
+            <h1 className="print-title">{displayTitle(title)}</h1>
             <textarea
               ref={titleInput}
               className="page-title"
