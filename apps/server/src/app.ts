@@ -107,9 +107,9 @@ export function createApp({
   // The linked Telegram chat talks to the chat assistant (a conversation of its own).
   const chatDeps = { db, settings, jobs, semantic };
   reminders.useChat({
-    ask: async (userId, text) => {
+    ask: async (userId, text, onAction) => {
       const username = db.select({ username: users.username }).from(users).where(eq(users.id, userId)).get()?.username ?? 'you';
-      return (await runChat(chatDeps, { userId, username, channel: 'telegram', text })).content;
+      return (await runChat(chatDeps, { userId, username, channel: 'telegram', text, onAction })).content;
     },
     reset: (userId) => resetChat(db, userId, 'telegram'),
     transcribe: async (userId, audio) => {

@@ -213,7 +213,8 @@ and a model that can use tools, chosen under Settings → AI models → Chat.
 The same assistant answers in **Telegram** once a chat is connected under Settings →
 Reminders: write or send voice messages (with a transcription service set up), use
 `/todo` for open tasks with buttons to tick them off, `/calendar` for the week, `/today`
-and `/new` to start over. Telegram keeps a conversation of its own.
+and `/new` to start over. What the assistant does in Nicotes shows up there too, in a
+folded list above its answer. Telegram keeps a conversation of its own.
 
 The page menu can also **summarize** a page or **suggest links** to other pages. Switch on
 the **semantic index** (Settings) to find notes by meaning: related pages, "By meaning"

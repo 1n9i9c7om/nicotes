@@ -98,26 +98,36 @@ describe('Telegram chat', () => {
     expect(week.text).toContain('▸ <b>');
     expect(week.text).toContain('☑ <s>Water the plants</s>');
 
-    // Anything else goes to the assistant; another chat is ignored.
+    // Anything else goes to the assistant; another chat is ignored. What it does in Nicotes
+    // shows up as steps (one message, edited as they come), then the answer.
     const prompts: string[] = [];
+    const replies = [
+      { tool_calls: [{ id: 'c1', type: 'function', function: { name: 'list_tasks', arguments: '{}' } }] },
+      { tool_calls: [{ id: 'c2', type: 'function', function: { name: 'read_page', arguments: JSON.stringify({ page: page.id }) } }] },
+      { content: 'All done for today, see [[Chores]].' },
+    ];
     vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
-      prompts.push(body.messages.at(-1)!.content);
-      return Response.json({ choices: [{ message: { content: 'All done for today, see [[Chores]].' } }], usage: { cost: 0 } });
+      const body = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+      if (body.messages.at(-1)!.role === 'user') prompts.push(body.messages.at(-1)!.content);
+      return Response.json({ choices: [{ message: replies.shift() }], usage: { cost: 0 } });
     });
     tg.push({ message: { message_id: 4, chat: { id: 99 }, text: 'Hello from a stranger' } });
     tg.push({ message: { message_id: 5, chat: { id: 42 }, text: 'Anything left today?' } });
-    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 4);
+    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 5);
     expect(prompts).toEqual(['Anything left today?']);
-    const reply = tg.sent.filter((s) => s.method === 'sendMessage')[3]!.body;
+    const [steps, reply] = tg.sent.filter((s) => s.method === 'sendMessage').slice(3).map((s) => s.body);
+    expect(steps).toMatchObject({ chat_id: 42, parse_mode: 'HTML', text: '<blockquote expandable>☑️ Looked at the tasks (0)</blockquote>' });
+    expect(tg.sent.find((s) => s.method === 'editMessageText' && s.body.message_id === 100)!.body.text).toBe(
+      `<blockquote expandable>☑️ Looked at the tasks (0)\n📄 <a href="http://localhost/p/${page.id}">Read “Chores”</a></blockquote>`,
+    );
     expect(reply).toMatchObject({ chat_id: 42, parse_mode: 'HTML', text: `All done for today, see <a href="http://localhost/p/${page.id}">Chores</a>.` });
     expect(tg.sent.some((s) => s.method === 'sendChatAction')).toBe(true);
     expect(tg.sent.every((s) => s.body.chat_id !== 99)).toBe(true);
 
     // /new forgets the Telegram conversation (the web chat is separate).
     tg.push({ message: { message_id: 6, chat: { id: 42 }, text: '/new' } });
-    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 5);
-    expect(tg.sent.filter((s) => s.method === 'sendMessage')[4]!.body.text).toMatch(/^Started a new conversation/);
+    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 6);
+    expect(tg.sent.filter((s) => s.method === 'sendMessage')[5]!.body.text).toMatch(/^Started a new conversation/);
     api.reminders.stop();
   });
 });

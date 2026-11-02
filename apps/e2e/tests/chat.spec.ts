@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { sidebar } from './fixtures';
+import type { ChatEntry } from '@nicotes/shared';
+import { createNotebook, createPage, sidebar, uniq } from './fixtures';
 
 test('the chat is right below search, and old Ask links lead to it', async ({ page }) => {
   await page.goto('/');
@@ -13,4 +14,32 @@ test('the chat is right below search, and old Ask links lead to it', async ({ pa
   // The test server has no AI service, so the chat says what it needs.
   await expect(page.getByRole('alert')).toContainText('The chat needs an OpenRouter API key');
   await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+});
+
+test('answers show what the assistant did in Nicotes, with links to the pages', async ({ page }) => {
+  const nb = await createNotebook(page, uniq('Chat NB'));
+  const car = await createPage(page, { notebookId: nb.id, title: uniq('Car'), content: 'Service in May' });
+  // The test server has no AI service: a saved conversation stands in for one.
+  const history: ChatEntry[] = [
+    { id: 'u1', role: 'user', content: 'When is the car service?', actions: [], createdAt: 1 },
+    {
+      id: 'a1',
+      role: 'assistant',
+      content: 'In May, see [[Car]].',
+      actions: [
+        { tool: 'search_notes', summary: 'Searched for “car” (1 found)', ok: true },
+        { tool: 'read_page', summary: `Read “${car.title}”`, pageId: car.id, ok: true },
+        { tool: 'calendar', summary: 'calendar: The calendar is unavailable', ok: false },
+      ],
+      createdAt: 2,
+    },
+  ];
+  await page.route('**/api/chat', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: history }) : route.continue()));
+  await page.goto('/chat');
+
+  const steps = page.locator('.chat-msg.from-assistant .chat-actions li');
+  await expect(steps).toHaveText(['Searched for “car” (1 found)', `Read “${car.title}”`, 'calendar: The calendar is unavailable']);
+  await expect(steps.nth(2)).toHaveClass('failed');
+  await steps.nth(1).getByRole('link').click();
+  await expect(page).toHaveURL(new RegExp(`/p/${car.id}$`));
 });
