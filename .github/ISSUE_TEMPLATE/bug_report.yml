@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Settings → About shows the version and build.
+      description: Settings → App & data → About shows the version and build.
       placeholder: 0.4.1 (abc1234)
     validations:
       required: true

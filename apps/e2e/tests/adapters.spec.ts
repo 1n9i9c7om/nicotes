@@ -24,7 +24,7 @@ test.afterAll(() => ha.close());
 
 test('a Home Assistant adapter is added in Settings and fills its logbook', async ({ page }) => {
   const name = uniq('Home');
-  await page.goto('/settings');
+  await page.goto('/settings/integrations');
   const card = page.locator('#adapters');
   await card.getByRole('button', { name: 'Home Assistant' }).click();
   const form = card.getByRole('form', { name: 'New Home Assistant adapter' });

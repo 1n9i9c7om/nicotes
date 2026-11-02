@@ -6,7 +6,7 @@ outside; the full set is in `apps/server/src/routes`.
 
 ## Signing in with a token
 
-Create a token under **Settings → API tokens** and send it with every request:
+Create a token under **Settings → Account → API tokens** and send it with every request:
 
 ```bash
 curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
@@ -68,7 +68,7 @@ curl -s -H "Authorization: Bearer nct_…" -H "Content-Type: application/json" \
 
 A page with a table whose first column is `Date` shows as charts in its View, one chart per
 column of numbers. Scripts can keep such a logbook by reading the page and writing it back
-with a new row (the adapters under Settings → Adapters do the same, but are managed only in
+with a new row (the adapters under Settings → Integrations → Adapters do the same, but are managed only in
 the app, since they hold other services' tokens):
 
 ```markdown
@@ -96,7 +96,7 @@ read-and-write token, since the chat can change notes.
 
 `GET /api/calendar/<token>.ics` is an iCalendar feed of the open tasks with a due date
 (all-day events). It needs no `Authorization` header: the calendar token in the address,
-created under Settings → Tasks → Calendar subscription, is the key. Calendar tokens work
+created under Settings → Notes & tasks → Calendar subscription, is the key. Calendar tokens work
 nowhere else, and an unknown token answers `404`.
 
 ## Export

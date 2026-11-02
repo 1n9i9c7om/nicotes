@@ -59,7 +59,7 @@ export function App() {
         <Route path="p/:pageId" element={<PageView />} />
         <Route path="t/:tagName" element={<TagView />} />
         <Route path="import" element={<ImportPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings/:tab?" element={<SettingsPage />} />
         <Route path="trash" element={<TrashPage />} />
         <Route path="share" element={<SharePage />} />
         <Route path="research" element={<ResearchPage />} />
