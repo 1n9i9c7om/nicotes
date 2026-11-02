@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import type { BinaryFileData, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { Attachment, CanvasFile } from '@nicotes/shared';
 import { readCanvas, writeCanvas, type Scene, type SceneElement } from '../lib/canvas';
+import { onPreparePrint } from '../lib/print';
 
 
 interface Props {
@@ -94,38 +95,64 @@ export default function CanvasEditor({ content, onChange, upload, onOpenLink, re
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // Printed as a vector drawing of everything on it, on white, rather than the visible part.
+  const [printSvg, setPrintSvg] = useState<SVGSVGElement | null>(null);
+  useEffect(
+    () =>
+      onPreparePrint(async () => {
+        const excalidraw = api.current;
+        if (!excalidraw) return;
+        const svg = await exportToSvg({
+          elements: excalidraw.getSceneElements(),
+          appState: { ...excalidraw.getAppState(), exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
+          files: excalidraw.getFiles(),
+          exportPadding: 16,
+        });
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        setPrintSvg(svg);
+        // Rendered before the dialog takes its snapshot.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return () => setPrintSvg(null);
+      }),
+    [],
+  );
+
   return (
-    <div className="canvas-host">
-      <Excalidraw
-        excalidrawAPI={(instance) => (api.current = instance)}
-        initialData={{
-          elements: initial.scene.elements as never,
-          appState: {
-            theme: 'dark',
-            ...(initial.scene.appState.viewBackgroundColor ? { viewBackgroundColor: initial.scene.appState.viewBackgroundColor } : {}),
-            ...(initial.scene.appState.gridSize ? { gridSize: initial.scene.appState.gridSize } : {}),
-          },
-          scrollToContent: true,
-        }}
-        theme="dark"
-        viewModeEnabled={readOnly}
-        UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, toggleTheme: false } }}
-        onChange={(elements, appState, binary) => {
-          if (readOnly) return;
-          latest.current = { elements: elements as unknown as readonly SceneElement[], appState, binary };
-          // Excalidraw reports every pointer move; the page is written once things settle.
-          clearTimeout(timer.current);
-          timer.current = setTimeout(() => void save(), 600);
-        }}
-        onLinkOpen={(element, event) => {
-          const link = element.link ?? '';
-          const target = /^\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/.exec(link)?.[1];
-          if (target && onOpenLink) {
-            event.preventDefault();
-            onOpenLink(target.trim());
-          }
-        }}
-      />
-    </div>
+    <>
+      {printSvg && <div className="canvas-print" ref={(el) => el?.replaceChildren(printSvg)} />}
+      <div className="canvas-host">
+        <Excalidraw
+          excalidrawAPI={(instance) => (api.current = instance)}
+          initialData={{
+            elements: initial.scene.elements as never,
+            appState: {
+              theme: 'dark',
+              ...(initial.scene.appState.viewBackgroundColor ? { viewBackgroundColor: initial.scene.appState.viewBackgroundColor } : {}),
+              ...(initial.scene.appState.gridSize ? { gridSize: initial.scene.appState.gridSize } : {}),
+            },
+            scrollToContent: true,
+          }}
+          theme="dark"
+          viewModeEnabled={readOnly}
+          UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, toggleTheme: false } }}
+          onChange={(elements, appState, binary) => {
+            if (readOnly) return;
+            latest.current = { elements: elements as unknown as readonly SceneElement[], appState, binary };
+            // Excalidraw reports every pointer move; the page is written once things settle.
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => void save(), 600);
+          }}
+          onLinkOpen={(element, event) => {
+            const link = element.link ?? '';
+            const target = /^\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/.exec(link)?.[1];
+            if (target && onOpenLink) {
+              event.preventDefault();
+              onOpenLink(target.trim());
+            }
+          }}
+        />
+      </div>
+    </>
   );
 }

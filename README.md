@@ -109,6 +109,11 @@ under Settings → **Voice notes**, what you said is written below it too: your 
 server (such as [Speaches](https://speaches.ai)), or Groq or OpenAI with a key. Recording
 needs HTTPS (or localhost).
 
+**Print or save as PDF** from a page's ⋯ menu (or <kbd>Ctrl</kbd> <kbd>P</kbd>) prints the page
+alone, on white: in the view you are using, so a recipe, a guide or a logbook's charts print
+as you see them, and a canvas prints as a sharp drawing of everything on it. "Save as PDF" in
+the print dialog makes a PDF named after the page.
+
 Search (<kbd>Ctrl</kbd> <kbd>K</kbd>) also looks inside the PDFs and text files your pages
 show. Photos and scanned images can be searched too once you turn on **Read images with AI**
 under Settings → Search in files: each image is then sent once to an AI model of your choice

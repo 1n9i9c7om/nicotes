@@ -17,6 +17,7 @@ import './styles/assistant.css';
 import './styles/models.css';
 import './styles/colors.css';
 import './styles/shared.css';
+import './styles/print.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';

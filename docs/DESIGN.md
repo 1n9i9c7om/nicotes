@@ -303,6 +303,14 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 
 ### History, trash, export and PWA
 
+- **Printing** (`styles/print.css`, `lib/print.ts`): the browser prints the page as shown,
+  with a print stylesheet that hides the app (sidebar, page bar, toolbar, connections,
+  assistant, buttons), lets the scroll panes flow, switches the colour tokens to a light set
+  and adds the title as a heading. Ctrl+P is routed through `printPage`, which runs
+  registered preparers first and names the document after the page (the PDF's file name).
+  Canvas pages register one that renders the whole scene with Excalidraw's `exportToSvg`
+  on white; the print stylesheet shows it instead of the live canvas.
+
 - **Version history:** `page_versions` snapshots. While editing, the pre-change state is
   saved when the last snapshot is older than 10 minutes; link rewrites and restores
   always snapshot first. Retention: everything from the last 24 h, then the newest per day
