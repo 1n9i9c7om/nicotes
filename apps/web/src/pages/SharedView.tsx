@@ -105,7 +105,7 @@ export function SharedView() {
                   <CanvasEditor key={current.id} content={current.content} readOnly onOpenLink={(t) => bridge!.open(t)} />
                 </Suspense>
               ) : (
-                <ReadOnlyPage key={current.id} page={current} bridge={bridge!} />
+                <ReadOnlyPage key={current.id} page={current} pages={data.pages} bridge={bridge!} />
               )}
               <p className="shared-updated">Last changed {dateOf(current.updatedAt)}</p>
             </article>
@@ -141,8 +141,12 @@ function PageTree({ pages, parentId, token, currentId }: { pages: PublicSharePag
 }
 
 /** The page as the editor shows it, but nothing can be changed. */
-function ReadOnlyPage({ page, bridge }: { page: PublicSharePage; bridge: LinkBridge }) {
-  const extensions = useMemo(() => editorExtensions({ bridge }), [bridge]);
+function ReadOnlyPage({ page, pages, bridge }: { page: PublicSharePage; pages: PublicSharePage[]; bridge: LinkBridge }) {
+  // Embeds show pages of the same share only (the bridge resolves nothing else).
+  const extensions = useMemo(
+    () => editorExtensions({ bridge, loadPage: async (id) => pages.find((p) => p.id === id) ?? null }),
+    [bridge, pages],
+  );
   const editor = useEditor({
     extensions,
     content: page.content,

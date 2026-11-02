@@ -109,6 +109,11 @@ under Settings → **Voice notes**, what you said is written below it too: your 
 server (such as [Speaches](https://speaches.ai)), or Groq or OpenAI with a key. Recording
 needs HTTPS (or localhost).
 
+**Embeds:** `![[Page]]` on a line of its own shows another page inside this one, and
+`![[Page#Heading]]` just the part under that heading, as in Obsidian. Type `![[`, pick the
+page and add `#Heading` if you like. The embedded text stays up to date with its page and is
+edited there: its title above the embed opens it. `[[Page#Heading]]` links work too.
+
 **Print or save as PDF** from a page's ⋯ menu (or <kbd>Ctrl</kbd> <kbd>P</kbd>) prints the page
 alone, on white: in the view you are using, so a recipe, a guide or a logbook's charts print
 as you see them, and a canvas prints as a sharp drawing of everything on it. "Save as PDF" in

@@ -192,6 +192,16 @@ and tsup respectively).
   reading. With several candidates, the linking page's notebook wins, then the oldest
   page. Links inside code are ignored. The resolver lives in `packages/shared`, so server
   (backlinks) and web (navigation, autocomplete) always agree.
+- **Sections and embeds:** `[[Page#Heading]]` links to the page (backlinks, renames keep
+  the `#Heading`); a `#` only starts a section between two non-space characters
+  (`splitSection`), and an exact title with `#` in it wins. `![[Page]]` or
+  `![[Page#Heading]]` on a line of its own is an embed node in the editor (`editor/embed.ts`):
+  it loads the page (`GET /api/pages/:id`, cached 30 s; in shared links only pages of the
+  share) and shows it, or the part under the heading up to the next heading of its level
+  (`sectionOf`), in a read-only editor of its own, one level deeper; from the second level on
+  embeds show as links, so pages that embed each other cannot loop. Inside a line, `![[…]]`
+  stays a link that keeps its `!`. Typing `!` before a link picked from the list makes either.
+  The Obsidian import keeps embeds and headings (not block ids).
 - **Autocomplete** inserts the shortest unambiguous target. Clicking an unresolved
   (dashed) link creates the page — under the qualifying parent/notebook if given.
 - **Rename propagation:** renaming or moving a page, or renaming a notebook, rewrites

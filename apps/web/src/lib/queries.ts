@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AiBatch,
@@ -738,3 +739,13 @@ export function useLayoutActions(id: string) {
 // ---------- System ----------
 
 export const useSystemInfo = () => useQuery({ queryKey: keys.system, queryFn: () => api.get<SystemInfo>('/system') });
+
+/** Loads pages shown in `![[embeds]]` (cached briefly, apart from the page being edited). */
+export function useLoadEmbed() {
+  const qc = useQueryClient();
+  return useCallback(
+    (id: string) =>
+      qc.fetchQuery({ queryKey: ['embed', id], queryFn: () => api.get<Page>(`/pages/${id}`), staleTime: 30_000 }).then((p) => ({ id: p.id, title: p.title, content: p.content })),
+    [qc],
+  );
+}
