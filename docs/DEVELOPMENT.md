@@ -48,6 +48,14 @@ browser. Failures leave a trace in `apps/e2e/test-results`
 - **Excalidraw's fonts** are copied from the package into `dist/excalidraw/fonts` at build
   time (a small plugin in `apps/web/vite.config.ts`) and served by Nicotes; the CDN it would
   use otherwise is blocked by the CSP.
+- **Patched versions inside Excalidraw:** the root `package.json` `overrides` raise `katex`,
+  `lodash-es` and `nanoid` to versions without known vulnerabilities. Excalidraw 0.18.1 pins
+  older ones (through its Mermaid import), so `npm audit` would flag them otherwise. `npm ls`
+  calls the overridden versions "invalid"; that is how npm shows overrides in this workspace
+  and does no harm. Remove the overrides once an Excalidraw release ships fixed versions
+  (`npm audit --omit=dev` should stay clean). npm does not apply new overrides to the
+  existing lockfile: let it resolve a lockfile from the `package.json` files in an empty
+  folder and copy the changed entries over.
 - **Windows and npm:** `npm install <package>` sometimes drops the `@esbuild/*` entries of
   other platforms from `package-lock.json` (npm/cli#4828). Compare the lockfile with
   `git diff` after adding a dependency and put missing entries back before committing.
