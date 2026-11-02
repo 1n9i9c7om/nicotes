@@ -100,13 +100,14 @@ describe('chat', () => {
     expect(calendar.days).toEqual([{ date: '2026-11-06', weekday: 'Friday', journal: false, tasks: [expect.objectContaining({ text: 'Book the service', done: false })] }]);
     expect(sent[2]!.messages.at(-1)!.content).toContain('The car is a blue Golf.');
 
-    // A follow-up: the earlier messages go along.
+    // A follow-up: the earlier messages go along, answers with what was done for them.
     await chat(api, 'Which car is it again?');
     expect(sent[3]!.messages.slice(1).map((m) => [m.role, m.content])).toEqual([
       ['user', 'What is on this week?'],
-      ['assistant', 'Friday: book the car service ([[Car]]).'],
+      ['assistant', '[Steps in Nicotes: Looked at the calendar 2026-11-04 – 2026-11-10; Searched for “car” (1 found); Read “Car”]\nFriday: book the car service ([[Car]]).'],
       ['user', 'Which car is it again?'],
     ]);
+    expect(sent[3]!.messages[0]!.content).toContain('Never write such a line yourself');
 
     expect((await api.call('DELETE', '/api/chat')).status).toBe(204);
     expect((await api.call<ChatEntry[]>('GET', '/api/chat')).body).toEqual([]);
@@ -136,6 +137,82 @@ describe('chat', () => {
       { ok: true },
     ]);
     expect((await api.call<Page>('GET', `/api/pages/${page.id}`)).body.content).toBe('- [x] Water the plants');
+  });
+
+  it('tells the model which answers did nothing, and drops a steps line it imitates', async () => {
+    const api = await signedIn();
+    const sent = fakeModel([{ content: '[Steps in Nicotes: Added to “Games”]\nAdded both tasks.' }, { content: 'Sorry, I have not added them yet.' }]);
+    await chat(api, 'Add two tasks');
+    expect((await api.call<ChatEntry[]>('GET', '/api/chat')).body.at(-1)!.content).toBe('Added both tasks.');
+    await chat(api, 'I do not see them');
+    expect(sent[1]!.messages[2]).toEqual({ role: 'assistant', content: '[Steps in Nicotes: none]\nAdded both tasks.' });
+  });
+
+  it('says where pages are, and creates, moves and renames them', async () => {
+    const api = await signedIn();
+    const games = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    const idleon = (await api.call<Page>('POST', '/api/pages', { notebookId: games.id, title: 'IdleOn', content: '' })).body;
+    const todo = (await api.call<Page>('POST', '/api/pages', { notebookId: games.id, title: "IdleOn ToDo's", content: '' })).body;
+    await api.call<Page>('POST', '/api/pages', { notebookId: games.id, title: 'Plan', content: "See [[IdleOn ToDo's]]." });
+    const sent = fakeModel([
+      { calls: [{ name: 'read_page', args: { page: todo.id } }, { name: 'create_page', args: { notebook: 'Games', parent: 'IdleOn', title: 'Bosses', content: '' } }] },
+      { calls: [{ name: 'move_page', args: { page: todo.id, parent: 'IdleOn', title: "IdleOn To-Do's" } }, { name: 'move_page', args: { page: 'IdleOn', parent: 'Bosses' } }] },
+      { content: 'Moved.' },
+    ]);
+    const events = await chat(api, 'Tidy up my IdleOn pages');
+    const actions = events.filter((e) => e.type === 'action').map((e) => (e as Extract<ChatEvent, { type: 'action' }>).action);
+    expect(actions.map((a) => [a.ok, a.summary])).toEqual([
+      [true, "Read “IdleOn ToDo's”"],
+      [true, 'Created “Games › IdleOn › Bosses”'],
+      [true, "Moved “IdleOn ToDo's” to “Games › IdleOn › IdleOn To-Do's”"],
+      [false, 'move page: A page cannot be moved into itself'],
+    ]);
+    expect(JSON.parse(sent[1]!.messages.find((m) => m.tool_call_id === 'call_1_0')!.content!)).toMatchObject({ path: "Games › IdleOn ToDo's" });
+    const moved = (await api.call<Page>('GET', `/api/pages/${todo.id}`)).body;
+    expect(moved).toMatchObject({ title: "IdleOn To-Do's", parentId: idleon.id });
+    // Links to the renamed page follow it.
+    const plan = (await api.call<{ id: string; title: string }[]>('GET', '/api/pages')).body.find((p) => p.title === 'Plan')!;
+    expect((await api.call<Page>('GET', `/api/pages/${plan.id}`)).body.content).toBe("See [[IdleOn To-Do's]].");
+  });
+
+  it('deletes a page only once the user confirms', async () => {
+    const api = await signedIn();
+    const nb = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    const old = (await api.call<Page>('POST', '/api/pages', { notebookId: nb.id, title: 'Old list', content: '' })).body;
+    await api.call<Page>('POST', '/api/pages', { notebookId: nb.id, parentId: old.id, title: 'Old notes', content: '' });
+    const sent = fakeModel([{ calls: [{ name: 'delete_page', args: { page: 'Old list' } }] }, { content: 'Press the button to delete it.' }, { content: 'OK.' }]);
+    const events = await chat(api, 'Delete the old list');
+    const action = (events[1] as Extract<ChatEvent, { type: 'action' }>).action;
+    expect(action).toEqual({
+      tool: 'delete_page',
+      summary: 'Delete “Games › Old list” and its subpage?',
+      pageId: old.id,
+      ok: true,
+      confirm: { id: expect.any(String), state: 'pending', yes: 'Move to trash', no: 'Keep it' },
+    });
+    expect(JSON.parse(sent[1]!.messages.at(-1)!.content!)).toEqual({ waiting_for_user: true, path: 'Games › Old list', subpages: 1 });
+    expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(200);
+
+    // The next message tells the model the step still waits.
+    await chat(api, 'Thanks');
+    expect(sent[2]!.messages[2]!.content).toBe('[Steps in Nicotes: Delete “Games › Old list” and its subpage? (waiting for the user)]\nPress the button to delete it.');
+
+    const confirmed = await api.call<ChatEntry>('POST', `/api/chat/actions/${action.confirm!.id}`, { confirm: true });
+    expect(confirmed.body.actions[0]).toMatchObject({ summary: 'Moved “Old list” and its subpage to the trash', confirm: { state: 'done' } });
+    expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(404);
+    expect((await api.call('POST', `/api/chat/actions/${action.confirm!.id}`, { confirm: true })).status).toBe(409);
+    expect((await api.call('POST', '/api/chat/actions/nope', { confirm: true })).status).toBe(404);
+  });
+
+  it('keeps a page when the user declines', async () => {
+    const api = await signedIn();
+    const nb = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    const page = (await api.call<Page>('POST', '/api/pages', { notebookId: nb.id, title: 'Keeper', content: '' })).body;
+    fakeModel([{ calls: [{ name: 'delete_page', args: { page: 'Keeper' } }] }, { content: 'Confirm, please.' }]);
+    const action = ((await chat(api, 'Delete Keeper'))[1] as Extract<ChatEvent, { type: 'action' }>).action;
+    const declined = await api.call<ChatEntry>('POST', `/api/chat/actions/${action.confirm!.id}`, { confirm: false });
+    expect(declined.body.actions[0]).toMatchObject({ summary: 'Kept it: “Games › Keeper”', confirm: { state: 'declined' } });
+    expect((await api.call('GET', `/api/pages/${page.id}`)).status).toBe(200);
   });
 
   it('stops calling tools after eight rounds and answers', async () => {

@@ -12,11 +12,19 @@ export type ChatChannel = (typeof CHAT_CHANNELS)[number];
 export interface ChatAction {
   /** The tool's name, e.g. "add_task". */
   tool: string;
+  /** What was done; for a step waiting for the user, the question ("Delete “X”?"). */
   summary: string;
   /** The page it read, wrote or found, to link to. */
   pageId?: string;
   ok: boolean;
+  /**
+   * Steps the user has to confirm first, such as deleting a page: nothing happens until
+   * they answer (POST /api/chat/actions/:id). `yes` and `no` label the buttons.
+   */
+  confirm?: { id: string; state: 'pending' | 'done' | 'declined'; yes: string; no: string };
 }
+
+export const chatConfirmSchema = z.object({ confirm: z.boolean() });
 
 export interface ChatEntry {
   id: string;

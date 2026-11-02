@@ -124,10 +124,28 @@ describe('Telegram chat', () => {
     expect(tg.sent.some((s) => s.method === 'sendChatAction')).toBe(true);
     expect(tg.sent.every((s) => s.body.chat_id !== 99)).toBe(true);
 
+    // Deleting a page waits for a button press.
+    const old = (await api.call<Page>('POST', '/api/pages', { notebookId: nb.id, title: 'Old', content: '' })).body;
+    replies.push(
+      { tool_calls: [{ id: 'c3', type: 'function', function: { name: 'delete_page', arguments: JSON.stringify({ page: 'Old' }) } }] },
+      { content: 'Confirm below.' },
+    );
+    tg.push({ message: { message_id: 6, chat: { id: 42 }, text: 'Delete the page Old' } });
+    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 8);
+    const question = tg.sent.filter((s) => s.method === 'sendMessage')[7]!.body;
+    expect(question.text).toBe('Delete “Home › Old”?');
+    const [yes, no] = (question.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard[0]!;
+    expect([yes!.text, no!.text]).toEqual(['✓ Move to trash', 'Keep it']);
+    expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(200);
+    tg.push({ callback_query: { id: 'q2', data: yes!.callback_data, message: { message_id: 8, chat: { id: 42 } } } });
+    await settle(() => tg.sent.some((s) => s.method === 'editMessageText' && s.body.message_id === 8));
+    expect(tg.sent.find((s) => s.method === 'editMessageText' && s.body.message_id === 8)!.body.text).toBe('Moved “Old” to the trash');
+    expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(404);
+
     // /new forgets the Telegram conversation (the web chat is separate).
-    tg.push({ message: { message_id: 6, chat: { id: 42 }, text: '/new' } });
-    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 6);
-    expect(tg.sent.filter((s) => s.method === 'sendMessage')[5]!.body.text).toMatch(/^Started a new conversation/);
+    tg.push({ message: { message_id: 7, chat: { id: 42 }, text: '/new' } });
+    await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 9);
+    expect(tg.sent.filter((s) => s.method === 'sendMessage')[8]!.body.text).toMatch(/^Started a new conversation/);
     api.reminders.stop();
   });
 });

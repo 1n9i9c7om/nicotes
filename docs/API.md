@@ -87,6 +87,7 @@ The chat assistant can be used from scripts too (it needs an AI service set up i
 | `POST /api/chat` `{ "text": "What's due today?" }` | Sends a message; the answer streams as server-sent events, one JSON object per `data:` line: `user`, `action` (each step it takes), then `answer` (with `entry.content`) or `error` |
 | `GET /api/chat` | The conversation so far |
 | `DELETE /api/chat` | Forgets the conversation |
+| `POST /api/chat/actions/:id` `{ "confirm": true }` | Answers a step that waits for confirmation (an `action` with `confirm.state: "pending"`, such as deleting a page): `true` carries it out, `false` drops it. Returns the answer with the step updated |
 
 A token shares the web app's conversation of its account. Sending a message needs a
 read-and-write token, since the chat can change notes.

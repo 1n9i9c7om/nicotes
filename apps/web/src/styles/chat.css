@@ -99,6 +99,40 @@
   color: var(--warning);
 }
 
+/* A step that waits for the user: a question with two buttons. */
+.chat-actions li.confirm {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px 10px 14px;
+  border-color: rgb(251 191 36 / 0.35);
+  border-radius: var(--radius-lg);
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.chat-actions li.confirm > :last-child {
+  overflow: visible;
+  white-space: normal;
+}
+
+.confirm-question {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-actions li.confirm svg {
+  color: var(--warning);
+}
+
+.confirm-buttons {
+  display: flex;
+  gap: 6px;
+}
+
 .chat-actions a {
   color: inherit;
 }
