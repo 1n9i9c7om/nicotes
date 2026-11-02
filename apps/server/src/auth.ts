@@ -38,7 +38,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqual(key, expected);
 }
 
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+/** SHA-256 of a session or API token: only hashes are stored. */
+export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export function createUser(db: Db, username: string, passwordHash: string): User {
   const user = { id: newId(), username: username.toLowerCase(), passwordHash, createdAt: Date.now() };
@@ -92,6 +93,17 @@ export function endSession(c: Context, db: Db) {
   deleteCookie(c, SESSION_COOKIE, { path: '/' });
 }
 
+/** The stored id of the request's session (a hash of the cookie), or null without one. */
+export function sessionId(c: Context): string | null {
+  const token = getCookie(c, SESSION_COOKIE);
+  return token ? hashToken(token) : null;
+}
+
+/** Signs an account out everywhere, e.g. after its sign-in was reset. */
+export function endAllSessions(db: Db, userId: string): number {
+  return db.delete(sessions).where(eq(sessions.userId, userId)).run().changes;
+}
+
 /** Resolves the session cookie to a user, renewing sessions that are past half their lifetime. */
 export function sessionUser(c: Context, db: Db, secure: boolean): User | null {
   const token = getCookie(c, SESSION_COOKIE);
@@ -121,8 +133,18 @@ export function purgeExpiredSessions(db: Db) {
 
 export type AppEnv = { Variables: { user: User } };
 
-export function requireAuth(db: Db, secure: boolean): MiddlewareHandler<AppEnv> {
+/**
+ * Requires a signed-in user: by session cookie, or by API token where `signInWithToken` is
+ * given (it returns false for requests without one). Without it, token requests are refused,
+ * e.g. for settings, backups and the tokens themselves.
+ */
+export function requireAuth(db: Db, secure: boolean, signInWithToken?: (c: Context<AppEnv>) => boolean): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
+    if (signInWithToken) {
+      if (signInWithToken(c)) return next();
+    } else if (/^Bearer\s/i.test(c.req.header('authorization') ?? '')) {
+      throw new HTTPException(403, { message: 'API tokens cannot be used for this; sign in instead' });
+    }
     const user = sessionUser(c, db, secure);
     if (!user) throw new HTTPException(401, { message: 'Not signed in' });
     c.set('user', user);

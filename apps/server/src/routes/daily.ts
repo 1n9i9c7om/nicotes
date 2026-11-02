@@ -64,6 +64,43 @@ function folder(tx: Tx, userId: string, notebookId: string, parentId: string | n
   return id;
 }
 
+/** The journal note of a date, created (from `content` and `tags`) if there is none yet. */
+export function ensureDailyNote(
+  db: Db,
+  settings: SettingsStore,
+  userId: string,
+  date: string,
+  content = '',
+  tags: string[] = [],
+): { pageId: string; created: boolean } {
+  return db.transaction((tx): { pageId: string; created: boolean } => {
+    const mapped = tx
+      .select({ pageId: dailyNotes.pageId, deletedAt: pages.deletedAt })
+      .from(dailyNotes)
+      .innerJoin(pages, eq(pages.id, dailyNotes.pageId))
+      .where(and(eq(dailyNotes.userId, userId), eq(dailyNotes.date, date)))
+      .get();
+    if (mapped && mapped.deletedAt === null) return { pageId: mapped.pageId, created: false };
+    // The old note is in the trash: start a new one (restoring the old one keeps it findable by title).
+    if (mapped) tx.delete(dailyNotes).where(and(eq(dailyNotes.userId, userId), eq(dailyNotes.date, date))).run();
+
+    const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+    const notebookId = journalNotebook(tx, userId, settings);
+    const year = folder(tx, userId, notebookId, null, String(y), y);
+    const month = folder(tx, userId, notebookId, year, MONTHS[m - 1]!, m);
+    const id = newId();
+    const now = Date.now();
+    tx.insert(pages)
+      .values({ id, userId, notebookId, parentId: month, title: date, content, sortOrder: d, createdAt: now, updatedAt: now })
+      .run();
+    tx.insert(dailyNotes).values({ userId, date, pageId: id }).run();
+    if (content) indexPageLinks(tx, userId, id, content);
+    const names = [...new Set(tags.map(normalizeTag).filter(Boolean))];
+    if (names.length) setPageTags(tx, userId, id, names);
+    return { pageId: id, created: true };
+  });
+}
+
 export function dailyRoutes(db: Db, settings: SettingsStore) {
   return new Hono<AppEnv>()
     .get('/', (c) => {
@@ -88,32 +125,7 @@ export function dailyRoutes(db: Db, settings: SettingsStore) {
     .post('/', async (c) => {
       const { date, content, tags } = await readJson(c, dailyRequestSchema);
       const userId = c.var.user.id;
-      const result = db.transaction((tx): { pageId: string; created: boolean } => {
-        const mapped = tx
-          .select({ pageId: dailyNotes.pageId, deletedAt: pages.deletedAt })
-          .from(dailyNotes)
-          .innerJoin(pages, eq(pages.id, dailyNotes.pageId))
-          .where(and(eq(dailyNotes.userId, userId), eq(dailyNotes.date, date)))
-          .get();
-        if (mapped && mapped.deletedAt === null) return { pageId: mapped.pageId, created: false };
-        // The old note is in the trash: start a new one (restoring the old one keeps it findable by title).
-        if (mapped) tx.delete(dailyNotes).where(and(eq(dailyNotes.userId, userId), eq(dailyNotes.date, date))).run();
-
-        const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-        const notebookId = journalNotebook(tx, userId, settings);
-        const year = folder(tx, userId, notebookId, null, String(y), y);
-        const month = folder(tx, userId, notebookId, year, MONTHS[m - 1]!, m);
-        const id = newId();
-        const now = Date.now();
-        tx.insert(pages)
-          .values({ id, userId, notebookId, parentId: month, title: date, content, sortOrder: d, createdAt: now, updatedAt: now })
-          .run();
-        tx.insert(dailyNotes).values({ userId, date, pageId: id }).run();
-        if (content) indexPageLinks(tx, userId, id, content);
-        const names = [...new Set(tags.map(normalizeTag).filter(Boolean))];
-        if (names.length) setPageTags(tx, userId, id, names);
-        return { pageId: id, created: true };
-      });
+      const result = ensureDailyNote(db, settings, userId, date, content, tags);
       const page: Page = findPage(db, userId, result.pageId);
       return c.json({ page, created: result.created });
     });

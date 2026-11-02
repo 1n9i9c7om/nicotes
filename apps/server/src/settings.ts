@@ -8,6 +8,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_TASK_EXCLUDE_TAGS,
+  DEFAULT_TRANSCRIBE_MODEL,
   modelSetting,
   settingsUpdateSchema,
   type AiTask,
@@ -30,6 +31,8 @@ const KEYS = {
   openrouterApiKey: { key: 'openrouter.apiKey', secret: true },
   openrouterModel: { key: 'openrouter.model', secret: false },
   routewayApiKey: { key: 'routeway.apiKey', secret: true },
+  localAiUrl: { key: 'local.url', secret: false },
+  localAiKey: { key: 'local.apiKey', secret: true },
   crawl4aiUrl: { key: 'crawl4ai.url', secret: false },
   crawl4aiToken: { key: 'crawl4ai.token', secret: true },
   importModel: { key: 'ai.model.import', secret: false },
@@ -41,6 +44,7 @@ const KEYS = {
   summaryModel: { key: 'ai.model.summary', secret: false },
   linksModel: { key: 'ai.model.links', secret: false },
   layoutModel: { key: 'ai.model.layout', secret: false },
+  imagesModel: { key: 'ai.model.images', secret: false },
   searxngUrl: { key: 'ai.searxngUrl', secret: false },
   aiCostLimit: { key: 'ai.costLimit', secret: false },
   dailyNotebookId: { key: 'daily.notebookId', secret: false },
@@ -48,6 +52,13 @@ const KEYS = {
   tasksExcludeTags: { key: 'tasks.excludeTags', secret: false },
   semanticIndex: { key: 'ai.semanticIndex', secret: false },
   embeddingModel: { key: 'ai.embeddingModel', secret: false },
+  reminderDigestTime: { key: 'reminders.digestTime', secret: false },
+  reminderTimeZone: { key: 'reminders.timeZone', secret: false },
+  telegramBotToken: { key: 'telegram.botToken', secret: true },
+  readImages: { key: 'search.readImages', secret: false },
+  transcribeUrl: { key: 'transcribe.url', secret: false },
+  transcribeKey: { key: 'transcribe.apiKey', secret: true },
+  transcribeModel: { key: 'transcribe.model', secret: false },
 } as const;
 type Name = keyof typeof KEYS;
 
@@ -68,6 +79,8 @@ export interface ImportConfig {
   costLimit: number;
   semanticIndex: boolean;
   embeddingModel: string;
+  /** Images are read by the "images" model for search. */
+  readImages: boolean;
 }
 export type AiConfig = ImportConfig;
 
@@ -106,6 +119,8 @@ export class SettingsStore {
       apiKey: pick('openrouterApiKey'),
       model: pick('openrouterModel', DEFAULT_OPENROUTER_MODEL),
       routewayKey: pick('routewayApiKey'),
+      localUrl: pick('localAiUrl'),
+      localKey: pick('localAiKey'),
       url: pick('crawl4aiUrl'),
       token: pick('crawl4aiToken'),
       tasks: Object.fromEntries(AI_TASKS.map((task) => [task, pick(modelSetting(task))])) as Record<
@@ -119,6 +134,13 @@ export class SettingsStore {
       excludeTags: pick('tasksExcludeTags', JSON.stringify(DEFAULT_TASK_EXCLUDE_TAGS)),
       semanticIndex: pick('semanticIndex', 'false'),
       embeddingModel: pick('embeddingModel', DEFAULT_EMBEDDING_MODEL),
+      digestTime: pick('reminderDigestTime'),
+      timeZone: pick('reminderTimeZone'),
+      telegramToken: pick('telegramBotToken'),
+      readImages: pick('readImages', 'false'),
+      transcribeUrl: pick('transcribeUrl'),
+      transcribeKey: pick('transcribeKey'),
+      transcribeModel: pick('transcribeModel', DEFAULT_TRANSCRIBE_MODEL),
     };
   }
 
@@ -133,6 +155,12 @@ export class SettingsStore {
         modelSource: r.model.source,
       },
       routeway: { apiKeySet: r.routewayKey.value !== null, apiKeySource: r.routewayKey.source },
+      local: {
+        url: r.localUrl.value,
+        urlSource: r.localUrl.source,
+        apiKeySet: r.localKey.value !== null,
+        apiKeySource: r.localKey.source,
+      },
       crawl4ai: {
         url: r.url.value,
         urlSource: r.url.source,
@@ -150,6 +178,21 @@ export class SettingsStore {
       },
       daily: { notebookId: r.dailyNotebook.value, templateId: r.dailyTemplate.value },
       tasks: { excludeTags: parseList(r.excludeTags.value), excludeTagsSource: r.excludeTags.source },
+      transcription: {
+        url: r.transcribeUrl.value,
+        urlSource: r.transcribeUrl.source,
+        keySet: r.transcribeKey.value !== null,
+        keySource: r.transcribeKey.source,
+        model: r.transcribeModel.value!,
+        modelSource: r.transcribeModel.source,
+      },
+      search: { readImages: r.readImages.value === 'true', readImagesSource: r.readImages.source },
+      reminders: {
+        digestTime: r.digestTime.value,
+        timeZone: r.timeZone.value,
+        telegramTokenSet: r.telegramToken.value !== null,
+        telegramTokenSource: r.telegramToken.source,
+      },
       semantic: {
         enabled: r.semanticIndex.value === 'true',
         enabledSource: r.semanticIndex.source,
@@ -163,7 +206,11 @@ export class SettingsStore {
     const r = this.resolve(userId);
     return {
       openrouterApiKey: r.apiKey.value,
-      keys: { openrouter: r.apiKey.value, routeway: r.routewayKey.value },
+      keys: {
+        openrouter: r.apiKey.value,
+        routeway: r.routewayKey.value,
+        local: r.localUrl.value ? { url: r.localUrl.value.replace(/\/+$/, ''), key: r.localKey.value } : null,
+      },
       model: r.model.value!,
       models: Object.fromEntries(AI_TASKS.map((task) => [task, r.tasks[task].value ?? r.model.value!])) as Record<AiTask, string>,
       crawl4aiUrl: r.url.value?.replace(/\/+$/, '') ?? null,
@@ -172,7 +219,50 @@ export class SettingsStore {
       costLimit: Number(r.costLimit.value) || DEFAULT_AI_COST_LIMIT,
       semanticIndex: r.semanticIndex.value === 'true',
       embeddingModel: r.embeddingModel.value!,
+      readImages: r.readImages.value === 'true',
     };
+  }
+
+  /** The transcription service with its key, or null when none is set up. */
+  transcription(userId: string): { url: string; key: string | null; model: string } | null {
+    const r = this.resolve(userId);
+    if (!r.transcribeUrl.value) return null;
+    return { url: r.transcribeUrl.value.replace(/\/+$/, ''), key: r.transcribeKey.value, model: r.transcribeModel.value! };
+  }
+
+  /** Reminder settings with the bot token itself, for the reminder service only. */
+  reminders(userId: string) {
+    const r = this.resolve(userId);
+    return { digestTime: r.digestTime.value, timeZone: r.timeZone.value, telegramToken: r.telegramToken.value };
+  }
+
+  /**
+   * Values the server keeps per account that are no user setting (keys it generated, a linked
+   * chat). Same table, under `internal.` keys; secrets are encrypted.
+   */
+  internal(userId: string, key: string, secret = false): string | null {
+    const row = this.db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(and(eq(settings.userId, userId), eq(settings.key, `internal.${key}`)))
+      .get();
+    if (!row) return null;
+    return secret ? this.box.decrypt(row.value) : row.value;
+  }
+
+  setInternal(userId: string, key: string, value: string | null, secret = false) {
+    const where = and(eq(settings.userId, userId), eq(settings.key, `internal.${key}`));
+    if (value === null) {
+      this.db.delete(settings).where(where).run();
+      return;
+    }
+    const stored = secret ? this.box.encrypt(value) : value;
+    const now = Date.now();
+    this.db
+      .insert(settings)
+      .values({ userId, key: `internal.${key}`, value: stored, updatedAt: now })
+      .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value: stored, updatedAt: now } })
+      .run();
   }
 
   /** Called after every update, e.g. to start or clear the semantic index. */
@@ -264,6 +354,51 @@ export async function checkRouteway(apiKey: string | null): Promise<ConnectionCh
   }
 }
 
+/** Your own server: lists its models (OpenAI's `/models`), which also checks the key. */
+export async function checkLocal(local: ProviderKeys['local']): Promise<ConnectionCheck> {
+  if (!local) return { ok: false, message: 'No address configured' };
+  try {
+    const res = await fetch(`${local.url}/models`, {
+      headers: local.key ? { authorization: `Bearer ${local.key}` } : {},
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, message: 'Your model server rejected the key' };
+    if (res.status === 404 && !/\/v1$/.test(local.url)) {
+      return { ok: false, message: 'Not found: most servers need the address of their OpenAI API, ending in /v1' };
+    }
+    if (!res.ok) return { ok: false, message: `Your model server answered ${res.status}` };
+    const body = (await res.json()) as { data?: { id: string }[] };
+    const count = body.data?.length ?? 0;
+    return count
+      ? { ok: true, message: `Reachable · ${count} model${count === 1 ? '' : 's'} installed` }
+      : { ok: false, message: 'Reachable, but it has no models installed yet' };
+  } catch (error) {
+    return { ok: false, message: `Cannot reach your model server: ${(error as Error).cause ?? (error as Error).message}` };
+  }
+}
+
+/** A transcription service answers /models (OpenAI, Groq, Speaches, LocalAI all do). */
+export async function checkTranscription(service: { url: string; key: string | null; model: string } | null): Promise<ConnectionCheck> {
+  if (!service) return { ok: false, message: 'No address configured' };
+  try {
+    const res = await fetch(`${service.url}/models`, {
+      headers: service.key ? { authorization: `Bearer ${service.key}` } : {},
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, message: 'The service rejected the key' };
+    if (res.status === 404 && !/\/v1$/.test(service.url)) return { ok: false, message: 'Not found: the address usually ends in /v1' };
+    if (!res.ok) return { ok: false, message: `The service answered ${res.status}` };
+    const body = (await res.json().catch(() => ({}))) as { data?: { id: string }[] };
+    const ids = body.data?.map((m) => m.id) ?? [];
+    if (ids.length && !ids.includes(service.model)) {
+      return { ok: false, message: `Reachable, but it has no model “${service.model}” (it has ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? ', …' : ''})` };
+    }
+    return { ok: true, message: `Reachable · model ${service.model}` };
+  } catch (error) {
+    return { ok: false, message: `Cannot reach the service: ${(error as Error).cause ?? (error as Error).message}` };
+  }
+}
+
 export async function checkCrawl4ai(url: string | null, token: string | null): Promise<ConnectionCheck> {
   if (!url) return { ok: false, message: 'No crawl4ai URL configured — imports use the built-in extractor' };
   try {
@@ -305,21 +440,21 @@ export function settingsRoutes(store: SettingsStore) {
       return c.json(store.view(c.var.user.id));
     })
     .post('/check', async (c) => {
-      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'crawl4ai', 'searxng']) }));
+      const { target } = await readJson(c, z.object({ target: z.enum(['openrouter', 'routeway', 'local', 'crawl4ai', 'searxng', 'transcribe']) }));
       const cfg = store.effective(c.var.user.id);
-      const result =
-        target === 'openrouter'
-          ? await checkOpenRouter(cfg.openrouterApiKey)
-          : target === 'routeway'
-            ? await checkRouteway(cfg.keys.routeway)
-            : target === 'crawl4ai'
-            ? await checkCrawl4ai(cfg.crawl4aiUrl, cfg.crawl4aiToken)
-            : await checkSearxng(cfg.searxngUrl);
-      return c.json(result);
+      const checks = {
+        transcribe: () => checkTranscription(store.transcription(c.var.user.id)),
+        openrouter: () => checkOpenRouter(cfg.openrouterApiKey),
+        routeway: () => checkRouteway(cfg.keys.routeway),
+        local: () => checkLocal(cfg.keys.local),
+        crawl4ai: () => checkCrawl4ai(cfg.crawl4aiUrl, cfg.crawl4aiToken),
+        searxng: () => checkSearxng(cfg.searxngUrl),
+      };
+      return c.json(await checks[target]());
     })
-    .get('/models', async (c) =>
-      c.json(
-        (await listModels(c.req.query('kind') === 'embedding' ? 'embedding' : 'chat', c.req.query('refresh') === '1')) satisfies ModelList,
-      ),
-    );
+    .get('/models', async (c) => {
+      const kind = c.req.query('kind') === 'embedding' ? 'embedding' : 'chat';
+      const local = store.effective(c.var.user.id).keys.local;
+      return c.json((await listModels(kind, c.req.query('refresh') === '1', local)) satisfies ModelList);
+    });
 }

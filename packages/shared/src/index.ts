@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import { normalizeTag } from './tags';
 
+export * from './adapters';
 export * from './ai';
 export * from './assistant';
 export * from './blocks';
+export * from './canvas';
+export * from './charts';
+export * from './chat';
 export * from './citations';
 export * from './colors';
 export * from './diff';
@@ -17,9 +21,15 @@ export * from './layout';
 export * from './listEdits';
 export * from './mentions';
 export * from './recipe';
+export * from './recurring';
+export * from './reminders';
 export * from './sections';
+export * from './security';
+export * from './sharing';
 export * from './system';
 export * from './tasks';
+export * from './tokens';
+export * from './vault';
 export * from './wikilinks';
 
 // ---------- Auth ----------
@@ -114,6 +124,8 @@ export interface PageSummary {
   sortOrder: number;
   /** Normalised tag names, sorted. */
   tags: string[];
+  /** A canvas page (a drawing) rather than a text page. */
+  canvas: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -121,6 +133,17 @@ export interface PageSummary {
 export interface Page extends PageSummary {
   content: string;
   version: number;
+}
+
+/**
+ * GET /api/pages/sync?since=: the pages changed since `since` (ms) in full, and the ids of all
+ * live pages, so a device can keep a copy of every page for offline use.
+ */
+export interface PageSync {
+  /** Server time of this answer; the next request asks for changes since then. */
+  at: number;
+  pages: Page[];
+  ids: string[];
 }
 
 /** Response of PATCH /pages/:id and PATCH /notebooks/:id. */
@@ -177,6 +200,19 @@ export interface SearchResult {
   title: string;
   /** Excerpt with matches wrapped in MATCH_START / MATCH_END. */
   excerpt: string;
+  /** The match is in a file the page shows (a PDF, an image read by AI), not in its text. */
+  attachment?: { id: string; filename: string };
+}
+
+/** GET /api/search/attachments: how far reading files for search has come. */
+export interface AttachmentSearchStatus {
+  /** Files not looked at yet. */
+  waiting: number;
+  /** PDFs and text files whose text is searchable. */
+  documents: number;
+  images: { read: number; notRead: number; failed: number };
+  /** The latest reason a file could not be read. */
+  lastError: string | null;
 }
 
 // ---------- Attachments ----------

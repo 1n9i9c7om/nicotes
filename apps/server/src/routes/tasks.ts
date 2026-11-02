@@ -7,10 +7,12 @@ import {
   taskCreateSchema,
   taskUpdateSchema,
   TEMPLATE_TAG,
+  tickTaskLine,
   updateTaskLine,
   type Page,
   type PageTask,
   type TaskStatus,
+  type TaskUpdate,
 } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
@@ -20,6 +22,7 @@ import { indexPageLinks, type Tx } from '../links.js';
 import { snapshotPage } from '../versions.js';
 import { findPage } from './pages.js';
 import type { SettingsStore } from '../settings.js';
+import { localTime, timeZoneOf } from '../time.js';
 import { inheritedTags, tagsByPage } from './tags.js';
 
 const MAX_TASKS = 2000;
@@ -71,13 +74,40 @@ export function listTasks(db: Db, userId: string, status: TaskStatus, excludeTag
 }
 
 /** Saves new page content the way the editor would (version bump, snapshot, link index). */
-function saveContent(tx: Tx, userId: string, page: Page, content: string) {
+export function saveContent(tx: Tx, userId: string, page: Page, content: string) {
   snapshotPage(tx, { ...page, userId }, 'edit');
   tx.update(pages)
     .set({ content, version: page.version + 1, updatedAt: Date.now() })
     .where(eq(pages.id, page.id))
     .run();
   indexPageLinks(tx, userId, page.id, content);
+}
+
+/**
+ * Ticks a task off (or reopens it) and/or sets its due date, if its line is unchanged. A
+ * recurring task ticked off gets its next occurrence above it; `today` is the account's date.
+ */
+export function updateTask(db: Db, userId: string, input: TaskUpdate, today: string) {
+  db.transaction((tx) => {
+    const page = findPage(tx, userId, input.pageId);
+    const lines = page.content.split('\n');
+    // Line numbers are only valid while the line is unchanged.
+    if (lines[input.line] !== input.raw) {
+      throw new HTTPException(409, { message: 'This task was changed in the meantime' });
+    }
+    lines[input.line] = updateTaskLine(input.raw, { due: input.due });
+    const updated = input.done === true ? tickTaskLine(lines, input.line, today) : lines;
+    if (input.done === false) updated[input.line] = updateTaskLine(updated[input.line]!, { done: false });
+    saveContent(tx, userId, page, updated.join('\n'));
+  });
+}
+
+/** Adds an open task to a page (appendTask decides where in it). */
+export function addTask(db: Db, userId: string, pageId: string, text: string, due?: string | null) {
+  db.transaction((tx) => {
+    const page = findPage(tx, userId, pageId);
+    saveContent(tx, userId, page, appendTask(page.content, text, due));
+  });
 }
 
 export function taskRoutes(db: Db, settings: SettingsStore) {
@@ -89,26 +119,12 @@ export function taskRoutes(db: Db, settings: SettingsStore) {
     })
     .patch('/', async (c) => {
       const input = await readJson(c, taskUpdateSchema);
-      const userId = c.var.user.id;
-      db.transaction((tx) => {
-        const page = findPage(tx, userId, input.pageId);
-        const lines = page.content.split('\n');
-        // Line numbers are only valid while the line is unchanged.
-        if (lines[input.line] !== input.raw) {
-          throw new HTTPException(409, { message: 'This task was changed in the meantime' });
-        }
-        lines[input.line] = updateTaskLine(input.raw, { done: input.done, due: input.due });
-        saveContent(tx, userId, page, lines.join('\n'));
-      });
-      return c.json(findPage(db, userId, input.pageId));
+      updateTask(db, c.var.user.id, input, localTime(Date.now(), timeZoneOf(settings, c.var.user.id)).date);
+      return c.json(findPage(db, c.var.user.id, input.pageId));
     })
     .post('/', async (c) => {
       const input = await readJson(c, taskCreateSchema);
-      const userId = c.var.user.id;
-      db.transaction((tx) => {
-        const page = findPage(tx, userId, input.pageId);
-        saveContent(tx, userId, page, appendTask(page.content, input.text, input.due));
-      });
-      return c.json(findPage(db, userId, input.pageId), 201);
+      addTask(db, c.var.user.id, input.pageId, input.text, input.due);
+      return c.json(findPage(db, c.var.user.id, input.pageId), 201);
     });
 }

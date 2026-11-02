@@ -341,3 +341,17 @@ input.task-check {
     padding: 0 8px;
   }
 }
+
+.task-remind {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}

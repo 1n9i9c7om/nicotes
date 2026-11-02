@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AiBatch,
@@ -44,10 +45,12 @@ import type {
   TaskCreate,
   TaskUpdate,
   TrashItem,
+  LoginResult,
   User,
 } from '@nicotes/shared';
-import { parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
+import { isTwoFactorChallenge, parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
 import { api } from './api';
+import { clearOffline } from './offline';
 
 export const keys = {
   auth: ['auth'] as const,
@@ -68,6 +71,7 @@ export const keys = {
   graph: ['graph'] as const,
   daily: (from: string, to: string) => ['daily', from, to] as const,
   tasks: ['tasks'] as const,
+  reminders: ['reminders'] as const,
   semantic: ['semantic-status'] as const,
   related: (id: string) => ['related', id] as const,
   summary: (id: string) => ['summary', id] as const,
@@ -94,13 +98,22 @@ function dropUserData(qc: QueryClient) {
 export const useAuthStatus = () =>
   useQuery({ queryKey: keys.auth, queryFn: () => api.get<AuthStatus>('/auth/status'), staleTime: Infinity });
 
-export function useSignIn(mode: 'login' | 'setup') {
+/** Switches the app to a user who has just signed in. */
+export function useFinishSignIn() {
   const qc = useQueryClient();
+  return (user: User) => {
+    dropUserData(qc);
+    qc.setQueryData<AuthStatus>(keys.auth, { user, setupRequired: false });
+  };
+}
+
+/** Signing in may stop halfway with a two-step challenge; the Login page continues from there. */
+export function useSignIn(mode: 'login' | 'setup') {
+  const finish = useFinishSignIn();
   return useMutation({
-    mutationFn: (input: Credentials) => api.post<User>(`/auth/${mode}`, input),
-    onSuccess: (user) => {
-      dropUserData(qc);
-      qc.setQueryData<AuthStatus>(keys.auth, { user, setupRequired: false });
+    mutationFn: (input: Credentials) => api.post<LoginResult>(`/auth/${mode}`, input),
+    onSuccess: (result) => {
+      if (!isTwoFactorChallenge(result)) finish(result);
     },
   });
 }
@@ -110,6 +123,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => api.post('/auth/logout'),
     onSuccess: () => {
+      void clearOffline();
       dropUserData(qc);
       qc.setQueryData<AuthStatus>(keys.auth, { user: null, setupRequired: false });
     },
@@ -354,13 +368,20 @@ export function useUpdateSettings() {
         qc.invalidateQueries({ queryKey: keys.semantic });
         qc.invalidateQueries({ queryKey: ['related'] });
       }
+      // Your own server's models join (or leave) the model lists.
+      if (input.localAiUrl !== undefined || input.localAiKey !== undefined) qc.invalidateQueries({ queryKey: keys.models });
+      // Images are read again (or for the first time).
+      if (input.readImages !== undefined || input.imagesModel !== undefined) qc.invalidateQueries({ queryKey: ['attachment-search'] });
+      // Another bot: its name and the (now disconnected) chat.
+      if (input.telegramBotToken !== undefined) qc.invalidateQueries({ queryKey: keys.reminders });
     },
   });
 }
 
 export const useCheckConnection = () =>
   useMutation({
-    mutationFn: (target: 'openrouter' | 'routeway' | 'crawl4ai' | 'searxng') => api.post<ConnectionCheck>('/settings/check', { target }),
+    mutationFn: (target: 'openrouter' | 'routeway' | 'local' | 'crawl4ai' | 'searxng' | 'transcribe') =>
+      api.post<ConnectionCheck>('/settings/check', { target }),
   });
 
 /** Chat models of both services, or OpenRouter's embedding models (pickers and prices). */
@@ -720,3 +741,13 @@ export function useLayoutActions(id: string) {
 // ---------- System ----------
 
 export const useSystemInfo = () => useQuery({ queryKey: keys.system, queryFn: () => api.get<SystemInfo>('/system') });
+
+/** Loads pages shown in `![[embeds]]` (cached briefly, apart from the page being edited). */
+export function useLoadEmbed() {
+  const qc = useQueryClient();
+  return useCallback(
+    (id: string) =>
+      qc.fetchQuery({ queryKey: ['embed', id], queryFn: () => api.get<Page>(`/pages/${id}`), staleTime: 30_000 }).then((p) => ({ id: p.id, title: p.title, content: p.content })),
+    [qc],
+  );
+}

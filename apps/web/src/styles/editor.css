@@ -395,3 +395,134 @@
 .hide-sources .ProseMirror .citation {
   display: none;
 }
+
+/* ---------- Voice notes ---------- */
+
+.prose .voice-player {
+  display: block;
+  width: min(100%, 420px);
+  height: 40px;
+  margin: 6px 0 2px;
+}
+
+.voice-recorder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.voice-recorder .error {
+  margin: 0;
+}
+
+.voice-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-status.live {
+  color: var(--text);
+}
+
+.voice-status.live svg {
+  color: #f87171;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.voice-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- Canvas pages ---------- */
+
+.page-body.canvas-body {
+  max-width: none;
+}
+
+.canvas-host {
+  position: relative;
+  height: max(420px, calc(100dvh - 240px));
+  margin: 8px 0 24px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.canvas-loading {
+  background: var(--bg-elev);
+}
+
+/* Excalidraw's own font for its UI is fine; it should not inherit the page's prose styles. */
+.canvas-host .excalidraw {
+  --color-primary: var(--accent);
+  font-size: 14px;
+}
+
+/* ---------- Embedded pages: ![[Page#Heading]] ---------- */
+
+.prose .embed {
+  margin: 1em 0;
+  padding: 10px 16px 4px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--accent-softer);
+}
+
+.prose .embed.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.prose .embed-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+.prose .embed-head::before {
+  content: '↳';
+  color: var(--text-faint);
+}
+
+.prose .embed-head:hover {
+  text-decoration: underline;
+}
+
+.prose .embed.unresolved .embed-head {
+  color: var(--text-muted);
+}
+
+.prose .embed-body > .ProseMirror {
+  padding: 0 0 6px;
+  outline: none;
+}
+
+.prose .embed-body > .ProseMirror > :first-child {
+  margin-top: 0.4em;
+}
+
+.prose .embed-note {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text-faint);
+}

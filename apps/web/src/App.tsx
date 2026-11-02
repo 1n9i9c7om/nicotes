@@ -1,8 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { AppShell } from './components/AppShell';
-import { AskPage } from './pages/AskPage';
 import { ApiError } from './lib/api';
 import { keys, useAuthStatus } from './lib/queries';
 import { Home } from './pages/Home';
@@ -16,12 +15,24 @@ import { OrganizePage } from './pages/OrganizePage';
 import { ResearchPage } from './pages/ResearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SharePage } from './pages/SharePage';
+import { SharedView } from './pages/SharedView';
 import { TagView } from './pages/TagView';
 import { TasksPage } from './pages/TasksPage';
+import { ChatPage } from './pages/ChatPage';
 
 // force-graph is large; the graph page loads on demand.
 const GraphPage = lazy(() => import('./pages/GraphPage').then((m) => ({ default: m.GraphPage })));
 import { TrashPage } from './pages/TrashPage';
+
+/** Shared links open without an account; everything else is the app behind the sign-in. */
+export function Root() {
+  return (
+    <Routes>
+      <Route path="s/:token/:pageId?" element={<SharedView />} />
+      <Route path="*" element={<App />} />
+    </Routes>
+  );
+}
 
 export function App() {
   const { data, isPending, isError, refetch } = useAuthStatus();
@@ -55,7 +66,8 @@ export function App() {
         <Route path="organize" element={<OrganizePage />} />
         <Route path="journal" element={<JournalPage />} />
         <Route path="tasks" element={<TasksPage />} />
-        <Route path="ask" element={<AskPage />} />
+        <Route path="chat" element={<ChatPage />} />
+        <Route path="ask" element={<AskRedirect />} />
         <Route
           path="graph"
           element={
@@ -90,4 +102,10 @@ function useSessionExpiry() {
       unsubMutations();
     };
   }, [qc]);
+}
+
+/** "Ask your notes" became the chat; old links and bookmarks still work. */
+function AskRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/chat${search}`} replace />;
 }

@@ -11,12 +11,14 @@ import {
   FilePlus,
   FileText,
   FolderInput,
+  Globe,
   Hash,
   House,
   LogOut,
-  MessageCircleQuestion,
+  MessagesSquare,
   Palette,
   Pencil,
+  PenTool,
   Plus,
   Search,
   Settings,
@@ -26,7 +28,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import type { Notebook, PageSummary, User } from '@nicotes/shared';
+import { EMPTY_CANVAS, type Notebook, type PageSummary, type User } from '@nicotes/shared';
 import logo from '../logo.svg';
 import {
   useCreatePage,
@@ -50,6 +52,7 @@ import { Menu } from './Menu';
 import { ConfirmDialog } from './Modal';
 import { MoveDialog } from './MoveDialog';
 import { NotebookDialog } from './NotebookDialog';
+import { ShareDialog } from './ShareDialog';
 
 type DropPosition = 'before' | 'after' | 'inside';
 type Drag = { kind: 'page' | 'notebook'; id: string };
@@ -65,7 +68,7 @@ interface TreeState {
   setDropTarget: (target: DropTarget | null) => void;
   renamingId: string | null;
   setRenamingId: (id: string | null) => void;
-  addPage: (notebookId: string, parentId: string | null) => void;
+  addPage: (notebookId: string, parentId: string | null, canvas?: boolean) => void;
   movePage: (target: PageSummary | Notebook, position: DropPosition) => void;
   moveNotebook: (target: Notebook, position: DropPosition) => void;
   confirm: (dialog: ConfirmState) => void;
@@ -133,8 +136,8 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
     confirm: setConfirmState,
     startMove: setMoving,
     startFromTemplate: (notebookId, parentId) => setFromTemplate({ notebookId, parentId }),
-    addPage: async (notebookId, parentId) => {
-      const page = await createPage.mutateAsync({ notebookId, parentId });
+    addPage: async (notebookId, parentId, canvas = false) => {
+      const page = await createPage.mutateAsync({ notebookId, parentId, ...(canvas ? { content: EMPTY_CANVAS } : {}) });
       setExpandedMap((prev) => ({ ...prev, [parentId ?? notebookId]: true }));
       navigate(`/p/${page.id}`, { state: { created: page } });
     },
@@ -185,6 +188,9 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
             <Search size={16} /> Search
             <kbd>Ctrl K</kbd>
           </button>
+          <NavLink to="/chat" className="nav-item">
+            <MessagesSquare size={16} /> Chat
+          </NavLink>
           <NavLink to="/" end className="nav-item">
             <House size={16} /> Home
           </NavLink>
@@ -197,9 +203,6 @@ export function Sidebar({ user, onClose, onSearch }: SidebarProps) {
           <NavLink to="/tasks" className="nav-item">
             <ListChecks size={16} /> Tasks
             <DueCount />
-          </NavLink>
-          <NavLink to="/ask" className="nav-item">
-            <MessageCircleQuestion size={16} /> Ask
           </NavLink>
           <NavLink to="/graph" className="nav-item">
             <Waypoints size={16} /> Graph
@@ -282,6 +285,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
   const navigate = useNavigate();
   const deleteNotebook = useDeleteNotebook();
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const roots = s.tree.children.get(rootKey(notebook.id)) ?? [];
   const open = s.expanded[notebook.id] ?? true;
   const drop = s.dropTarget?.id === notebook.id ? s.dropTarget.position : null;
@@ -335,6 +339,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
           <Menu
             items={[
               { label: 'New page', icon: <FilePlus size={15} />, onSelect: () => s.addPage(notebook.id, null) },
+              { label: 'New canvas', icon: <PenTool size={15} />, onSelect: () => s.addPage(notebook.id, null, true) },
               { label: 'New page from template…', icon: <LayoutTemplate size={15} />, onSelect: () => s.startFromTemplate(notebook.id, null) },
               { label: 'Edit notebook', icon: <Palette size={15} />, onSelect: () => setEditing(true) },
               {
@@ -347,6 +352,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
                 icon: <FileDown size={15} />,
                 onSelect: () => (window.location.href = exportUrl(notebook.id)),
               },
+              { label: 'Share…', icon: <Globe size={15} />, onSelect: () => setSharing(true) },
               {
                 label: 'Delete notebook',
                 icon: <Trash2 size={15} />,
@@ -374,6 +380,7 @@ function NotebookNode({ notebook }: { notebook: Notebook }) {
       )}
 
       {editing && <NotebookDialog notebook={notebook} onClose={() => setEditing(false)} />}
+      {sharing && <ShareDialog kind="notebook" targetId={notebook.id} title={notebook.title} onClose={() => setSharing(false)} />}
     </div>
   );
 }
@@ -436,7 +443,7 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
           <RenameInput page={page} onDone={() => s.setRenamingId(null)} />
         ) : (
           <NavLink to={`/p/${page.id}`} className="tree-link" onDoubleClick={() => s.setRenamingId(page.id)}>
-            <FileText size={14} className="tree-icon" />
+            {page.canvas ? <PenTool size={14} className="tree-icon" /> : <FileText size={14} className="tree-icon" />}
             <span className={page.title.trim() ? 'tree-title' : 'tree-title untitled'}>
               {displayTitle(page.title)}
             </span>
@@ -454,6 +461,7 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
           <Menu
             items={[
               { label: 'New subpage', icon: <FilePlus size={15} />, onSelect: () => s.addPage(page.notebookId, page.id) },
+              { label: 'New canvas below', icon: <PenTool size={15} />, onSelect: () => s.addPage(page.notebookId, page.id, true) },
               {
                 label: 'Subpage from template…',
                 icon: <LayoutTemplate size={15} />,

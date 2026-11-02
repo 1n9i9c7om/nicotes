@@ -21,8 +21,8 @@ describe('extractWikilinks', () => {
       'Twice: [[Elden Ring]]',
     ].join('\n');
     expect(extractWikilinks(md)).toEqual([
-      { target: 'Elden Ring', label: null },
-      { target: 'Games/Factorio', label: 'the factory' },
+      { target: 'Elden Ring', label: null, section: null },
+      { target: 'Games/Factorio', label: 'the factory', section: null },
     ]);
   });
 

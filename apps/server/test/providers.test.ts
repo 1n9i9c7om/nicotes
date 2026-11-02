@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelList, Settings } from '@nicotes/shared';
 import { chat, streamChat } from '../src/ai/llm.js';
+import { embed } from '../src/ai/embeddings.js';
 import { listModels } from '../src/ai/models.js';
-import { checkRouteway } from '../src/settings.js';
+import { checkLocal, checkRouteway } from '../src/settings.js';
 import { linksInText } from '../src/ai/research.js';
 import { setup } from './helpers.js';
 
@@ -52,7 +53,7 @@ function fakeServices(reply: (call: Call) => Response) {
   return calls;
 }
 
-const keys = { openrouter: 'sk-or', routeway: 'sk-rw' };
+const keys = { openrouter: 'sk-or', routeway: 'sk-rw', local: null };
 
 describe('model services', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -115,7 +116,7 @@ describe('model services', () => {
 
   it('names the missing key and the service in errors', async () => {
     fakeServices(() => Response.json({ error: { message: 'bad key' } }, { status: 401 }));
-    await expect(chat({ keys: { openrouter: 'sk-or', routeway: null }, model: 'routeway:x', messages: [], maxTokens: 1 })).rejects.toThrow(
+    await expect(chat({ keys: { openrouter: 'sk-or', routeway: null, local: null }, model: 'routeway:x', messages: [], maxTokens: 1 })).rejects.toThrow(
       'No Routeway API key configured (Settings)',
     );
     await expect(chat({ keys, model: 'routeway:x', messages: [], maxTokens: 1 })).rejects.toThrow('Routeway rejected the API key');
@@ -176,9 +177,8 @@ describe('Routeway settings', () => {
     const api = setup({ settingsEnv: { openrouterApiKey: 'sk-or' } as never });
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
     await api.call('PATCH', '/api/settings', { askModel: 'routeway:deepseek-v4.1-flash' });
-    const res = await api.rawPost('/api/ai/ask', { question: 'Anything new?' });
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain('Asking needs a Routeway API key');
+    const res = await api.rawPost('/api/chat', { text: 'Anything new?' });
+    expect(await res.text()).toContain('The chat needs a Routeway API key');
   });
 });
 
@@ -213,5 +213,105 @@ describe('Routeway connection check', () => {
     fakeRouteway('sk-good');
     expect(await checkRouteway('sk-bad')).toEqual({ ok: false, message: 'Routeway rejected the API key' });
     expect(await checkRouteway(null)).toEqual({ ok: false, message: 'No API key configured' });
+  });
+});
+
+describe('your own model server', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const local = { url: 'http://ollama:11434/v1', key: null };
+  const withLocal = { ...keys, local };
+  const installed = { object: 'list', data: [{ id: 'llama3.2' }, { id: 'qwen3:8b' }, { id: 'nomic-embed-text' }] };
+
+  it('sends "local:" models to its address, without a key unless one is set, and charges nothing', async () => {
+    const calls = fakeServices(() =>
+      Response.json({ choices: [{ message: { content: 'Hi' } }], usage: { prompt_tokens: 100, completion_tokens: 20 } }),
+    );
+    const reply = await chat({ keys: withLocal, model: 'local:llama3.2', messages: [{ role: 'user', content: 'Hello' }], maxTokens: 50, json: true });
+    expect(calls[0]!.url).toBe('http://ollama:11434/v1/chat/completions');
+    expect(calls[0]!.auth).toBeNull();
+    expect(calls[0]!.body).toMatchObject({ model: 'llama3.2', stream: true, response_format: { type: 'json_object' } });
+    expect(calls[0]!.body).not.toHaveProperty('reasoning');
+    expect(reply.usage).toEqual({ promptTokens: 100, completionTokens: 20, cost: 0 });
+
+    await chat({ keys: { ...keys, local: { ...local, key: 'lm-key' } }, model: 'local:llama3.2', messages: [], maxTokens: 5 });
+    expect(calls[1]!.auth).toBe('Bearer lm-key');
+  });
+
+  it('tries again without JSON mode when the server refuses it', async () => {
+    const calls = fakeServices((call) =>
+      call.body?.response_format
+        ? Response.json({ error: { message: "'response_format.type' must be 'json_schema'" } }, { status: 400 })
+        : Response.json({ choices: [{ message: { content: '{"a":1}' } }] }),
+    );
+    const reply = await chat({ keys: withLocal, model: 'local:qwen3:8b', messages: [], maxTokens: 50, json: true });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.body).not.toHaveProperty('response_format');
+    expect(reply.content).toBe('{"a":1}');
+  });
+
+  it('explains what is missing: the address, a model, or web search', async () => {
+    await expect(chat({ keys, model: 'local:llama3.2', messages: [], maxTokens: 1 })).rejects.toThrow(
+      'No address of your own model server configured (Settings)',
+    );
+    fakeServices(() => Response.json({ error: { message: 'model "llama9" not found, try pulling it first' } }, { status: 404 }));
+    await expect(chat({ keys: withLocal, model: 'local:llama9', messages: [], maxTokens: 1 })).rejects.toThrow(
+      'Your model server does not know the model "llama9"',
+    );
+    await expect(chat({ keys: withLocal, model: 'local:llama3.2', messages: [], maxTokens: 1, webResults: 3 })).rejects.toThrow(
+      'Your own model server cannot search the web',
+    );
+  });
+
+  it('lists its installed models next to the hosted ones, embedding models separately', async () => {
+    fakeServices((call) => (call.url === 'http://ollama:11434/v1/models' ? Response.json(installed) : new Response(null, { status: 500 })));
+    const chatModels = await listModels('chat', true, local);
+    expect(chatModels.models.filter((m) => m.provider === 'local').map((m) => m.id)).toEqual(['local:llama3.2', 'local:qwen3:8b']);
+    expect(chatModels.models.find((m) => m.id === 'local:llama3.2')).toMatchObject({ name: 'llama3.2', free: true, promptPrice: 0 });
+    const embeddingModels = await listModels('embedding', true, local);
+    expect(embeddingModels.models.filter((m) => m.provider === 'local').map((m) => m.id)).toEqual(['local:nomic-embed-text']);
+  });
+
+  it('computes embeddings on it', async () => {
+    const calls = fakeServices(() => Response.json({ data: [{ index: 0, embedding: [3, 4] }] }));
+    const { vectors, usage } = await embed({ keys: withLocal, model: 'local:nomic-embed-text', inputs: ['hello'] });
+    expect(calls[0]!.url).toBe('http://ollama:11434/v1/embeddings');
+    expect(calls[0]!.body).toEqual({ model: 'nomic-embed-text', input: ['hello'] });
+    expect(Array.from(vectors[0]!)).toEqual([0.6000000238418579, 0.800000011920929]);
+    expect(usage.cost).toBe(0);
+  });
+
+  it('is set up under Settings: address saved, key encrypted, models listed and the connection checked', async () => {
+    const api = setup();
+    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    const saved = await api.call<Settings>('PATCH', '/api/settings', { localAiUrl: 'http://ollama:11434/v1/', localAiKey: 'lm-secret' });
+    expect(saved.body.local).toEqual({ url: 'http://ollama:11434/v1/', urlSource: 'settings', apiKeySet: true, apiKeySource: 'settings' });
+    expect(JSON.stringify(saved.body)).not.toContain('lm-secret');
+
+    const calls = fakeServices((call) => (call.url === 'http://ollama:11434/v1/models' ? Response.json(installed) : new Response(null, { status: 500 })));
+    const list = await api.call<ModelList>('GET', '/api/settings/models?kind=chat&refresh=1');
+    expect(list.body.models.some((m) => m.id === 'local:qwen3:8b')).toBe(true);
+    // The trailing slash is dropped and the key sent along.
+    expect(calls.find((c) => c.url.startsWith('http://ollama'))?.auth).toBe('Bearer lm-secret');
+
+    const check = await api.call<{ ok: boolean; message: string }>('POST', '/api/settings/check', { target: 'local' });
+    expect(check.body).toEqual({ ok: true, message: 'Reachable · 3 models installed' });
+  });
+
+  it('points to the /v1 address when the server answers 404', async () => {
+    vi.stubGlobal('fetch', async () => new Response('404 page not found', { status: 404 }));
+    expect(await checkLocal({ url: 'http://ollama:11434', key: null })).toEqual({
+      ok: false,
+      message: 'Not found: most servers need the address of their OpenAI API, ending in /v1',
+    });
+    expect(await checkLocal(null)).toEqual({ ok: false, message: 'No address configured' });
+  });
+
+  it('asks for the address when a feature uses one of its models', async () => {
+    const api = setup();
+    await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    await api.call('PATCH', '/api/settings', { askModel: 'local:llama3.2' });
+    const res = await api.rawPost('/api/chat', { text: 'Anything new?' });
+    expect(await res.text()).toContain('The chat needs the address of your own model server');
   });
 });

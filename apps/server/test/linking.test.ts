@@ -63,6 +63,14 @@ describe('links, tags, search and attachments', () => {
     expect((await backlinks(builds.id)).map((b) => b.id)).toEqual([hub.id]);
   });
 
+  it('counts embeds and section links as links, and keeps the section when renaming', async () => {
+    const bread = await create('Bread');
+    const hub = await create('Hub', '![[Bread#Steps]]\n\nSee [[Bread#Flour|the flour]].');
+    expect((await backlinks(bread.id)).map((b) => b.id)).toEqual([hub.id]);
+    await api.call('PATCH', `/api/pages/${bread.id}`, { title: 'Sourdough' });
+    expect((await get(hub.id)).content).toBe('![[Sourdough#Steps]]\n\nSee [[Sourdough#Flour|the flour]].');
+  });
+
   it('manages tags and drops unused ones without a description', async () => {
     const elden = await create('Elden Ring');
     const tagged = await api.call<Page>('PUT', `/api/pages/${elden.id}/tags`, {

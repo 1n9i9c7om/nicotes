@@ -3,10 +3,10 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { MarkdownManager } from '@tiptap/markdown';
 import type { LinkBridge } from '../lib/links';
 
-const WIKILINK = /^\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/;
+const WIKILINK = /^(!?)\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/;
 const WIKILINK_INPUT = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]$/;
 
-const wikilinkMarkdown = ({ target, label }: WikilinkAttrs) => `[[${target}${label ? `|${label}` : ''}]]`;
+const wikilinkMarkdown = ({ target, label, embed }: WikilinkAttrs) => `${embed ? '!' : ''}[[${target}${label ? `|${label}` : ''}]]`;
 
 /**
  * @tiptap/markdown only formats text: bold or a highlight around a `[[wikilink]]` would be
@@ -51,6 +51,8 @@ export interface WikilinkAttrs {
   target: string;
   /** Display text from `[[target|label]]`. */
   label: string | null;
+  /** Written `![[…]]` inside a line: an embed in Obsidian, a link here (kept as written). */
+  embed?: boolean;
 }
 
 export interface WikilinkOptions {
@@ -78,6 +80,7 @@ export const Wikilink = Node.create<WikilinkOptions>({
     return {
       target: { default: '', renderHTML: () => ({}) },
       label: { default: null, renderHTML: () => ({}) },
+      embed: { default: false, renderHTML: () => ({}) },
     };
   },
 
@@ -115,10 +118,10 @@ export const Wikilink = Node.create<WikilinkOptions>({
       const render = () => {
         const { target, label } = node.attrs as WikilinkAttrs;
         const resolved = bridge?.resolve(target) ?? null;
-        dom.className = resolved || !bridge ? 'wikilink' : 'wikilink unresolved';
+        dom.className = resolved || !bridge ? 'wikilink' : bridge.readOnly ? 'wikilink unshared' : 'wikilink unresolved';
         dom.dataset.wikilink = target;
         dom.textContent = label || target;
-        dom.title = resolved ? resolved.path : bridge ? `Create page “${target}”` : target;
+        dom.title = resolved ? resolved.path : !bridge ? target : bridge.readOnly ? '' : `Create page “${target}”`;
       };
       render();
       const unsubscribe = bridge?.subscribe(render);
@@ -175,16 +178,19 @@ export const Wikilink = Node.create<WikilinkOptions>({
   markdownTokenizer: {
     name: 'wikilink',
     level: 'inline',
-    start: (src) => src.indexOf('[['),
+    start: (src) => {
+      const at = src.indexOf('[[');
+      return at > 0 && src[at - 1] === '!' ? at - 1 : at;
+    },
     tokenize(src) {
       const match = WIKILINK.exec(src);
       if (!match) return undefined;
-      return { type: 'wikilink', raw: match[0], target: match[1]!.trim(), label: match[2]?.trim() ?? null };
+      return { type: 'wikilink', raw: match[0], target: match[2]!.trim(), label: match[3]?.trim() ?? null, embed: match[1] === '!' };
     },
   },
 
   parseMarkdown(token) {
-    return { type: 'wikilink', attrs: { target: token.target, label: token.label } };
+    return { type: 'wikilink', attrs: { target: token.target, label: token.label, embed: Boolean(token.embed) } };
   },
 
   renderMarkdown(node) {

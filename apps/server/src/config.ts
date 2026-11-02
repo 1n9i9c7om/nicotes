@@ -43,6 +43,8 @@ export const config = {
     openrouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || undefined,
     openrouterModel: process.env.OPENROUTER_MODEL?.trim() || undefined,
     routewayApiKey: process.env.ROUTEWAY_API_KEY?.trim() || undefined,
+    localAiUrl: process.env.LOCAL_AI_URL?.trim() || undefined,
+    localAiKey: process.env.LOCAL_AI_KEY?.trim() || undefined,
     crawl4aiUrl: process.env.CRAWL4AI_URL?.trim() || undefined,
     crawl4aiToken: process.env.CRAWL4AI_TOKEN?.trim() || undefined,
     // Per-feature models; unset ones use OPENROUTER_MODEL.
@@ -54,10 +56,16 @@ export const config = {
     summaryModel: process.env.OPENROUTER_SUMMARY_MODEL?.trim() || undefined,
     linksModel: process.env.OPENROUTER_LINKS_MODEL?.trim() || undefined,
     layoutModel: process.env.OPENROUTER_LAYOUT_MODEL?.trim() || undefined,
+    imagesModel: process.env.OPENROUTER_IMAGES_MODEL?.trim() || undefined,
     searxngUrl: process.env.SEARXNG_URL?.trim() || undefined,
     aiCostLimit: process.env.NICOTES_AI_COST_LIMIT?.trim() || undefined,
     embeddingModel: process.env.OPENROUTER_EMBEDDING_MODEL?.trim() || undefined,
     semanticIndex: process.env.NICOTES_SEMANTIC_INDEX?.trim() || undefined,
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
+    readImages: process.env.NICOTES_READ_IMAGES?.trim() || undefined,
+    transcribeUrl: process.env.TRANSCRIBE_URL?.trim() || undefined,
+    transcribeKey: process.env.TRANSCRIBE_KEY?.trim() || undefined,
+    transcribeModel: process.env.TRANSCRIBE_MODEL?.trim() || undefined,
   },
 };
 

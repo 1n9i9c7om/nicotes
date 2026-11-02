@@ -2,8 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Hash, MessageCircleQuestion, Search, Sparkles, TextSearch } from 'lucide-react';
+import { FileText, Hash, MessagesSquare, Paperclip, Search, Sparkles, TextSearch } from 'lucide-react';
 import { MATCH_END, MATCH_START } from '@nicotes/shared';
+import { aiKeyFor } from '../lib/ai';
 import { plainExcerpt } from '../lib/format';
 import { fuzzyFilter } from '../lib/fuzzy';
 import { searchPages, semanticSearch, useNotebooks, usePages, useSettings, useTags } from '../lib/queries';
@@ -45,7 +46,7 @@ export function Excerpt({ text }: { text: string }) {
   );
 }
 
-const ICONS = { page: FileText, tag: Hash, content: TextSearch, meaning: Sparkles, ask: MessageCircleQuestion };
+const ICONS = { page: FileText, tag: Hash, content: TextSearch, meaning: Sparkles, ask: MessagesSquare };
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -61,6 +62,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const slow = useDebounced(q, 450);
   const settings = useSettings();
   const semanticOn = !!settings.data?.semantic.enabled;
+  const chatReady = aiKeyFor(settings.data, 'ask', 'The chat').ready;
 
   const content = useQuery({
     queryKey: ['search', debounced],
@@ -114,7 +116,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               key: `c:${r.id}`,
               kind: 'content',
               label: displayTitle(r.title),
-              detail: r.excerpt ? <Excerpt text={r.excerpt} /> : where(r.id, r.notebookId),
+              detail: r.attachment ? (
+                // Found in a file the page shows.
+                <>
+                  <span className="palette-file">
+                    <Paperclip size={12} /> {r.attachment.filename}
+                  </span>{' '}
+                  {r.excerpt && <Excerpt text={r.excerpt} />}
+                </>
+              ) : r.excerpt ? (
+                <Excerpt text={r.excerpt} />
+              ) : (
+                where(r.id, r.notebookId)
+              ),
               href: `/p/${r.id}`,
             }))
         : [];
@@ -132,10 +146,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               href: `/p/${r.id}`,
             }))
         : [];
-    // Questions can go straight to "Ask your notes".
+    // Questions and requests can go straight to the chat.
     const askItems: Item[] =
-      semanticOn && q.length >= 3 && !isTagQuery && (q.endsWith('?') || q.split(/\s+/).length >= 3)
-        ? [{ key: 'ask', kind: 'ask', label: `Ask your notes: “${q}”`, detail: '', href: `/ask?q=${encodeURIComponent(q)}` }]
+      chatReady && q.length >= 3 && !isTagQuery && (q.endsWith('?') || q.split(/\s+/).length >= 3)
+        ? [{ key: 'ask', kind: 'ask', label: `Chat: “${q}”`, detail: '', href: `/chat?q=${encodeURIComponent(q)}` }]
         : [];
     return [...pageItems, ...tagItems, ...contentItems, ...meaningItems, ...askItems];
   }, [q, debounced, slow, pages.data, tags.data, content.data, meaning.data, semanticOn, tree, notebookTitle]);
@@ -153,7 +167,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const sectionTitle = (item: Item, i: number) => {
     if (i > 0 && items[i - 1]!.kind === item.kind) return null;
-    const titles = { page: q ? 'Pages' : 'Recent', tag: 'Tags', content: 'In page content', meaning: 'By meaning', ask: 'Ask' };
+    const titles = { page: q ? 'Pages' : 'Recent', tag: 'Tags', content: 'In page content', meaning: 'By meaning', ask: 'Chat' };
     return <li className="palette-section">{titles[item.kind]}</li>;
   };
 

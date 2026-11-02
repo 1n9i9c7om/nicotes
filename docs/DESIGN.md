@@ -14,7 +14,8 @@ docker-compose.
 - **Markdown is the content format.** The database is the source of truth; every page
   body is Markdown and can be exported as `.md` at any time.
 - **Single container.** One image, one `/data` volume, no external services required.
-  Optional integrations (OpenRouter, crawl4ai) are enabled by configuration.
+  Optional integrations (AI services, crawl4ai, SearXNG, Telegram, transcription,
+  adapters) are enabled by configuration.
 - **Multi-user ready.** Single user today, but every owned row carries a `user_id` and
   all access goes through the authenticated session.
 
@@ -35,6 +36,9 @@ User ─┬─ Notebook ── Page ── Page (children, any depth)
 | Attachment | Files under `/data/attachments/<id>`, embedded in Markdown as `/api/attachments/<id>/<name>`. |
 | Task       | Not stored separately: `- [ ]` lines in pages, read on demand and edited in place. |
 | Semantic index | Optional embeddings of page passages (`page_chunks`, `page_index`), plus AI summaries (`page_summaries`). |
+| Share      | A read-only link to a page (with or without subpages) or a notebook (`shares`). |
+| Adapter    | A connection to another service that writes a logbook page or journal lines daily (`adapters`). |
+| Chat message | The chat's conversation per channel, web or Telegram (`chat_messages`). |
 
 ### Example: a topic hub (here: games)
 
@@ -65,7 +69,8 @@ makes the sub-articles count as tagged too (search, graph filter, organize).
 │  • REST API: auth, notebooks, pages, (search, import…)     │
 │  • Serves the built SPA                                     │
 │  • Import pipeline → crawl4ai (optional) / Readability      │
-│                    → OpenRouter (optional)                  │
+│                    → AI service (optional)                  │
+│  • Background: backups, reminders, adapters, indexing      │
 └───────────────────────────┬────────────────────────────────┘
                             │
              /data/nicotes.db (SQLite, WAL, FTS5)
@@ -97,8 +102,73 @@ and tsup respectively).
   offers a one-time setup screen while no user exists. The server refuses to start
   rather than create that account with the example password `change-me` or one shorter
   than 8 characters.
+- **API tokens** (`tokens.ts`, table `api_tokens`): `nct_` + 32 random bytes, shown once,
+  stored as SHA-256 with their last four characters for the list. Sent as
+  `Authorization: Bearer`, they sign requests in as their user; `read` tokens are limited
+  to GET/HEAD. `/api/settings`, `/api/backups`, `/api/security`, `/api/shares`,
+  `/api/reminders`, `/api/adapters` and `/api/tokens` only accept the session (403 for a
+  token), so a token can neither read stored AI keys nor the key file, change how the
+  account signs in, publish notes, reach the tokens of other services, nor make more
+  tokens. Token requests skip the CSRF content-type rule (browsers never send the
+  header by themselves). Wrong tokens are rate-limited per IP (20 per 15 minutes);
+  `last_used_at` is written at most once a minute. Endpoints for scripts: `docs/API.md`.
+- **Calendar feed** (`routes/calendar.ts`): `GET /api/calendar/<token>.ics` with a token of
+  scope `calendar` (refused as a bearer token; Settings shows the address once and "New
+  address" replaces the old token). It lists open tasks with a due date — the same set as
+  the task list, including its tag exclusions — as all-day VEVENTs: SUMMARY is the task as
+  plain text, DESCRIPTION/URL link to the page (origin from `X-Forwarded-Proto/Host` behind
+  a proxy), CATEGORIES the notebook, UID a hash of page, text and date. Text is escaped and
+  lines folded at 75 octets (RFC 5545); unknown tokens get 404 and are rate-limited per IP.
+- **Reminders** (`reminders.ts`, `routes/reminders.ts`; tables `push_subscriptions`,
+  `reminders_sent`): tasks may carry `⏰ HH:MM` (on the due date) or `⏰ YYYY-MM-DD HH:MM`,
+  parsed into `remind` (local time). A per-account time zone (saved from the browser) and an
+  optional morning-summary time live in settings. `ReminderService` ticks once a minute:
+  open tasks (re-parsed only when pages changed) whose reminder time has come, at most two
+  hours late, and the summary of tasks due today plus overdue ones. Each goes out once (key
+  in `reminders_sent`, pruned after three days); if every target fails it is retried up to
+  five times. Channels: Web Push via `web-push` with a VAPID key pair per account (private
+  key encrypted; subscriptions answering 404/410 are dropped; the generated service worker
+  loads `push-sw.js` for `push` and `notificationclick`), and Telegram through the user's
+  own bot (token in settings or `TELEGRAM_BOT_TOKEN`). Linking a chat needs no public
+  address: a one-time code in a `t.me/<bot>?start=<code>` link, read by long polling
+  `getUpdates` (while a code waits, and afterwards for the chat, see Telegram chat below); a
+  new token unlinks the chat.
+- **Shared links** (`routes/shares.ts`, table `shares`): a read-only link to a page (with
+  or without its subtree) or a notebook. The 18-byte token is looked up by SHA-256 and also
+  stored encrypted (SecretBox), so the owner can copy the link again. `/api/shares` is
+  session only; `GET /api/public/shares/<token>` needs no account and returns the live,
+  untrashed pages in tree order (pages added later are included). Attachment addresses in
+  the Markdown are rewritten to `/api/public/shares/<token>/attachments/<id>`, which serves
+  a file only if a shared page links to it (same sandboxed headers as normal downloads).
+  Unknown and expired tokens answer 404 and count against a per-IP limit (30 per 15
+  minutes); responses are `no-store` with `X-Robots-Tag: noindex`, as is the SPA shell
+  under `/s/`. The web app renders `/s/<token>/<page>` outside the sign-in, with TipTap
+  read-only and a link bridge that only resolves pages inside the share.
+- **Two-step sign-in** (`twoFactor.ts`, `routes/security.ts`; tables `two_factor`,
+  `recovery_codes`): TOTP per RFC 6238 (HMAC-SHA1, 30 s, 6 digits, ±1 step), implemented
+  with `node:crypto`. The 20-byte secret is encrypted with the SecretBox key; `last_step`
+  remembers the step of the last accepted code, so no code works twice. With TOTP on,
+  `POST /api/auth/login` answers `{twoFactor, ticket, passkey}` instead of starting a
+  session; `POST /api/auth/login/code` finishes with a TOTP or recovery code. Tickets live
+  5 minutes in memory and allow 5 wrong codes; wrong TOTP codes also count per account
+  (10 per 6 hours, across tickets), recovery codes do not (50 bits each, so guessing is
+  hopeless). Ten recovery codes, SHA-256 hashed, deleted when used.
+- **Passkeys** (`passkeys.ts`, table `passkeys`, `@simplewebauthn/server`): discoverable
+  credentials with user verification required, so a passkey counts as both steps and signs
+  in without a username; with a ticket, it replaces the code instead. The RP ID is the host
+  name of the request's `Origin`; each passkey stores it and only signs in for that host,
+  so a phishing page (other origin, other RP ID) cannot use it. Challenges live 5 minutes in
+  memory, keyed by a `flow` id returned with the options. Counter and `last_used_at` are
+  updated on use. Algorithms are listed explicitly (EdDSA, ES256, RS256).
+- **Sign-in security settings** (`/api/security`, session only): changes need the password
+  again, which unlocks them for 10 minutes for that session (in memory), so a session left
+  open cannot lock the owner out or add a passkey. `reset-2fa.js <user> [--passkeys]` turns
+  TOTP off from the server and ends the account's sessions. API tokens are not affected by
+  any of this; they are separate credentials with their own scope.
 - **Concurrency:** page saves send the `version` they were based on; a mismatch returns
-  `409` so two tabs never silently overwrite each other.
+  `409` with the current page, so two tabs never silently overwrite each other. The editor
+  then merges both versions line by line (`mergeText`) when they don't touch the same
+  lines, and shows the conflict banner (keep mine / load theirs) when they do.
 - **Ordering:** siblings have an integer `sort_order`; a move request names the new
   parent and index and the server renumbers siblings in a transaction.
 
@@ -109,8 +179,9 @@ and tsup respectively).
   - *Visual* — TipTap with `@tiptap/markdown` (formatted as you type).
   - *Source* — CodeMirror 6 with Markdown highlighting.
   The toggle is remembered per browser. Markdown dialect: GFM (tables, task lists,
-  strikethrough) + `[[wikilinks]]` + callouts + colours. Round-tripping between views must
-  be lossless for that dialect; this is covered by tests.
+  strikethrough) + `[[wikilinks]]` and `![[embeds]]` + colours + Obsidian Tasks markers
+  (`📅`, `⏰`, `🔁`). Round-tripping between views must be lossless for that dialect; this
+  is covered by tests.
 - **Colours** (`packages/shared/src/colors.ts`, `editor/colors.ts`): a fixed palette
   (yellow, orange, red, purple, blue, green) stored as Obsidian writes it — `==text==` for
   the default (yellow) highlight, `<mark style="background: green">` for other highlights,
@@ -119,7 +190,8 @@ and tsup respectively).
   `styles/colors.css`; the read-only renderer shows them too, and plain-text uses
   (excerpts, read-aloud, semantic index) strip them. The full-text index still contains the
   tag words.
-- **Autosave** with debounce and a visible status (saved / saving / conflict / offline).
+- **Autosave** with debounce and a visible status (editing / saving / saved / saved on this
+  device / conflict).
 - **Theme:** dark, blue/cyan accents, defined as CSS custom properties.
 - **Responsive:** sidebar collapses into a drawer on narrow screens.
 
@@ -131,6 +203,16 @@ and tsup respectively).
   reading. With several candidates, the linking page's notebook wins, then the oldest
   page. Links inside code are ignored. The resolver lives in `packages/shared`, so server
   (backlinks) and web (navigation, autocomplete) always agree.
+- **Sections and embeds:** `[[Page#Heading]]` links to the page (backlinks, renames keep
+  the `#Heading`); a `#` only starts a section between two non-space characters
+  (`splitSection`), and an exact title with `#` in it wins. `![[Page]]` or
+  `![[Page#Heading]]` on a line of its own is an embed node in the editor (`editor/embed.ts`):
+  it loads the page (`GET /api/pages/:id`, cached 30 s; in shared links only pages of the
+  share) and shows it, or the part under the heading up to the next heading of its level
+  (`sectionOf`), in a read-only editor of its own, one level deeper; from the second level on
+  embeds show as links, so pages that embed each other cannot loop. Inside a line, `![[…]]`
+  stays a link that keeps its `!`. Typing `!` before a link picked from the list makes either.
+  The Obsidian import keeps embeds and headings (not block ids).
 - **Autocomplete** inserts the shortest unambiguous target. Clicking an unresolved
   (dashed) link creates the page — under the qualifying parent/notebook if given.
 - **Rename propagation:** renaming or moving a page, or renaming a notebook, rewrites
@@ -140,8 +222,44 @@ and tsup respectively).
 - **Full-text search** uses an FTS5 table (title weighted 8×) kept in sync by triggers,
   keyed by page id. Every word becomes a quoted prefix term, so user input cannot inject
   FTS syntax; `#tag` words filter by tag.
-- **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF
-  and plain text display inline; everything else downloads.
+- **Search in files** (`attachmentText.ts`, table `attachment_text`, FTS table
+  `attachments_fts` over file name and text, kept in sync by triggers): a background reader
+  looks at every attachment once (after uploads and imports, and every minute for ones it
+  has not seen): PDFs through `unpdf` (pdf.js; up to 500 pages, 500k characters, 2 minutes;
+  scanned PDFs yield nothing), text files as UTF-8, images only with `readImages` on, sent as
+  a data URL to the `images` AI task's model, which writes down the text or describes the
+  picture (≤ 10 MB). Turning that on, or changing model or keys, retries images not read
+  yet. Search adds file matches for pages whose Markdown still links the file (keeping at
+  least a quarter of the results for them); a page matching by its own text is listed once.
+- **Attachments** (≤ 25 MB) are served with `nosniff` and a sandboxing CSP. Images, PDF,
+  plain text and audio display inline; everything else downloads. Byte ranges (`Range`,
+  206/416) are supported, which Safari needs for audio and video.
+- **Canvas pages** (`components/CanvasEditor.tsx`, `lib/canvas.ts`, shared `canvas.ts`):
+  Excalidraw, loaded on demand (≈340 kB gzip). A canvas page's Markdown is the Obsidian
+  Excalidraw format: frontmatter `excalidraw-plugin: parsed` (which marks a canvas; the page
+  list reports it as `canvas` from the first 2000 characters), `## Text Elements` with each
+  text (and `[[link]]` on shapes) as `text ^elementId` so FTS and the link index see them,
+  `## Embedded Files` with `fileId: ![name](attachment url)`, and the scene as
+  `compressed-json` (LZString base64, 256-character lines, deleted elements dropped, files
+  empty). Images pasted into a canvas are uploaded as attachments on save and fetched into
+  the scene when it opens, so page versions stay small. Saves are debounced (Excalidraw
+  reports every pointer move); the text tools, summary and assistant are hidden for canvases.
+  Export writes `Title.excalidraw.md` with the export fields merged into the drawing's
+  frontmatter; the vault import turns `.excalidraw.md` files (Obsidian's, with JSON or
+  compressed JSON) back into canvas pages. Fonts are served from `/excalidraw/fonts`; the
+  CDN fallback each font names is removed before the FontFace is created (Chrome checks every
+  address against the CSP at that point). Shared links show canvases read-only.
+- **Voice notes** (`components/VoiceRecorder.tsx`, `editor/audio.ts`, `ai/transcribe.ts`):
+  MediaRecorder records Opus in WebM (Chrome, Firefox) or AAC in MP4 (Safari), at most 30
+  minutes, uploaded as an attachment and linked as `[🎙️ Voice note (m:ss)](…)` (its own
+  paragraph unless the line is empty). Markdown has no audio syntax, so the link stays a
+  link; a ProseMirror plugin adds an `<audio>` widget after links to audio attachments
+  (keyed by address, so typing does not restart playback; WebM lacks a duration, which the
+  player works out by seeking to the end once). Transcription: `POST
+  /api/attachments/<id>/transcribe` sends the file to an OpenAI-compatible
+  `/audio/transcriptions` (URL, key and model in settings, `TRANSCRIBE_*` env), stores the
+  text in `attachment_text` for search, and the editor adds it as a quote below the
+  recording.
 - **Framing** is refused (`frame-ancestors 'none'`). `NICOTES_BROWSER_EXTENSION=true`
   allows `moz-extension:` and `chrome-extension:` ancestors for the sidebar extension
   (`extension/`): Firefox gives every install a random origin, so it can only be allowed by
@@ -175,7 +293,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Profiles:** Recipe (ingredients checklist, numbered steps, sections), Article (summary
   + key points, optional full text), Product (specs table, pros/cons), Event, Generic.
   "Detect" uses the JSON-LD `@type`, else a short classification call.
-- **LLM:** OpenRouter chat completions in JSON mode; the expected shape is given as a
+- **LLM:** chat completions of the import model's service in JSON mode; the expected shape is given as a
   TypeScript type in the prompt and validated with Zod, with one corrective retry
   (`z-ai/glm-5.3-flashx` has JSON mode but no strict schema support). Output keeps the
   page's language; page text is capped at 40k characters. Token usage is shown.
@@ -190,8 +308,30 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   API key and crawl4ai token are AES-256-GCM encrypted with `NICOTES_SECRET` or a key file
   generated in the data directory, and never returned to the browser.
 - The import page is a route (`/import?url=…`) so the PWA share target can use it.
+- **Vault import** (`import/vault.ts`): a zip (up to 300 MB; files over 25 MB and hidden
+  folders such as `.obsidian` are skipped; a single top folder names the vault) is unpacked
+  with fflate and kept in memory for 30 minutes between preview and import. Notes: YAML
+  frontmatter (scalars, lists, block text) gives title, tags, created/updated (as the
+  export writes them); other properties become `**key:** value` lines; a first `# Heading`
+  equal to the title is dropped. Tags come from properties and inline `#tags` outside code.
+  Layout: top-level folders → notebooks (or one notebook), subfolders → parent pages, a
+  note named like its folder (beside it or inside it) → that parent; alphabetical order.
+  Links: `[[Note#Part#Heading^block|alias]]` → `[[Note#Heading|alias]]` (innermost heading,
+  no block ids), note embeds stay embeds, file embeds and
+  relative Markdown links → attachment links (resolved from the note's folder, the vault
+  root, then by file name anywhere, like Obsidian), `[x](Note.md)` → `[[Note|x]]`, and links
+  by file name to a note with another title are rewritten to the title. Files no note uses
+  are listed as skipped. Pages are inserted in one transaction; links are indexed after.
 
 ### History, trash, export and PWA
+
+- **Printing** (`styles/print.css`, `lib/print.ts`): the browser prints the page as shown,
+  with a print stylesheet that hides the app (sidebar, page bar, toolbar, connections,
+  assistant, buttons), lets the scroll panes flow, switches the colour tokens to a light set
+  and adds the title as a heading. Ctrl+P is routed through `printPage`, which runs
+  registered preparers first and names the document after the page (the PDF's file name).
+  Canvas pages register one that renders the whole scene with Excalidraw's `exportToSvg`
+  on white; the print stylesheet shows it instead of the live canvas.
 
 - **Version history:** `page_versions` snapshots. While editing, the pre-change state is
   saved when the last snapshot is older than 10 minutes; link rewrites and restores
@@ -214,20 +354,46 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   created, updated), attachments under `attachments/` with relative links. Opens as an
   Obsidian vault; `[[links]]` stay as written.
 - **PWA:** vite-plugin-pwa (Workbox). Precaches only the app shell; other assets are cached
-  on first use; `/api` is never served from the cache, so no offline data. The manifest's
-  `share_target` points at `/share`, which extracts a URL from `url`, `text` or `title` and
-  opens the importer. Installing requires HTTPS (or localhost).
+  on first use, attachments (NetworkFirst) once viewed; the rest of `/api` never comes from
+  the service worker. The manifest's `share_target` points at `/share`, which extracts a URL
+  from `url`, `text` or `title` and opens the importer. Installing requires HTTPS (or
+  localhost).
+- **Offline notes** (`web/lib/offline.ts`, per device, on by default in the installed app,
+  Settings → App): IndexedDB holds a copy of every page, the last answers of the lists the
+  app starts from (auth status, notebooks, pages, tags, settings) and an outbox of page edits.
+  `GET /api/pages/sync?since=` returns the pages changed since the last sync (with a second
+  of overlap) and all live ids, so deleted pages leave the copy too; it runs at start, every
+  5 minutes and when the browser comes back online. The API client answers GETs from the
+  copy when the server cannot be reached (network error, or 502–504 from a proxy), and
+  queries run with `networkMode: 'always'` so they do not wait for the network.
+- **Offline edits:** a page save that cannot reach the server goes to the outbox with the
+  version and text it was based on ("Saved on this device"); later offline edits of the
+  same page keep that first base. The editor of a page owns its outbox entry: it picks it up
+  when the page opens (also after a reload) and sends it with its normal saves. Pages that
+  are not open are sent by the outbox. Either way, a page changed elsewhere meanwhile is
+  merged line by line (`mergeText` in `shared/diff.ts`: both sides' hunks against the base,
+  applied together unless they touch the same lines); if they clash, the open editor shows
+  the conflict banner, and the outbox keeps the offline text as a subpage "… (offline
+  copy)". Creating, renaming, moving and deleting need the server. Sign-out (and switching
+  the setting off) deletes the copy and the cached attachments; another account signing in
+  on the device starts a fresh copy.
 
 ### AI assistants
 
-- **Models per feature:** import, organize, research, ask, summaries and link suggestions
-  each resolve their own model (settings > environment variable > the default model), so
-  cheap extraction and demanding writing can use different models. Settings shows
-  OpenRouter's prices next to each and warns about ids missing from its model list.
-- **Services:** chat models run on OpenRouter or Routeway (`ai/llm.ts`). A model id
-  `routeway:<id>` goes to `https://api.routeway.ai/v1` with the Routeway key, anything else
-  to OpenRouter, so each feature uses the service of its model and a missing key is
-  reported per service. The services differ in options: OpenRouter gets
+- **Models per feature:** import, organize, research, the chat (task id `ask`), the page
+  assistant, summaries, link suggestions, layouts and reading images each resolve their own
+  model (settings > environment variable > the default model), so cheap extraction and
+  demanding writing can use different models. Settings shows prices next to each and warns
+  about ids missing from the model lists.
+- **Services:** chat models run on OpenRouter, Routeway or the user's own
+  OpenAI-compatible server (`ai/llm.ts`). A model id `routeway:<id>` goes to
+  `https://api.routeway.ai/v1` with the Routeway key, `local:<id>` to
+  `<own server address>/chat/completions` (key optional, cost 0, no web search; a 400 about
+  JSON mode is retried without `response_format`), anything else to OpenRouter, so each
+  feature uses the service of its model and a missing key or address is reported per
+  service. Embeddings run on OpenRouter or the own server (`ai/embeddings.ts`); the own
+  server's `/models` list is split into chat and embedding models by the word "embed" and
+  cached for five minutes. The services differ in options: OpenRouter gets
   `reasoning.effort` and `usage.include` and searches via its `web` plugin; Routeway leaves
   reasoning off unless an effort above "minimal" is asked for, reports streamed usage via
   `stream_options.include_usage`, searches with an `@online` model suffix (links are read
@@ -235,7 +401,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   from its price list. `GET /api/settings/models` merges both public model lists (cached
   for an hour, `refresh=1` reloads; a service that is down is left out and reported) into
   one list with prices, context size and tool / reasoning / free flags for the picker.
-  Embeddings stay on OpenRouter.
+  Routeway is not used for embeddings.
 
 - **Jobs:** research and organize runs are rows in `jobs`, executed in-process (two at a
   time) with persisted progress, step log and cost; the UI polls them. Runs interrupted by
@@ -302,7 +468,15 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   rewrites it and saves a version. Due dates use Obsidian's `📅 YYYY-MM-DD`
   (`due:` / `@` are read too). Quick add fills today's daily note (placeholder task, a
   "Tasks" section, or the end).
-- **Semantic index** (opt-in per user, OpenRouter embeddings, default
+- **Recurring tasks** (`shared/recurring.ts`): `🔁 <rule>` as in Obsidian's Tasks plugin.
+  `tickTaskLine` ticks a line off and, for an open recurring task, inserts the next
+  occurrence above it: the due date moves to the rule's next date after it (after today
+  with "when done", or for undated tasks, which then get one), and dated reminders keep
+  their distance to it. Every way of ticking uses it: the task API (Tasks page, Telegram,
+  chat; with the account's date), the views (`setItemChecked`) and the editor, where a
+  ProseMirror plugin (`editor/recurring.ts`) spots a task item whose checkbox went on and
+  inserts a copy with the dates moved, in the same undo step.
+- **Semantic index** (opt-in per user, embeddings from OpenRouter or the own server, default
   `openai/text-embedding-3-small` at 512 dimensions): a background indexer embeds pages
   whose version, title or model changed, once typing has paused for 30 s, in passages of
   ≤ 1200 characters split by heading (title and heading path are embedded with each
@@ -312,16 +486,39 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   Switching the index off deletes it.
 - **Related pages:** nearest pages by mean passage vector, minus pages already connected
   (links both ways, parent, children); "Link" adds the page to a "See also" section.
-- **Ask your notes:** `POST /api/ai/ask` streams server-sent events: the retrieved
-  passages (semantic, or FTS keyword fallback), then the answer as it is generated, then
-  the cost. The model may only use the numbered passages and cites them as `[n]`;
-  follow-ups send the last turns along. Answers render through a small Markdown renderer
-  that builds React elements (no HTML injection) and can be saved as notes.
+- **Chat** (`chat/agent.ts`, `chat/tools.ts`, `chat/routes.ts`, table `chat_messages`):
+  an agent with OpenAI-style tool calling (`chatWithTools` in `ai/llm.ts`, not streamed;
+  the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
+  `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
+  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
+  `create_page`, `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
+  `pageId:line`), `add_task` (today's journal unless a page is named; due date, `⏰`
+  reminder and `🔁` repeat rule), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
+  per day, journal days), `start_research`, `research_status`. Arguments are validated
+  with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
+  `{error}` and show as failed steps. Up to 8 rounds per message, the last with
+  `tool_choice: "none"`, and the per-run cost limit applies. The system prompt has the
+  date and time in the account's time zone. History: the channel's messages (web and
+  Telegram are separate) up to 24k characters; tool traffic is kept only within a turn,
+  the steps are stored with the answer for display. `POST /api/chat` streams `user`,
+  `action` and `answer` events; `DELETE /api/chat` forgets the conversation.
+- **Telegram chat** (`telegram.ts`): once a chat is linked, the reminder service long-polls
+  the bot (messages and button presses) and hands updates of the linked chat to
+  `TelegramBot`: `/todo` lists open tasks (overdue, today, next 7 days, undated) with a
+  button per task (`d:pageId:line:hash of the line`, so a changed task is not ticked by
+  mistake), `/calendar` a Monday–Sunday week with « / » buttons (`w:date`, edited in place),
+  `/new` resets, voice messages are fetched (`getFile`) and transcribed. Other text goes to
+  the chat (channel `telegram`, "typing…" while it works). Its steps go into one message
+  (an expandable `<blockquote>`, sent with the first step and edited as more come, one
+  request at a time; pages link to the app when its address is known); its Markdown is converted to
+  Telegram's HTML (bold, italics, code, lists, links; `[[links]]` point to the app's
+  address) and split into 4000-character messages. Other chats are ignored.
 - **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
   `section` (the parent page's subtree; a top-level page's own subtree), `notebook` or
-  `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
-  **Ask** searches everything unless the request names `notebookIds`.
-- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
+  `all` (`ai/scope.ts`). Retrieval (`ai/retrieve.ts`: passages by meaning when the semantic
+  index is on, else full-text search and the sections with the most matching words) takes
+  the allowed page ids.
+- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events: steps,
   the context it read (notes within the read scope picked in the panel, which starts at `page`
   every time it opens; optionally a few web
   sources found via SearXNG/OpenRouter and read like Research does), the message, and —
@@ -347,7 +544,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   starts in the middle, adjustable with −/+ or a slider; cook mode also takes times from the
   lines shown under "You need"), **guide** (steps one at a time),
   **reader** (read aloud with the browser's speech synthesis, sentence and word highlighting,
-  position remembered) and **document** (clean read view).
+  position remembered), **charts** (tables of numbers, see below) and **document** (clean read
+  view).
 - **Blocks:** `shared/blocks.ts` splits Markdown into headings, lists (items with line ranges,
   depth, checkbox state), paragraphs, quotes, code, tables and images. Each block has a key
   from its kind, the headings above it and its position under them (`list:Ingredients:0`), so
@@ -355,7 +553,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Layout spec:** type, language, servings and block keys for ingredients, steps and checklist
   lists (`shared/layout.ts`). A heuristic picks one instantly (ingredient/step headings in
   several languages, share of checkboxes, amount of prose, numbered lists) with a confidence;
-  below 0.75, and with an API key, the AI is asked once (`POST /api/ai/layout/:pageId`). It
+  below 0.75, and with an AI service for the layout model, the AI is asked once
+  (`POST /api/ai/layout/:pageId`). It
   sees one line per block with numbered ids and answers with the type and ids, which the server
   checks and turns into keys; missing parts come from the heuristic. Users can pick a type by
   hand (`PUT`) or go back to automatic (`DELETE`); choices live in `page_layouts`.
@@ -370,6 +569,47 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   (`shared/listEdits.ts`: tick, set text, add, remove, move with nested items) applied to the
   editor's text, so they autosave, show up in version history and can be undone in the view.
   Recipe check-offs and servings are temporary on purpose: cooking should not change the note.
+
+- **Charts** (`shared/charts.ts`, `web/components/layouts/Charts.tsx`): a table's first
+  column is the x axis, every column whose cells are mostly numbers a series (decimal commas,
+  thousands separators and units like "12.3 kWh" or a header "Solar (kWh)" are understood).
+  Dates make a line, anything else bars from zero. Small multiples, one chart per column on
+  its own axis, never two scales in one chart; empty cells break the line. Hand-drawn SVG
+  (no chart library), sized to its card, with a crosshair and tooltip on hover or touch; the
+  table stays below as the exact view. The colours are a fixed categorical order checked for
+  colour-blind contrast on the dark surface. The heuristic picks this layout for pages whose
+  tables have three or more rows of numbers and little else.
+
+### Adapters
+
+- **What:** per-account connections to other services (`adapters` table) that write a day's
+  values into a logbook page or the journal. `type` picks the source, `config` holds its
+  plain settings as JSON, `secrets` its tokens as encrypted JSON (`SecretBox`, never sent back;
+  the API answers which secret fields are set). The routes (`/api/adapters`) are session
+  only, like settings.
+- **Sources** (`server/src/adapters/`): `read(ctx)` gets the config, secrets, the day in the
+  account's time zone and an injectable `fetch`, and returns values (`label`, `value`,
+  `unit`) plus an optional sentence for the journal. Home Assistant reads
+  `/api/states/<id>` for each sensor (value, unit, name) and one `/api/history/period` call
+  from local midnight for those that take a figure over the day: a time-weighted average,
+  minimum, maximum, or the growth of a meter (a drop of more than 10% counts as a reset).
+  Weather geocodes the place and reads Open-Meteo's daily forecast for that date. The fields a
+  source needs, with labels and help, are described in `shared/adapters.ts`, which the
+  settings form is built from.
+- **Writers** (`writers.ts`): a logbook is the first table whose first column is "Date";
+  the day's row is replaced or inserted in date order, new values add columns, and anything
+  else on the page is left alone. Without such a table one is appended. The page is created
+  in a "Logbooks" notebook on the first run (again if it was deleted). The journal gets one
+  `**<name>:** …` line per adapter, replaced when it runs again. Both save like the editor
+  (version, snapshot, link index).
+- **Schedule:** a check every minute runs adapters whose daily time has passed and whose
+  `last_run_date` is not today; a failed run is retried every 15 minutes that day. A new
+  adapter whose time already passed waits for the next day (the settings run it once right
+  away). Run now does not count as the day's run, so an evening adapter still records the
+  full day.
+- **Safety:** an adapter's address is the account's to choose, like the local model server,
+  so it may be on the home network. Changing the address requires entering the token again,
+  so a stored token cannot be sent somewhere else.
 
 ### Backups
 
@@ -406,17 +646,24 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |
+| `LOCAL_AI_URL` / `LOCAL_AI_KEY` | — | Your own OpenAI-compatible model server (address ending in `/v1`, optional key) for `local:<id>` models (overridable in Settings) |
 | `CRAWL4AI_URL`, `CRAWL4AI_TOKEN` | — | Optional crawl4ai (overridable in Settings) |
+| `TELEGRAM_BOT_TOKEN` | — | Bot for task reminders and the chat in Telegram (overridable in Settings) |
 | `NICOTES_IMPORT_ALLOW_PRIVATE` | `false` | Allow importing from private networks |
 | `NICOTES_BROWSER_EXTENSION` | `false` | Allow the sidebar extension to show Nicotes in a frame |
 | `SEARXNG_URL` | — | Research search via SearXNG (else OpenRouter web search) |
-| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT}_MODEL` | default model | Model per AI feature (overridable in Settings → AI models) |
+| `OPENROUTER_{IMPORT,ORGANIZE,RESEARCH,ASK,ASSISTANT,SUMMARY,LINKS,LAYOUT,IMAGES}_MODEL` | default model | Model per AI feature, `ASK` being the chat (overridable in Settings → AI models) |
+| `NICOTES_READ_IMAGES` | `false` | Default for reading images with AI for search (overridable in Settings) |
+| `TRANSCRIBE_URL`, `TRANSCRIBE_KEY`, `TRANSCRIBE_MODEL` | —, —, `whisper-1` | OpenAI-compatible transcription service for voice notes (overridable in Settings) |
 | `NICOTES_AI_COST_LIMIT` | `0.5` | USD limit per AI run |
 | `NICOTES_VERSION`, `NICOTES_BUILD_{REF,COMMIT,DATE}` | package.json version, — | Build information for Settings → About (set by CI as Docker build args) |
 | `NICOTES_SEMANTIC_INDEX` | `false` | Default for the semantic index (overridable in Settings) |
 | `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model for the semantic index |
 | `NICOTES_BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where backups are written |
 | `NICOTES_BACKUP_PATH` | `nicotes-backups` volume | Docker Compose only: host folder mounted at `/backups` |
+| `NICOTES_TAG`, `NICOTES_HTTP_PORT` | `main-latest`, `3000` | Docker Compose only: image tag to run and the port on the host |
+| `SEARXNG_SECRET` | — | Docker Compose only: secret of the optional SearXNG container (`compose.searxng.yml`) |
+| `WEB_DIR` | `../web/dist` | Built web app the server serves (development) |
 | `NICOTES_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups; `0` turns them off |
 | `NICOTES_BACKUP_KEEP_DAILY` / `NICOTES_BACKUP_KEEP_WEEKLY` | `7` / `4` | Retention: newest backup per day / per week |
 
@@ -445,7 +692,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    daily notes with a journal calendar.
 7. ✅ **Connections & insight** — connections panel (backlinks, unlinked mentions, related
    pages, AI link suggestions), tasks across pages with due dates, semantic index with
-   search by meaning, "Ask your notes" with citations, page summaries.
+   search by meaning, "Ask your notes" with citations (later replaced by the chat), page
+   summaries.
 8. ✅ **Hardening** — automatic backups with restore, Playwright end-to-end tests
    (`npm run e2e`), a model per AI feature.
 9. ✅ **Interactive views** — checklist, recipe with cook mode, guide, reader with
@@ -454,4 +702,13 @@ URL ─► crawl4ai /crawl (if configured) ─┐
     that page only, approved hunk by hunk; read scopes for the assistant and Ask; version
     history with diffs against the previous version and partial restore. GitLab CI builds
     images into the registry.
-11. **Later** — multi-user.
+11. **Reach & security** (in progress) — ✅ own model servers (`local:<id>`), ✅ API
+    tokens, ✅ calendar feed for tasks, ✅ two-step sign-in and passkeys, ✅ read-only shared
+    links, ✅ task reminders (web push, Telegram), ✅ Obsidian vault import, ✅ search inside
+    PDFs and images, ✅ voice notes with transcription, ✅ canvas pages (Excalidraw), ✅ a chat
+    assistant with tools for every feature (web and Telegram), ✅ adapters that log data
+    from other services (Home Assistant, weather), ✅ charts of tables in page views, ✅
+    recurring tasks, ✅ print and PDF, ✅ embedded pages and sections, ✅ offline reading and
+    editing.
+12. **Later** — multi-user; perhaps adapters for Withings or Google Health (they need an
+    OAuth app).

@@ -32,3 +32,20 @@ test('a checkbox typed in a page shows under Tasks, and ticking it there updates
   await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('checkbox', { name: `Reopen “${task}”` })).toBeChecked();
 });
+
+test('ticking off a recurring task in the editor adds the next one', async ({ page }) => {
+  const nb = await createNotebook(page, uniq('Tasks NB'));
+  const task = uniq('Water the plants');
+  const doc = await createPage(page, { notebookId: nb.id, title: uniq('Chores'), content: `- [ ] ${task} 🔁 every week 📅 2099-01-05` });
+
+  await page.goto(`/p/${doc.id}`);
+  await visualEditor(page).getByRole('checkbox').click();
+  await expect
+    .poll(async () => (await getPage(page, doc.id)).content)
+    .toBe(`- [ ] ${task} 🔁 every week 📅 2099-01-12\n- [x] ${task} 🔁 every week 📅 2099-01-05`);
+
+  // The task list shows the rule next to the open one.
+  await sidebar(page).getByRole('link', { name: 'Tasks', exact: true }).click();
+  const row = page.getByRole('listitem').filter({ has: page.getByRole('checkbox', { name: `Complete “${task}”` }) });
+  await expect(row).toContainText('every week');
+});

@@ -69,6 +69,12 @@
   color: var(--accent-strong);
 }
 
+.model-badge.local {
+  border-color: rgb(74 222 128 / 0.35);
+  background: rgb(74 222 128 / 0.1);
+  color: var(--success);
+}
+
 /* ---------- Panel ---------- */
 
 .model-picker-panel {

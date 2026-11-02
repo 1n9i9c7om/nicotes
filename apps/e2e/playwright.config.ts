@@ -3,7 +3,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, defineConfig, devices } from '@playwright/test';
-import { ADMIN } from './tests/fixtures';
+import { ADMIN, SECURE } from './tests/fixtures';
 
 const root = resolve(import.meta.dirname, '../..');
 const serverEntry = join(root, 'apps/server/dist/index.js');
@@ -36,10 +36,12 @@ if (!process.env.E2E_DATA_ROOT) {
   process.env.E2E_DATA_ROOT = dir;
   process.env.E2E_PORT = String(await freePort());
   process.env.E2E_SETUP_PORT = String(await freePort());
+  process.env.E2E_SECURITY_PORT = String(await freePort());
 }
 const dataRoot = process.env.E2E_DATA_ROOT;
 const port = Number(process.env.E2E_PORT);
 const setupPort = Number(process.env.E2E_SETUP_PORT);
+const securityPort = Number(process.env.E2E_SECURITY_PORT);
 
 /** No AI feature may reach OpenRouter (or anything else) from the tests. */
 const offline = {
@@ -82,7 +84,13 @@ export default defineConfig({
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel, storageState: join(import.meta.dirname, '.auth/user.json') },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel,
+        storageState: join(import.meta.dirname, '.auth/user.json'),
+        // A fake microphone (a beep) without a permission prompt, for voice notes.
+        launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+      },
       dependencies: ['setup'],
       testIgnore: /mobile\.spec\.ts/,
     },
@@ -124,6 +132,23 @@ export default defineConfig({
         DATA_DIR: join(dataRoot, 'setup'),
         NICOTES_ADMIN_USER: '',
         NICOTES_ADMIN_PASSWORD: '',
+      },
+    },
+    {
+      // Its own account for two-step sign-in and passkeys, which would get in the way of
+      // tests signing in elsewhere.
+      command: `node "${serverEntry}"`,
+      cwd: root,
+      url: `http://127.0.0.1:${securityPort}/api/health`,
+      reuseExistingServer: false,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        ...offline,
+        NICOTES_PORT: String(securityPort),
+        DATA_DIR: join(dataRoot, 'security'),
+        NICOTES_ADMIN_USER: SECURE.username,
+        NICOTES_ADMIN_PASSWORD: SECURE.password,
       },
     },
   ],

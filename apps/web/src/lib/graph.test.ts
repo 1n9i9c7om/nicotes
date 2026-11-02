@@ -10,6 +10,7 @@ const page = (id: string, notebookId: string, parentId: string | null = null, ta
   title: id,
   sortOrder: 0,
   tags,
+  canvas: false,
   createdAt: 0,
   updatedAt: 0,
 });

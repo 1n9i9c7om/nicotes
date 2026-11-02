@@ -31,6 +31,190 @@ export const sessions = sqliteTable(
   (t) => [index('sessions_user_idx').on(t.userId)],
 );
 
+/** Personal access tokens for scripts and other apps (`Authorization: Bearer nct_…`). */
+export const apiTokens = sqliteTable(
+  'api_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** SHA-256 of the token; the token itself is shown once, when it is created. */
+    tokenHash: text('token_hash').notNull().unique(),
+    /** Its last four characters, so a list can tell tokens apart. */
+    hint: text('hint').notNull(),
+    /** 'read' (GET only) or 'write'. */
+    scope: text('scope').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+    expiresAt: integer('expires_at'),
+  },
+  (t) => [index('api_tokens_user_idx').on(t.userId)],
+);
+
+/** Adapters: data from other services, written into a logbook page or the journal daily. */
+export const adapters = sqliteTable(
+  'adapters',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    name: text('name').notNull(),
+    /** JSON of the non-secret fields. */
+    config: text('config').notNull(),
+    /** JSON of the secret fields, encrypted with the server's secret key. */
+    secrets: text('secrets'),
+    /** 'logbook' or 'journal'. */
+    target: text('target').notNull(),
+    /** "HH:MM" in the account's time zone. */
+    dailyAt: text('daily_at').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /** The logbook page, made by the first run (set null when it is deleted). */
+    pageId: text('page_id').references(() => pages.id, { onDelete: 'set null' }),
+    lastRunAt: integer('last_run_at'),
+    /** The local date of the last scheduled run, so each day runs once. */
+    lastRunDate: text('last_run_date'),
+    lastStatus: text('last_status'),
+    lastMessage: text('last_message'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('adapters_user_idx').on(t.userId)],
+);
+
+/** The chat's conversations: one per channel (the web app, Telegram), until reset. */
+export const chatMessages = sqliteTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'web' or 'telegram'. */
+    channel: text('channel').notNull(),
+    /** 'user' or 'assistant'. */
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    /** JSON list of what the assistant did on the way (searched, created a task, …). */
+    actions: text('actions'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('chat_messages_user_idx').on(t.userId, t.channel, t.createdAt)],
+);
+
+/** Browsers and installed apps that receive reminders as push notifications. */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The push service's address for this browser; it identifies the subscription. */
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** "Android · Chrome", to tell devices apart. */
+    name: text('name').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastSentAt: integer('last_sent_at'),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId)],
+);
+
+/** Reminders already sent, so each goes out once; old entries are pruned. */
+export const remindersSent = sqliteTable(
+  'reminders_sent',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** "digest:2026-11-04" or "task:<hash of page, text and time>". */
+    key: text('key').notNull(),
+    sentAt: integer('sent_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+/** Read-only links to a page (optionally with its subpages) or a whole notebook. */
+export const shares = sqliteTable(
+  'shares',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'page' or 'notebook'. */
+    kind: text('kind').notNull(),
+    /** The page or notebook id; shares of deleted ones are removed with them. */
+    targetId: text('target_id').notNull(),
+    includeChildren: integer('include_children', { mode: 'boolean' }).notNull().default(false),
+    /** SHA-256 of the token in the link, for looking it up. */
+    tokenHash: text('token_hash').notNull().unique(),
+    /** The token encrypted, so the owner can copy the link again. */
+    token: text('token').notNull(),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at'),
+    viewCount: integer('view_count').notNull().default(0),
+    lastViewedAt: integer('last_viewed_at'),
+  },
+  (t) => [index('shares_user_idx').on(t.userId), index('shares_target_idx').on(t.targetId)],
+);
+
+/** Two-step sign-in with an authenticator app (TOTP); a row means it is on. */
+export const twoFactor = sqliteTable('two_factor', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** The shared secret, encrypted with the server's secret key. */
+  totpSecret: text('totp_secret').notNull(),
+  /** The last 30-second step a code was accepted for, so no code works twice. */
+  lastStep: integer('last_step').notNull().default(0),
+  enabledAt: integer('enabled_at').notNull(),
+});
+
+/** One-time codes for when the authenticator app is gone; used ones are deleted. */
+export const recoveryCodes = sqliteTable(
+  'recovery_codes',
+  {
+    /** SHA-256 of the normalised code. */
+    codeHash: text('code_hash').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('recovery_codes_user_idx').on(t.userId)],
+);
+
+/** WebAuthn credentials: sign-in with a fingerprint, face or device PIN. */
+export const passkeys = sqliteTable(
+  'passkeys',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** base64url, as the browser reports it. */
+    credentialId: text('credential_id').notNull().unique(),
+    /** base64url COSE public key. */
+    publicKey: text('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    /** JSON array of transports ("internal", "usb", "hybrid", …), a hint for the browser. */
+    transports: text('transports'),
+    /** The host name the passkey belongs to; it only signs in there. */
+    rpId: text('rp_id').notNull(),
+    /** Synced between devices (e.g. iCloud Keychain, Google Password Manager). */
+    backedUp: integer('backed_up', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+  },
+  (t) => [index('passkeys_user_idx').on(t.userId)],
+);
+
 export const notebooks = sqliteTable(
   'notebooks',
   {
@@ -140,6 +324,30 @@ export const attachments = sqliteTable(
 );
 
 /** Per-user key/value settings. Secret values are stored encrypted (see secrets.ts). */
+/**
+ * Text read from attachments for search: from PDFs and text files, and from images by an AI
+ * model when that is turned on. Mirrored into the FTS table `attachments_fts` by triggers.
+ */
+export const attachmentText = sqliteTable(
+  'attachment_text',
+  {
+    attachmentId: text('attachment_id')
+      .primaryKey()
+      .references(() => attachments.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'done' (text may be empty), 'skipped' (nothing to read, or images are off) or 'error'. */
+    status: text('status').notNull(),
+    /** 'pdf', 'text' or 'image'; null when skipped. */
+    source: text('source'),
+    text: text('text').notNull().default(''),
+    error: text('error'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('attachment_text_user_idx').on(t.userId, t.status)],
+);
+
 export const settings = sqliteTable(
   'settings',
   {

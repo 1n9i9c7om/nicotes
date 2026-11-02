@@ -36,5 +36,17 @@ when it can be reached over the internet:
   only use it if you trust everyone who can sign in.
 - **Browser extension.** `NICOTES_BROWSER_EXTENSION=true` lets browser extension pages show
   Nicotes in a frame. Leave it off if you don't use the sidebar.
-- **AI features.** With an OpenRouter or Routeway key, the text of the notes a feature works
-  on is sent to that service. Nothing is sent without a key.
+- **Sign-in.** Turn on two-step sign-in or passkeys (Settings → Sign-in security). API
+  tokens can be limited to reading and revoked at any time; calendar addresses and shared
+  links are secrets too, so turn off ones you no longer use.
+- **AI features.** A feature sends the text of the notes it works on to the service of the
+  model it uses: OpenRouter, Routeway or your own model server. The same goes for voice
+  notes (to the transcription service) and, if you turn it on, images (to the model that
+  reads them). Nothing is sent without such a service set up.
+- **Your own services.** The addresses of your own model server, transcription service and
+  adapters (such as Home Assistant) may be on your home network: whoever can sign in can
+  choose them, so only give accounts to people you trust. An adapter's stored token is only
+  sent to the address it was entered for.
+- **Offline notes.** The installed app keeps a copy of all notes in the browser on that
+  device (Settings → App; off by default in a browser tab). On a shared computer leave it
+  off; signing out deletes the copy.

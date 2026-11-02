@@ -1,6 +1,6 @@
 {
   "name": "@nicotes/server",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
@@ -9,6 +9,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "restore": "node --env-file-if-exists=../../.env --import tsx src/restore.ts",
+    "reset-2fa": "node --env-file-if-exists=../../.env --import tsx src/reset-2fa.ts",
     "test": "vitest run",
     "typecheck": "tsc -p .",
     "db:generate": "drizzle-kit generate"
@@ -17,18 +18,22 @@
     "@hono/node-server": "^2.1.5",
     "@mozilla/readability": "^0.6.0",
     "@nicotes/shared": "*",
+    "@simplewebauthn/server": "^14.0.3",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",
     "hono": "^4.13.13",
     "linkedom": "^0.18.13",
     "turndown": "^7.2.4",
-    "undici": "^8.12.3"
+    "undici": "^8.12.3",
+    "unpdf": "^2.1.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.5",
     "@types/turndown": "^5.0.6",
+    "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.11",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",

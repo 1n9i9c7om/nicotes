@@ -12,7 +12,10 @@ export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
  * The AI features. Each can use its own model; unset ones use the default model
  * (`openrouter.model`), so one cheap model can run everything.
  */
-export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout'] as const;
+/** OpenAI's name for Whisper; other services name their models differently. */
+export const DEFAULT_TRANSCRIBE_MODEL = 'whisper-1';
+
+export const AI_TASKS = ['import', 'organize', 'research', 'ask', 'assistant', 'summary', 'links', 'layout', 'images'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
@@ -29,8 +32,8 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
     hint: 'Plans searches, reads sources and writes a cited note: several calls per run, the most demanding task.',
   },
   ask: {
-    label: 'Ask your notes',
-    hint: 'Answers from your notes with citations. Needs a model that sticks to the given sources.',
+    label: 'Chat',
+    hint: 'The chat (in Nicotes and Telegram) looks things up and makes changes with tools, a few calls per message. Needs a model that can use tools (marked “tools”).',
   },
   assistant: {
     label: 'Page assistant',
@@ -42,19 +45,30 @@ export const AI_TASK_INFO: Record<AiTask, { label: string; hint: string }> = {
     label: 'Page layouts',
     hint: 'Recognises recipes, checklists, guides and stories for the interactive view. One short call per page.',
   },
+  images: {
+    label: 'Reading images',
+    hint: 'Reads the text in images, or says what they show, so search finds them (when turned on under Search). Needs a model that accepts images; one call per image.',
+  },
 };
 
-/** Services that run the chat models. Embeddings (semantic index) always use OpenRouter. */
-export const AI_PROVIDERS = ['openrouter', 'routeway'] as const;
+/**
+ * Services that run the models: two hosted ones, and your own OpenAI-compatible server
+ * (Ollama, LM Studio, LocalAI, vLLM …). Embeddings run on OpenRouter or your own server.
+ */
+export const AI_PROVIDERS = ['openrouter', 'routeway', 'local'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
-export const AI_PROVIDER_LABELS: Record<AiProvider, string> = { openrouter: 'OpenRouter', routeway: 'Routeway' };
+export const AI_PROVIDER_LABELS: Record<AiProvider, string> = { openrouter: 'OpenRouter', routeway: 'Routeway', local: 'Own server' };
 
-/** Routeway models are stored as "routeway:<id>"; every other model id is an OpenRouter one. */
+/** Routeway models are stored as "routeway:<id>", your own server's as "local:<id>"; every other id is an OpenRouter one. */
 export const ROUTEWAY_PREFIX = 'routeway:';
-export const providerOf = (model: string): AiProvider => (model.startsWith(ROUTEWAY_PREFIX) ? 'routeway' : 'openrouter');
-/** The id the provider itself uses (without the "routeway:" prefix). */
-export const providerModelId = (model: string) =>
-  model.startsWith(ROUTEWAY_PREFIX) ? model.slice(ROUTEWAY_PREFIX.length) : model;
+export const LOCAL_PREFIX = 'local:';
+export const providerOf = (model: string): AiProvider =>
+  model.startsWith(ROUTEWAY_PREFIX) ? 'routeway' : model.startsWith(LOCAL_PREFIX) ? 'local' : 'openrouter';
+/** The id the provider itself uses (without the "routeway:" or "local:" prefix). */
+export const providerModelId = (model: string) => {
+  for (const prefix of [ROUTEWAY_PREFIX, LOCAL_PREFIX]) if (model.startsWith(prefix)) return model.slice(prefix.length);
+  return model;
+};
 
 /** Default spending limit per AI job (research run, organize run), in USD. */
 export const DEFAULT_AI_COST_LIMIT = 0.5;
@@ -71,6 +85,13 @@ export interface Settings {
     modelSource: SettingSource;
   };
   routeway: {
+    apiKeySet: boolean;
+    apiKeySource: SettingSource;
+  };
+  /** Your own OpenAI-compatible model server; most need no key. */
+  local: {
+    url: string | null;
+    urlSource: SettingSource;
     apiKeySet: boolean;
     apiKeySource: SettingSource;
   };
@@ -98,6 +119,28 @@ export interface Settings {
     excludeTags: string[];
     excludeTagsSource: SettingSource;
   };
+  transcription: {
+    /** An OpenAI-compatible API with /audio/transcriptions (ending in /v1); null when off. */
+    url: string | null;
+    urlSource: SettingSource;
+    keySet: boolean;
+    keySource: SettingSource;
+    model: string;
+    modelSource: SettingSource;
+  };
+  search: {
+    /** Opt-in: images are sent to the "Reading images" model, which writes down their text. */
+    readImages: boolean;
+    readImagesSource: SettingSource;
+  };
+  reminders: {
+    /** "HH:MM": a summary of the day's tasks at that time; null when off. */
+    digestTime: string | null;
+    /** IANA time zone reminder times are in, e.g. "Europe/Berlin". */
+    timeZone: string | null;
+    telegramTokenSet: boolean;
+    telegramTokenSource: SettingSource;
+  };
   semantic: {
     /** Opt-in: indexing sends all note text to OpenRouter for embeddings. */
     enabled: boolean;
@@ -108,6 +151,15 @@ export interface Settings {
 }
 
 const optionalSecret = z.string().trim().max(500).nullable().optional();
+
+function isTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const optionalUrl = z
   .string()
   .trim()
@@ -126,6 +178,8 @@ export const settingsUpdateSchema = z.object({
   openrouterApiKey: optionalSecret,
   openrouterModel: modelId,
   routewayApiKey: optionalSecret,
+  localAiUrl: optionalUrl,
+  localAiKey: optionalSecret,
   crawl4aiUrl: optionalUrl,
   crawl4aiToken: optionalSecret,
   importModel: modelId,
@@ -148,6 +202,23 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
+  reminderDigestTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected a time like 08:00')
+    .nullable()
+    .optional(),
+  reminderTimeZone: z
+    .string()
+    .max(64)
+    .refine(isTimeZone, 'Unknown time zone')
+    .nullable()
+    .optional(),
+  telegramBotToken: optionalSecret,
+  imagesModel: modelId,
+  readImages: z.boolean().nullable().optional(),
+  transcribeUrl: optionalUrl,
+  transcribeKey: optionalSecret,
+  transcribeModel: z.string().trim().max(200).nullable().optional(),
 });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
 
@@ -157,7 +228,7 @@ export interface ConnectionCheck {
 }
 
 export interface ModelInfo {
-  /** The id as stored in settings ("routeway:" prefixed for Routeway). */
+  /** The id as stored in settings ("routeway:" / "local:" prefixed for Routeway / your own server). */
   id: string;
   name: string;
   provider: AiProvider;

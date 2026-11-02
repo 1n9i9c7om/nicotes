@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyHunks, diffHunks, diffSegments } from './diff';
+import { applyHunks, diffHunks, diffSegments, mergeText } from './diff';
 
 const before = ['# Shopping', '', '- apples', '- pears', '- milk', '', 'Notes', 'end'].join('\n');
 const after = ['# Shopping list', '', '- apples', '- milk', '- bread', '', 'Notes', 'end', 'PS'].join('\n');
@@ -77,5 +77,23 @@ describe('diffSegments', () => {
   it('does not collapse short stretches', () => {
     const segments = diffSegments('a\nb\nc', diffHunks('a\nb\nc', 'a\nB\nc'), 3);
     expect(segments.map((s) => s.type)).toEqual(['same', 'hunk', 'same']);
+  });
+});
+
+describe('mergeText', () => {
+  const base = ['# Plan', 'one', 'two', 'three', 'four'].join('\n');
+  it('combines edits of different lines', () => {
+    const mine = base.replace('two', 'TWO');
+    const theirs = base.replace('four', 'four\nfive');
+    expect(mergeText(base, mine, theirs)).toBe(['# Plan', 'one', 'TWO', 'three', 'four', 'five'].join('\n'));
+  });
+  it('takes one side when the other did not change, or both made the same edit', () => {
+    expect(mergeText(base, base, 'x')).toBe('x');
+    expect(mergeText(base, 'x', base)).toBe('x');
+    expect(mergeText(base, base.replace('one', '1'), base.replace('one', '1').replace('four', '4'))).toBe(base.replace('one', '1').replace('four', '4'));
+  });
+  it('gives up when both changed the same lines', () => {
+    expect(mergeText(base, base.replace('two', 'mine'), base.replace('two', 'theirs'))).toBeNull();
+    expect(mergeText(base, base.replace('one\n', 'one\nmine\n'), base.replace('one\n', 'one\ntheirs\n'))).toBeNull();
   });
 });

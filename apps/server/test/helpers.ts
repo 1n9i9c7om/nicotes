@@ -37,10 +37,39 @@ export function setup(options: Partial<AppOptions> = {}) {
     return { status: res.status, body: (await res.json()) as { url: string; mime: string; size: number } };
   }
 
+  /** Multipart upload of one file to any route, e.g. a vault zip. */
+  async function postFile<T = unknown>(path: string, file: File) {
+    const form = new FormData();
+    form.set('file', file);
+    const res = await app.request(path, { method: 'POST', headers: { cookie, 'x-requested-with': 'nicotes' }, body: form });
+    return { status: res.status, body: (await res.json()) as T };
+  }
+
   const raw = (path: string) => app.request(path, { headers: { cookie } });
+  /** A GET with a Range header, as media players send. */
+  const rawRange = (path: string, range: string) => app.request(path, { headers: { cookie, range } });
   /** POSTs JSON and returns the raw response (e.g. a server-sent event stream). */
   const rawPost = (path: string, body: unknown) =>
     app.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  return { db, jobs: app.jobs, semantic: app.semantic, backups: app.backups, call, upload, raw, rawPost, logout: () => (cookie = '') };
+  /** A request without the session cookie, e.g. with an API token. */
+  const request = (path: string, init?: RequestInit) => app.request(path, init);
+
+  return {
+    db,
+    jobs: app.jobs,
+    semantic: app.semantic,
+    backups: app.backups,
+    reminders: app.reminders,
+    attachmentText: app.attachmentText,
+    adapters: app.adapters,
+    call,
+    upload,
+    postFile,
+    raw,
+    rawRange,
+    rawPost,
+    request,
+    logout: () => (cookie = ''),
+  };
 }

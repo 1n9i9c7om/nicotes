@@ -26,7 +26,7 @@ test.describe('first run', () => {
 
     await page.getByLabel('Username').fill('owner');
     await page.getByLabel('Password').fill('first-run-password');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Hello, owner' })).toBeVisible();
   });
 });
@@ -40,11 +40,11 @@ test.describe('login', () => {
 
     await page.getByLabel('Username').fill(ADMIN.username);
     await page.getByLabel('Password').fill('not-the-password');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByText('Wrong username or password')).toBeVisible();
 
     await page.getByLabel('Password').fill(ADMIN.password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('heading', { name: `Hello, ${ADMIN.username}` })).toBeVisible();
 
     await page.reload();

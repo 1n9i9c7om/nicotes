@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { pageBlocks, SUB_LIST, subLists, tableRows, type PageBlock } from './blocks';
 import { guessLanguage } from './language';
+import { tableChart } from './charts';
 import { findServings, parseQuantity } from './recipe';
 
 /**
@@ -10,7 +11,7 @@ import { findServings, parseQuantity } from './recipe';
  * `pageBlocks`) play which part; the views render and edit those blocks themselves.
  */
 
-export const LAYOUT_TYPES = ['document', 'checklist', 'recipe', 'steps', 'reader'] as const;
+export const LAYOUT_TYPES = ['document', 'checklist', 'recipe', 'steps', 'reader', 'data'] as const;
 export type LayoutType = (typeof LAYOUT_TYPES)[number];
 
 export const LAYOUT_INFO: Record<LayoutType, { label: string; hint: string }> = {
@@ -19,6 +20,7 @@ export const LAYOUT_INFO: Record<LayoutType, { label: string; hint: string }> = 
   recipe: { label: 'Recipe', hint: 'Servings, ingredients and a step-by-step cook mode' },
   steps: { label: 'Guide', hint: 'One step at a time, with timers' },
   reader: { label: 'Reader', hint: 'Read aloud with the current sentence highlighted' },
+  data: { label: 'Charts', hint: 'Tables of numbers as charts, such as logbooks' },
 };
 
 export const layoutSpecSchema = z.object({
@@ -33,6 +35,8 @@ export const layoutSpecSchema = z.object({
   steps: z.array(z.string().max(300)).max(200),
   /** Checklist: the lists that make up the checklist. */
   lists: z.array(z.string().max(300)).max(100),
+  /** Charts: the tables to chart (specs saved before charts existed have none). */
+  tables: z.array(z.string().max(300)).max(50).default([]),
 });
 export type LayoutSpec = z.infer<typeof layoutSpecSchema>;
 
@@ -68,6 +72,7 @@ export const emptySpec = (type: LayoutType, language: string | null = null): Lay
   ingredients: [],
   steps: [],
   lists: [],
+  tables: [],
 });
 
 /**
@@ -122,13 +127,20 @@ export function guessLayout(markdown: string, tags: string[] = [], forced?: Layo
     return { ...base, type: 'steps' as const, steps: keys(chosen), confidence };
   };
 
+  // Tables of numbers (logbooks, measurements) with at least three rows.
+  const chartable = blocks.filter((b): b is Extract<PageBlock, { text: string }> => b.kind === 'table' && !!tableChart(b.text));
+  const dataTables = chartable.filter((b) => tableRows(b.text).rows.length >= 3);
+  const data = (confidence: number) => ({ ...base, type: 'data' as const, tables: keys(dataTables.length ? dataTables : chartable), confidence });
+
   if (forced === 'recipe') return recipe(1);
+  if (forced === 'data') return data(1);
   if (forced === 'checklist') return checklist(1);
   if (forced === 'steps') return steps(1);
   if (forced) return { ...base, type: forced, confidence: 1 };
 
   if (ingredientBlocks.length && (stepBlocks.length || tags.includes('recipe'))) return recipe(0.9);
   if (tasks.length >= 2 && tasks.length >= items.length * 0.6 && listChars >= proseChars * 0.5) return checklist(0.85);
+  if (dataTables.length && proseChars < 1500 && listChars < 1500) return data(0.85);
   if (ingredientBlocks.length) return recipe(0.6);
   if (tags.includes('recipe') && lists.length) return recipe(0.5);
   if (stepBlocks.length) return steps(0.75);
@@ -143,5 +155,5 @@ export function guessLayout(markdown: string, tags: string[] = [], forced?: Layo
 /** Whether every block a spec refers to still exists in the page. */
 export function specMatches(spec: LayoutSpec, blocks: PageBlock[]): boolean {
   const present = new Set([...blocks, ...subLists(blocks)].map((b) => b.key));
-  return [...spec.ingredients, ...spec.steps, ...spec.lists].every((key) => present.has(key));
+  return [...spec.ingredients, ...spec.steps, ...spec.lists, ...spec.tables].every((key) => present.has(key));
 }

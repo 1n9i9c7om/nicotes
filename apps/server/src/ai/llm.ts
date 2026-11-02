@@ -19,19 +19,32 @@ export const addUsage = (a: Usage, b: Usage): Usage => ({
 
 export const emptyUsage = (): Usage => ({ promptTokens: 0, completionTokens: 0, cost: 0 });
 
-/** API keys per service; a model's id decides which one is used (see `providerOf`). */
-export type ProviderKeys = Record<AiProvider, string | null>;
+/**
+ * How to reach each service: an API key for the hosted ones, an address (and a key, if it
+ * wants one) for your own server. A model's id decides which one is used (see `providerOf`).
+ */
+export interface ProviderKeys {
+  openrouter: string | null;
+  routeway: string | null;
+  local: { url: string; key: string | null } | null;
+}
 
-/** Whether the service that runs `model` has a key. */
+/** Whether the service that runs `model` is set up. */
 export const hasKeyFor = (keys: ProviderKeys, model: string) => !!keys[providerOf(model)];
 
 /** E.g. "Asking needs a Routeway API key — add one under Settings." */
-export const missingKeyMessage = (what: string, model: string) =>
-  `${what} needs ${providerOf(model) === 'routeway' ? 'a Routeway' : 'an OpenRouter'} API key — add one under Settings.`;
+export function missingKeyMessage(what: string, model: string) {
+  const provider = providerOf(model);
+  if (provider === 'local') return `${what} needs the address of your own model server — add it under Settings.`;
+  return `${what} needs ${provider === 'routeway' ? 'a Routeway' : 'an OpenRouter'} API key — add one under Settings.`;
+}
 
-interface ChatMessage {
+/** Text, or text and images (as data: URLs) for models that accept images. */
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+
+export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentPart[];
 }
 
 export interface Citation {
@@ -70,24 +83,48 @@ export interface ChatOptions {
   signal?: AbortSignal;
 }
 
-const ENDPOINTS: Record<AiProvider, string> = {
+const ENDPOINTS: Record<Exclude<AiProvider, 'local'>, string> = {
   openrouter: 'https://openrouter.ai/api/v1/chat/completions',
   routeway: 'https://api.routeway.ai/v1/chat/completions',
 };
 
-/** The service that runs a model, its key and the model id it expects. */
-function route(opts: Pick<ChatOptions, 'keys' | 'model' | 'webResults'>) {
+interface Route {
+  provider: AiProvider;
+  label: string;
+  url: string;
+  /** Your own server may need none. */
+  key: string | null;
+  model: string;
+}
+
+/** The service that runs a model, where to send it, its key and the model id it expects. */
+function route(opts: Pick<ChatOptions, 'keys' | 'model' | 'webResults'>): Route {
   const provider = providerOf(opts.model);
+  const id = providerModelId(opts.model);
+  if (provider === 'local') {
+    const local = opts.keys.local;
+    if (!local) throw new LlmError('No address of your own model server configured (Settings)');
+    if (opts.webResults) {
+      throw new LlmError('Your own model server cannot search the web: set up SearXNG under Settings, or research from the model’s own knowledge');
+    }
+    return { provider, label: 'your model server', url: `${local.url}/chat/completions`, key: local.key, model: id };
+  }
   const label = AI_PROVIDER_LABELS[provider];
   const key = opts.keys[provider];
   if (!key) throw new LlmError(`No ${label} API key configured (Settings)`);
-  const id = providerModelId(opts.model);
-  return { provider, label, key, model: provider === 'routeway' && opts.webResults ? `${id}@online` : id };
+  return { provider, label, url: ENDPOINTS[provider], key, model: provider === 'routeway' && opts.webResults ? `${id}@online` : id };
 }
 
-type Route = ReturnType<typeof route>;
+const headersFor = (r: Route) => ({
+  ...(r.key ? { authorization: `Bearer ${r.key}` } : {}),
+  'content-type': 'application/json',
+  'x-title': 'Nicotes',
+});
 
-/** The request body; the two services differ in reasoning, usage and web search options. */
+/**
+ * The request body. OpenRouter has its own reasoning, usage and web search options;
+ * Routeway and your own server take the plain OpenAI ones.
+ */
 function requestBody(r: Route, opts: ChatOptions, stream: boolean) {
   const common = {
     model: r.model,
@@ -120,7 +157,24 @@ const withoutReasoning = (body: object) => {
   return rest;
 };
 
+/**
+ * A simpler request for a model that refused one: without reasoning options, and without
+ * JSON mode if that was the problem (some servers only take JSON schemas). Null if the
+ * refusal was about something else.
+ */
+function fallbackBody(body: object, message: string | undefined): object | null {
+  if (/reasoning|effort/i.test(message ?? '')) return withoutReasoning(body);
+  if (/response_format|json/i.test(message ?? '') && 'response_format' in body) {
+    const { response_format: _, ...rest } = withoutReasoning(body) as Record<string, unknown>;
+    return rest;
+  }
+  return null;
+}
+
 function httpError(r: Route, status: number, message?: string): LlmError {
+  if (status === 404 && r.provider === 'local') {
+    return new LlmError(`Your model server does not know the model "${r.model}" (or its address is wrong): ${message ?? 'HTTP 404'}`);
+  }
   if (status === 401) return new LlmError(`${r.label} rejected the API key`);
   if (status === 402) return new LlmError(`Your ${r.label} credits are used up`);
   if (status === 429) return new LlmError(`${r.label} rate limit reached, try again shortly`);
@@ -148,10 +202,10 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
 
   const send = async (payload: object) => {
     try {
-      return await fetch(ENDPOINTS[r.provider], {
+      return await fetch(r.url, {
         method: 'POST',
         signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000),
-        headers: { authorization: `Bearer ${r.key}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
+        headers: headersFor(r),
         body: JSON.stringify(payload),
       });
     } catch (error) {
@@ -163,8 +217,9 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
 
   let res = await send(body);
   let data = (await res.json().catch(() => ({}))) as CompletionResponse;
-  if (res.status === 400 && /reasoning|effort/i.test(data.error?.message ?? '')) {
-    res = await send(withoutReasoning(body));
+  const simpler = res.status === 400 ? fallbackBody(body, data.error?.message) : null;
+  if (simpler) {
+    res = await send(simpler);
     data = (await res.json().catch(() => ({}))) as CompletionResponse;
   }
   if (!res.ok) throw httpError(r, res.status, data.error?.message);
@@ -175,6 +230,86 @@ export async function chat(opts: ChatOptions): Promise<{ content: string; usage:
     citations: (message?.annotations ?? [])
       .filter((a) => a.type === 'url_citation' && a.url_citation?.url)
       .map((a) => ({ url: a.url_citation!.url, title: a.url_citation!.title ?? '', content: a.url_citation!.content ?? '' })),
+  };
+}
+
+/** A function the model may call, its parameters described by a JSON schema. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: object;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  /** JSON, as the model wrote it (may be invalid). */
+  arguments: string;
+}
+
+/** A conversation with tools: the model's calls, and their results sent back. */
+export type ToolMessage =
+  | ChatMessage
+  | { role: 'assistant'; content: string | null; tool_calls: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
+
+interface ToolCompletion {
+  choices?: { message?: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments?: string } }[] } }[];
+  usage?: CompletionResponse['usage'];
+  error?: { message?: string };
+}
+
+/**
+ * One completion that may call tools. Not streamed: calls arrive as a whole, and the caller
+ * runs them and asks again with their results.
+ */
+export async function chatWithTools(
+  opts: Omit<ChatOptions, 'messages' | 'json' | 'webResults'> & {
+    messages: ToolMessage[];
+    tools: ToolSpec[];
+    /** "none": answer now, no more calls (the tools stay listed, as earlier calls refer to them). */
+    toolChoice?: 'auto' | 'none';
+  },
+): Promise<{ content: string; toolCalls: ToolCall[]; usage: Usage }> {
+  const r = route(opts);
+  const body = {
+    ...requestBody(r, { ...opts, messages: opts.messages as ChatMessage[] }, false),
+    tools: opts.tools.map((t) => ({ type: 'function', function: t })),
+    tool_choice: opts.toolChoice ?? 'auto',
+  };
+  const send = async (payload: object) => {
+    try {
+      return await fetch(r.url, {
+        method: 'POST',
+        signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(180_000)]) : AbortSignal.timeout(180_000),
+        headers: headersFor(r),
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (opts.signal?.aborted) throw new LlmError('Cancelled');
+      const timeout = (error as Error).name === 'TimeoutError';
+      throw new LlmError(timeout ? 'The model took too long to answer' : `Cannot reach ${r.label}: ${(error as Error).message}`);
+    }
+  };
+  let res = await send(body);
+  let data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  const simpler = res.status === 400 ? fallbackBody(body, data.error?.message) : null;
+  if (simpler) {
+    res = await send(simpler);
+    data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  }
+  if (!res.ok) {
+    // OpenRouter answers 404 when no provider of the model supports tools.
+    if (/tool/i.test(data.error?.message ?? '') && (res.status === 400 || res.status === 404)) {
+      throw new LlmError(`The model ${opts.model} cannot use tools, which the chat needs: choose another one for Chat under Settings → AI models`);
+    }
+    throw httpError(r, res.status, data.error?.message);
+  }
+  const message = data.choices?.[0]?.message;
+  return {
+    content: message?.content ?? '',
+    toolCalls: (message?.tool_calls ?? []).map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments ?? '{}' })),
+    usage: await usageOf(r, opts.model, data.usage),
   };
 }
 
@@ -221,20 +356,15 @@ async function readStream(
   alive: () => void,
   onDelta: (text: string) => void,
 ): Promise<{ content: string; usage: Usage }> {
-  const send = (payload: object) =>
-    fetch(ENDPOINTS[r.provider], {
-      method: 'POST',
-      signal,
-      headers: { authorization: `Bearer ${r.key}`, 'content-type': 'application/json', 'x-title': 'Nicotes' },
-      body: JSON.stringify(payload),
-    });
+  const send = (payload: object) => fetch(r.url, { method: 'POST', signal, headers: headersFor(r), body: JSON.stringify(payload) });
 
   let res: Response;
   try {
     res = await send(body);
     if (res.status === 400) {
       const error = (await res.clone().json().catch(() => ({}))) as CompletionResponse;
-      if (/reasoning|effort/i.test(error.error?.message ?? '')) res = await send(withoutReasoning(body));
+      const simpler = fallbackBody(body, error.error?.message);
+      if (simpler) res = await send(simpler);
     }
   } catch (error) {
     if (opts.signal?.aborted || (error as Error).name === 'TimeoutError') throw error;

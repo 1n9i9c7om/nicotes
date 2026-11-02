@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AskSource } from './insight';
+import type { NoteSource } from './insight';
 
 // ---------- Read access for AI features ----------
 
@@ -50,7 +50,7 @@ export interface WebSource {
 export type AssistantEvent =
   | { type: 'step'; text: string }
   /** Notes (numbered [1], [2], …) and web sources ([W1], …) the answer may draw on. */
-  | { type: 'context'; notes: AskSource[]; web: WebSource[]; /** Why the web research came back empty. */ webError?: string }
+  | { type: 'context'; notes: NoteSource[]; web: WebSource[]; /** Why the web research came back empty. */ webError?: string }
   | { type: 'delta'; text: string }
   /** The whole page as the assistant would write it; the client shows it as a diff to approve. */
   | { type: 'proposal'; content: string }

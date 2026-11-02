@@ -117,7 +117,7 @@ describe('LLM client', () => {
         );
       }),
     );
-    const result = await completeJson({ keys: { openrouter: 'k', routeway: null }, model: 'm', system: 's', user: 'u', schema: z.object({ title: z.string() }) });
+    const result = await completeJson({ keys: { openrouter: 'k', routeway: null, local: null }, model: 'm', system: 's', user: 'u', schema: z.object({ title: z.string() }) });
     expect(result.data).toEqual({ title: 'Fixed' });
     expect(result.usage).toEqual({ promptTokens: 20, completionTokens: 10, cost: 0 });
     expect((bodies[1] as { messages: unknown[] }).messages).toHaveLength(4);

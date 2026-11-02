@@ -10,10 +10,12 @@ import {
   Eye,
   EyeOff,
   FolderInput,
+  Globe,
   History,
   LayoutTemplate,
   Link2,
   Loader2,
+  Printer,
   Sparkles,
   Wand2,
   Waypoints,
@@ -22,6 +24,7 @@ import {
 import {
   appendSeeAlso,
   hasCitations,
+  isCanvas,
   findPhrase,
   linkFirstMention,
   linkMention,
@@ -40,12 +43,15 @@ import { HistoryDialog } from '../components/HistoryDialog';
 import { PageLayout } from '../components/layouts/PageLayout';
 import { Menu } from '../components/Menu';
 import { MoveDialog } from '../components/MoveDialog';
+import { ShareDialog } from '../components/ShareDialog';
 import { TagEditor } from '../components/TagEditor';
 import { ApiError, uploadFile } from '../lib/api';
 import { useLinkBridge } from '../lib/links';
+import { linksShowing, useShares } from '../lib/shares';
 import { useLocalState } from '../lib/storage';
 import {
   useApplyChanges,
+  useLoadEmbed,
   useNotebooks,
   usePage,
   usePages,
@@ -56,7 +62,12 @@ import {
 } from '../lib/queries';
 import { inheritedTagMap } from '../lib/tags';
 import { ancestors, buildTree, displayTitle } from '../lib/tree';
+import { loadCanvasEditor } from '../lib/excalidraw';
+import { printPage } from '../lib/print';
 import { NotFound } from './NotFound';
+
+// Excalidraw is large: canvas pages load it on demand.
+const CanvasEditor = lazy(loadCanvasEditor);
 
 type Mode = 'visual' | 'source';
 /** Navigation state set when a page was just created: open it directly and focus the title. */
@@ -93,6 +104,8 @@ function PageEditor({ page }: { page: Page }) {
   // The interactive view is remembered per page (a recipe opens in cook view, notes in the editor).
   const [viewPages, setViewPages] = useLocalState<string[]>('nicotes.viewPages', []);
   const viewing = viewPages.includes(page.id);
+  // A drawing rather than text: shown by the canvas editor, without the text tools.
+  const canvas = isCanvas(content);
   const showView = (on: boolean) =>
     setViewPages((list) => (on ? [...list.filter((id) => id !== page.id), page.id].slice(-500) : list.filter((id) => id !== page.id)));
   const editIn = (next: Mode) => {
@@ -108,6 +121,7 @@ function PageEditor({ page }: { page: Page }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useLocalState('nicotes.assistantOpen', false);
   // Purely visual: source citations ("gooey 2, 3, 7.") are hidden, the text keeps them.
   const [hideSources, setHideSources] = useLocalState('nicotes.hideSources', false);
@@ -120,7 +134,8 @@ function PageEditor({ page }: { page: Page }) {
   const bridge = useLinkBridge(notebookId);
   const upload = useCallback((file: File) => uploadFile(file, page.id), [page.id]);
   const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
-  const env = { bridge, upload, onUploadError };
+  const loadPage = useLoadEmbed();
+  const env = { bridge, upload, onUploadError, loadPage };
 
   const tagList = useTags();
   const inherited = useMemo(
@@ -133,6 +148,8 @@ function PageEditor({ page }: { page: Page }) {
   );
   const notebook = notebooks.data?.find((n) => n.id === notebookId);
   const trail = ancestors(tree, page.id);
+  const shares = useShares();
+  const sharedBy = linksShowing(shares.data ?? [], { id: page.id, notebookId }, trail.map((p) => p.id));
 
   const linkHere = (mention: OutgoingMention) => {
     const next = linkFirstMention(content, mention.title, mention.target);
@@ -172,6 +189,19 @@ function PageEditor({ page }: { page: Page }) {
     // Drop the handed-over copy from history so Back/Forward later loads fresh data.
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state]);
+
+  // Ctrl+P prints the page the way the menu does (a canvas needs preparing first).
+  const print = () => void printPage(displayTitle(title));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        print();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   // Auto-grow the title textarea.
   useEffect(() => {
@@ -214,12 +244,23 @@ function PageEditor({ page }: { page: Page }) {
         </nav>
         <div className="page-bar-actions">
           <SaveIndicator status={status} />
+          {sharedBy.length > 0 && (
+            <button
+              className="btn btn-sm shared-toggle"
+              title="Anyone with a link can read this page"
+              onClick={() => setSharing(true)}
+            >
+              <Globe size={15} /> <span>Shared</span>
+            </button>
+          )}
           <Menu
             label="Page actions"
             items={[
               { label: 'Version history', icon: <History size={15} />, onSelect: () => setHistoryOpen(true) },
               { label: 'Show in graph', icon: <Waypoints size={15} />, onSelect: () => navigate(`/graph?focus=${page.id}&depth=2`) },
               { label: 'Move to…', icon: <FolderInput size={15} />, onSelect: () => setMoving(true) },
+              { label: 'Share…', icon: <Globe size={15} />, onSelect: () => setSharing(true) },
+              { label: 'Print or save as PDF', icon: <Printer size={15} />, onSelect: print },
               {
                 label: 'Summarize with AI',
                 icon: <Sparkles size={15} />,
@@ -234,7 +275,7 @@ function PageEditor({ page }: { page: Page }) {
               },
             ]}
           />
-          {cited && (viewing || mode === 'visual') && (
+          {!canvas && cited && (viewing || mode === 'visual') && (
             <button
               className={`btn btn-sm sources-toggle${hideSources ? ' active' : ''}`}
               aria-pressed={hideSources}
@@ -244,15 +285,17 @@ function PageEditor({ page }: { page: Page }) {
               <EyeOff size={15} /> <span>Hide sources</span>
             </button>
           )}
-          <button
-            className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
-            aria-pressed={assistantOpen}
-            title="Chat about this page and let AI propose changes"
-            onClick={() => setAssistantOpen(!assistantOpen)}
-          >
-            <Bot size={15} /> <span>Assistant</span>
-          </button>
-          <div className="segmented" role="group" aria-label="Editor mode">
+          {!canvas && (
+            <button
+              className={`btn btn-sm assistant-toggle${assistantOpen ? ' active' : ''}`}
+              aria-pressed={assistantOpen}
+              title="Chat about this page and let AI propose changes"
+              onClick={() => setAssistantOpen(!assistantOpen)}
+            >
+              <Bot size={15} /> <span>Assistant</span>
+            </button>
+          )}
+          {!canvas && <div className="segmented" role="group" aria-label="Editor mode">
             <button
               className={!viewing && mode === 'visual' ? 'active' : ''}
               aria-pressed={!viewing && mode === 'visual'}
@@ -275,7 +318,7 @@ function PageEditor({ page }: { page: Page }) {
             >
               <LayoutTemplate size={15} /> <span>View</span>
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -304,8 +347,13 @@ function PageEditor({ page }: { page: Page }) {
 
       <div className="page-split">
         <div className="page-main">
-          <div ref={body} className={`page-body${hideSources ? ' hide-sources' : ''}`} style={pageWidth ? { maxWidth: pageWidth } : undefined}>
-            <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />
+          <div
+            ref={body}
+            className={`page-body${hideSources ? ' hide-sources' : ''}${canvas ? ' canvas-body' : ''}`}
+            style={pageWidth && !canvas ? { maxWidth: pageWidth } : undefined}
+          >
+            {!canvas && <PageWidthHandles body={body} width={pageWidth} onChange={setPageWidth} />}
+            <h1 className="print-title">{displayTitle(title)}</h1>
             <textarea
               ref={titleInput}
               className="page-title"
@@ -323,8 +371,12 @@ function PageEditor({ page }: { page: Page }) {
               }}
             />
             <TagEditor pageId={page.id} tags={summary?.tags ?? page.tags} inherited={inherited} />
-            <PageSummary pageId={page.id} version={version} summarize={summarize} />
-            {viewing ? (
+            {!canvas && <PageSummary pageId={page.id} version={version} summarize={summarize} />}
+            {canvas ? (
+              <Suspense fallback={<div className="canvas-host canvas-loading" aria-busy="true" />}>
+                <CanvasEditor key={`c${revision}`} content={content} onChange={setContent} upload={upload} onOpenLink={(t) => bridge.open(t)} />
+              </Suspense>
+            ) : viewing ? (
               <PageLayout
                 pageId={page.id}
                 notebookId={notebookId}
@@ -355,7 +407,7 @@ function PageEditor({ page }: { page: Page }) {
             <LocalGraph pageId={page.id} notebookId={notebookId} />
           </div>
         </div>
-        {assistantOpen && (
+        {assistantOpen && !canvas && (
           <PageAssistant
             pageId={page.id}
             title={title}
@@ -367,6 +419,18 @@ function PageEditor({ page }: { page: Page }) {
       </div>
 
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
+      {sharing && (
+        <ShareDialog
+          kind="page"
+          targetId={page.id}
+          title={displayTitle(title)}
+          hasChildren={(tree.children.get(page.id)?.length ?? 0) > 0}
+          inherited={sharedBy
+            .filter((s) => s.targetId !== page.id)
+            .map((share) => ({ share, title: share.kind === 'notebook' ? (notebook?.title ?? '') : displayTitle(tree.byId.get(share.targetId)?.title) }))}
+          onClose={() => setSharing(false)}
+        />
+      )}
       {historyOpen && (
         <HistoryDialog
           pageId={page.id}
@@ -389,6 +453,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
     saving: { icon: <Loader2 size={14} className="spin" />, label: 'Saving…' },
     error: { icon: <CloudOff size={14} />, label: 'Offline – retrying' },
     conflict: { icon: <AlertTriangle size={14} />, label: 'Conflict' },
+    local: { icon: <CloudOff size={14} />, label: 'Saved on this device' },
   };
   const { icon, label } = map[status];
   return (

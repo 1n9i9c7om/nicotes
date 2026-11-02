@@ -5,6 +5,7 @@ import {
   linkTargetFor,
   pathOf,
   resolveWikilink,
+  splitSection,
   type LinkContext,
 } from '@nicotes/shared';
 import { fuzzyFilter } from './fuzzy';
@@ -37,6 +38,8 @@ export interface LinkBridge {
   suggest: (query: string) => LinkSuggestion[];
   open: (target: string) => void;
   subscribe: (listener: () => void) => () => void;
+  /** Shared pages: links to pages that are not shared are plain text, never "create page". */
+  readOnly?: boolean;
 }
 
 /** Opens a link target: navigates to the page, or creates it (in the matching place) first. */
@@ -52,7 +55,8 @@ export function useOpenWikilink(fromNotebookId: string) {
         navigate(`/p/${page.id}`);
         return;
       }
-      const segments = target.split('/').map((s) => s.trim());
+      // A link to a section of a missing page creates the page.
+      const segments = splitSection(target).page.split('/').map((s) => s.trim());
       const title = segments.pop() ?? target;
       let notebookId = fromNotebookId;
       let parentId: string | null = null;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, max, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import {
@@ -9,8 +9,10 @@ import {
   pageUpdateSchema,
   type ApiError,
   type Page,
+  type PageCreate,
   type PageMove,
   type PageSummary,
+  type PageSync,
   type PageVersion,
   type PageVersionSummary,
   type RenameResult,
@@ -33,6 +35,8 @@ const summaryColumns = {
   parentId: pages.parentId,
   title: pages.title,
   sortOrder: pages.sortOrder,
+  // Like isCanvas() in @nicotes/shared: frontmatter that names the Excalidraw plugin.
+  canvas: sql<boolean>`(substr(${pages.content}, 1, 3) = '---' AND instr(substr(${pages.content}, 1, 2000), 'excalidraw-plugin:') > 0)`.mapWith(Boolean),
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
 };
@@ -149,6 +153,37 @@ export function siblingIndex(db: Db | Tx, userId: string, page: { id: string; no
   return Math.max(0, ids.indexOf(page.id));
 }
 
+/** A new page at the end of its parent's (or the notebook's) pages. */
+export function createPage(db: Db, userId: string, input: PageCreate): Page {
+  getNotebook(db, userId, input.notebookId);
+  const parentId = input.parentId ?? null;
+  if (parentId && findPage(db, userId, parentId).notebookId !== input.notebookId) {
+    throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
+  }
+  const last = db
+    .select({ value: max(pages.sortOrder) })
+    .from(pages)
+    .where(and(live(userId), siblingsOf(input.notebookId, parentId)))
+    .get();
+  const now = Date.now();
+  const id = newId();
+  db.insert(pages)
+    .values({
+      id,
+      userId,
+      notebookId: input.notebookId,
+      parentId,
+      title: input.title ?? '',
+      content: input.content ?? '',
+      sortOrder: (last?.value ?? -1) + 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+  if (input.content) indexPageLinks(db, userId, id, input.content);
+  return findPage(db, userId, id);
+}
+
 export function pageRoutes(db: Db) {
   return new Hono<AppEnv>()
     .get('/', (c) => {
@@ -164,34 +199,21 @@ export function pageRoutes(db: Db) {
     })
     .post('/', async (c) => {
       const input = await readJson(c, pageCreateSchema);
+      return c.json(createPage(db, c.var.user.id, input), 201);
+    })
+    .get('/sync', (c) => {
       const userId = c.var.user.id;
-      getNotebook(db, userId, input.notebookId);
-      const parentId = input.parentId ?? null;
-      if (parentId && findPage(db, userId, parentId).notebookId !== input.notebookId) {
-        throw new HTTPException(400, { message: 'Parent page belongs to another notebook' });
-      }
-      const last = db
-        .select({ value: max(pages.sortOrder) })
+      const since = Number(c.req.query('since') ?? 0);
+      // A second of overlap, so a page saved while the last answer was made is not missed.
+      const at = Date.now();
+      const changed = db
+        .select(pageColumns)
         .from(pages)
-        .where(and(live(userId), siblingsOf(input.notebookId, parentId)))
-        .get();
-      const now = Date.now();
-      const id = newId();
-      db.insert(pages)
-        .values({
-          id,
-          userId,
-          notebookId: input.notebookId,
-          parentId,
-          title: input.title ?? '',
-          content: input.content ?? '',
-          sortOrder: (last?.value ?? -1) + 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run();
-      if (input.content) indexPageLinks(db, userId, id, input.content);
-      return c.json(findPage(db, userId, id), 201);
+        .where(and(live(userId), Number.isFinite(since) && since > 0 ? gte(pages.updatedAt, since - 1000) : undefined))
+        .all();
+      const tags = changed.length ? tagsByPage(db, userId, changed.map((p) => p.id)) : new Map<string, string[]>();
+      const ids = db.select({ id: pages.id }).from(pages).where(live(userId)).all().map((p) => p.id);
+      return c.json({ at, pages: changed.map((p) => ({ ...p, tags: tags.get(p.id) ?? [] })), ids } satisfies PageSync);
     })
     .get('/:id', (c) => c.json(findPage(db, c.var.user.id, c.req.param('id'))))
     .patch('/:id', async (c) => {

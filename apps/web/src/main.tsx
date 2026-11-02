@@ -11,17 +11,20 @@ import './styles/graph.css';
 import './styles/journal.css';
 import './styles/tasks.css';
 import './styles/ask.css';
+import './styles/chat.css';
 import './styles/layouts.css';
 import './styles/assistant.css';
 import './styles/models.css';
 import './styles/colors.css';
+import './styles/shared.css';
+import './styles/print.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import { App } from './App';
-import { ApiError } from './lib/api';
+import { Root } from './App';
+import { ApiError, OfflineError } from './lib/api';
 import './lib/install';
 import { registerSW } from 'virtual:pwa-register';
 
@@ -43,9 +46,13 @@ registerSW({ immediate: true });
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2,
+      retry: (count, error) => !(error instanceof ApiError && error.status < 500) && !(error instanceof OfflineError) && count < 2,
       refetchOnWindowFocus: false,
+      // Offline, requests still run: they answer from the notes kept on this device (lib/offline.ts)
+      // or fail at once, instead of waiting for the network.
+      networkMode: 'always',
     },
+    mutations: { networkMode: 'always' },
   },
 });
 
@@ -53,7 +60,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <Root />
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Sparkles, ExternalLink, FileDown, LogOut, PlugZap, RotateCcw, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Copy, Cpu, Info, ListChecks, Mic, Sparkles, ExternalLink, FileDown, FileSearch, LogOut, PlugZap, RotateCcw, Server, Smartphone, Telescope, XCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { TEMPLATE_TAG } from '@nicotes/shared';
 import { displayTitle } from '../lib/tree';
 import { formatDuration, formatSize, timeAgo } from '../lib/format';
@@ -8,16 +9,28 @@ import {
   AI_TASKS,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_TRANSCRIBE_MODEL,
   modelSetting,
+  providerOf,
+  type AttachmentSearchStatus,
   type ConnectionCheck,
   type ModelInfo,
   type Settings,
   type SettingSource,
   type SettingsUpdate,
+  type User,
 } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
+import { api } from '../lib/api';
+import { setOfflineEnabled, useOfflineStatus } from '../lib/offline';
 import { ModelPicker } from '../components/ModelPicker';
+import { SettingsAdapters } from '../components/SettingsAdapters';
 import { SettingsBackups } from '../components/SettingsBackups';
+import { SettingsReminders } from '../components/SettingsReminders';
+import { SettingsSecurity } from '../components/SettingsSecurity';
+import { SettingsShares } from '../components/SettingsShares';
+import { SettingsTokens } from '../components/SettingsTokens';
+import { SettingsCalendar } from '../components/SettingsCalendar';
 import {
   exportUrl,
   useAuthStatus,
@@ -36,6 +49,7 @@ import {
   useUpdateSettings,
 } from '../lib/queries';
 import { useInstallPrompt } from '../lib/install';
+import { serviceReady } from '../lib/ai';
 
 const SOURCE_LABEL: Record<Exclude<SettingSource, null>, string> = {
   settings: 'Saved here',
@@ -202,8 +216,10 @@ export function SettingsPage() {
   const signOut = useSignOut();
   const checkOpenRouter = useCheckConnection();
   const checkRouteway = useCheckConnection();
+  const checkLocal = useCheckConnection();
   const checkCrawl4ai = useCheckConnection();
   const checkSearxng = useCheckConnection();
+  const checkTranscribe = useCheckConnection();
   const batches = useBatches();
   const notebooks = useNotebooks();
   const allPages = usePages();
@@ -214,7 +230,7 @@ export function SettingsPage() {
   const installPrompt = useInstallPrompt();
 
   if (!settings.data) return null;
-  const { openrouter, routeway, crawl4ai, ai, daily, tasks, semantic } = settings.data;
+  const { openrouter, routeway, local, crawl4ai, ai, daily, tasks, reminders, semantic, transcription } = settings.data;
   const save = (input: SettingsUpdate) => update.mutate(input);
 
   return (
@@ -287,13 +303,52 @@ export function SettingsPage() {
         </div>
       </section>
 
+      <section className="settings-card" id="local-models">
+        <h2>
+          <Server size={18} /> Your own model server
+        </h2>
+        <p className="muted">
+          Runs AI features on a server you control, so your notes don't leave your network: Ollama, LM Studio,
+          LocalAI, vLLM or anything else with an OpenAI-compatible API. Its models appear in the model pickers below,
+          marked Own server, and cost nothing. They can't search the web; research then needs SearXNG or uses the
+          model's own knowledge.
+        </p>
+        <SettingField
+          key={`local-url-${local.urlSource}-${local.url}`}
+          label="Address"
+          source={local.urlSource}
+          current={local.url}
+          placeholder="http://ollama:11434/v1"
+          pending={update.isPending}
+          onSave={(v) => save({ localAiUrl: v })}
+          hint="The address of its OpenAI API, usually ending in /v1. Ollama: http://<host>:11434/v1, LM Studio: http://<host>:1234/v1."
+        />
+        <SettingField
+          key={`local-key-${local.apiKeySource}`}
+          label="API key (optional)"
+          secret
+          source={local.apiKeySource}
+          current={null}
+          unsetLabel="None"
+          pending={update.isPending}
+          onSave={(v) => save({ localAiKey: v })}
+          hint="Only if your server asks for one."
+        />
+        <div className="setting-actions">
+          <button className="btn" disabled={checkLocal.isPending} onClick={() => checkLocal.mutate('local')}>
+            {checkLocal.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkLocal.data} />
+        </div>
+      </section>
+
       <section className="settings-card models-card" id="models">
         <h2>
           <Cpu size={18} /> AI models
         </h2>
         <p className="muted">
-          Each AI feature can use its own model from OpenRouter or Routeway; unset ones use the default model. Prices
-          are per million tokens, input / output.
+          Each AI feature can use its own model from OpenRouter, Routeway or your own server; unset ones use the
+          default model. Prices are per million tokens, input / output.
         </p>
         <ModelField
           label="Default model"
@@ -427,10 +482,73 @@ export function SettingsPage() {
 
       <SemanticCard
         semantic={semantic}
-        apiKeySet={openrouter.apiKeySet}
+        ready={serviceReady(settings.data, semantic.model)}
         pending={update.isPending}
         save={save}
         list={embeddingModels}
+      />
+
+      <section className="settings-card" id="voice">
+        <h2>
+          <Mic size={18} /> Voice notes
+        </h2>
+        <p className="muted">
+          Record with the microphone button in the editor's toolbar; recordings are kept as attachments with a player in
+          the page. With a transcription service, what you said is also written below the recording, and search finds it.
+        </p>
+        <SettingField
+          key={`transcribe-url-${transcription.url}`}
+          label="Transcription service"
+          source={transcription.urlSource}
+          current={transcription.url}
+          placeholder="http://speaches:8000/v1"
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeUrl: v })}
+          hint={
+            <>
+              An OpenAI-compatible API with <code>/audio/transcriptions</code>: your own Whisper server (Speaches, LocalAI,
+              …), Groq (<code>https://api.groq.com/openai/v1</code>) or OpenAI (<code>https://api.openai.com/v1</code>).
+              Recordings are sent there.
+            </>
+          }
+        />
+        <SettingField
+          key={`transcribe-key-${transcription.keySource}`}
+          label="API key"
+          secret
+          source={transcription.keySource}
+          current={null}
+          placeholder="Not needed for most servers of your own"
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeKey: v })}
+        />
+        <SettingField
+          key={`transcribe-model-${transcription.model}`}
+          label="Model"
+          source={transcription.modelSource}
+          current={transcription.model}
+          placeholder={DEFAULT_TRANSCRIBE_MODEL}
+          pending={update.isPending}
+          onSave={(v) => save({ transcribeModel: v })}
+          hint="whisper-1 or gpt-4o-mini-transcribe at OpenAI, whisper-large-v3-turbo at Groq, e.g. Systran/faster-whisper-small at Speaches."
+        />
+        <div className="setting-actions">
+          <button
+            className="btn"
+            disabled={checkTranscribe.isPending || !transcription.url}
+            onClick={() => checkTranscribe.mutate('transcribe')}
+          >
+            {checkTranscribe.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <CheckResult result={checkTranscribe.data} />
+        </div>
+      </section>
+
+      <FileSearchCard
+        search={settings.data.search}
+        model={settings.data.models.images.model ?? openrouter.model}
+        pending={update.isPending}
+        save={save}
       />
 
       {update.error && <p className="error">{update.error.message}</p>}
@@ -488,7 +606,27 @@ export function SettingsPage() {
           onSave={(v) => save({ tasksExcludeTags: v === null ? null : v.split(/[\s,]+/).filter(Boolean) })}
           hint="Comma-separated tags; save it empty to include everything. “Clear” goes back to the default (recipe)."
         />
+        <SettingsCalendar />
       </section>
+
+      <SettingsReminders
+        reminders={reminders}
+        save={save}
+        telegramToken={
+          <SettingField
+            key={`telegram-${reminders.telegramTokenSource}`}
+            label="Bot token"
+            secret
+            source={reminders.telegramTokenSource}
+            current={null}
+            placeholder="123456789:AA…"
+            pending={update.isPending}
+            onSave={(v) => save({ telegramBotToken: v })}
+          />
+        }
+      />
+
+      <SettingsAdapters />
 
       <section className="settings-card">
         <h2>
@@ -506,6 +644,12 @@ export function SettingsPage() {
       </section>
 
       <SettingsBackups />
+
+      <SettingsShares />
+
+      <SettingsTokens />
+
+      <SettingsSecurity />
 
       <section className="settings-card">
         <h2>
@@ -530,6 +674,7 @@ export function SettingsPage() {
             </span>
           )}
         </div>
+        {auth.data?.user && <OfflineSetting user={auth.data.user} />}
       </section>
 
       <section className="settings-card">
@@ -603,13 +748,14 @@ function AboutCard() {
 
 function SemanticCard({
   semantic,
-  apiKeySet,
+  ready,
   pending,
   save,
   list,
 }: {
   semantic: Settings['semantic'];
-  apiKeySet: boolean;
+  /** Whether the service that runs the embedding model is set up. */
+  ready: boolean;
   pending: boolean;
   save: (input: SettingsUpdate) => void;
   list: ReturnType<typeof useModels>;
@@ -625,20 +771,27 @@ function SemanticCard({
         <Sparkles size={18} /> Semantic index
       </h2>
       <p className="muted">
-        Finds notes by meaning: related pages under each page, “By meaning” results in search and “Ask your notes”.
-        While it is on, the text of your notes is sent to OpenRouter to compute embeddings (with the default model
-        about $0.02 per million words, a few cents for thousands of pages). Switching it off deletes the index.
+        Finds notes by meaning: related pages under each page, “By meaning” results in search and in the chat.
+        While it is on, the text of your notes is sent to the service of the embedding model to compute embeddings:
+        OpenRouter (with the default model about $0.02 per million words, a few cents for thousands of pages), or your
+        own server for free. Switching it off deletes the index.
       </p>
       <label className="check-row">
         <input
           type="checkbox"
           checked={semantic.enabled}
-          disabled={pending || (!apiKeySet && !semantic.enabled)}
+          disabled={pending || (!ready && !semantic.enabled)}
           onChange={(e) => save({ semanticIndex: e.target.checked })}
         />
         Index my notes
       </label>
-      {!apiKeySet && <p className="setting-hint">Needs an OpenRouter API key (see above).</p>}
+      {!ready && (
+        <p className="setting-hint">
+          {providerOf(semantic.model) === 'local'
+            ? 'Needs the address of your own model server (see above).'
+            : 'Needs an OpenRouter API key (see above), or an embedding model from your own server.'}
+        </p>
+      )}
       {s && (
         <div className="semantic-status" role="status">
           <div className="semantic-bar" aria-hidden="true">
@@ -672,7 +825,7 @@ function SemanticCard({
           <ModelHint
             id={semantic.model}
             models={list.data?.models}
-            text="An OpenRouter model. Changing it rebuilds the index. Multilingual models match notes across languages."
+            text="From OpenRouter or your own server. Changing it rebuilds the index. Multilingual models match notes across languages."
           />
         }
       />
@@ -682,6 +835,61 @@ function SemanticCard({
             <RotateCcw size={14} /> Rebuild index
           </button>
         </div>
+      )}
+    </section>
+  );
+}
+
+/** Search in the PDFs, text files and (with AI) images that pages show. */
+function FileSearchCard({
+  search,
+  model,
+  pending,
+  save,
+}: {
+  search: Settings['search'];
+  /** The model that reads images. */
+  model: string;
+  pending: boolean;
+  save: (input: SettingsUpdate) => void;
+}) {
+  const status = useQuery({
+    queryKey: ['attachment-search'],
+    queryFn: () => api.get<AttachmentSearchStatus>('/search/attachments'),
+    // Follow along while files are being read.
+    refetchInterval: (q) => (q.state.data?.waiting ? 3000 : false),
+  });
+  const s = status.data;
+  return (
+    <section className="settings-card" id="file-search">
+      <h2>
+        <FileSearch size={18} /> Search in files
+      </h2>
+      <p className="muted">
+        Search also finds what is written in the PDFs and text files your pages show. Photos and scanned images are
+        pictures, not text: an AI model can read those too.
+      </p>
+      {s && (
+        <p className="muted" role="status">
+          {s.documents === 1 ? '1 document' : `${s.documents} documents`} searchable · {s.images.read}{' '}
+          {s.images.read === 1 ? 'image' : 'images'} read
+          {s.waiting > 0 && ` · ${s.waiting} ${s.waiting === 1 ? 'file' : 'files'} waiting`}
+        </p>
+      )}
+      <label className="check-row">
+        <input type="checkbox" checked={search.readImages} disabled={pending} onChange={(e) => save({ readImages: e.target.checked })} />
+        Read images with AI
+      </label>
+      <p className="setting-hint">
+        Each image is sent once to the “{AI_TASK_INFO.images.label}” model (<code>{model}</code>, see AI models), which
+        writes down its text or says what it shows. Off unless you turn it on, as the images leave your server, except to a
+        model on your own server. Scanned PDFs are not read.
+      </p>
+      {s && s.images.failed > 0 && s.lastError && (
+        <p className="check fail">
+          <XCircle size={15} /> {s.images.failed === 1 ? '1 image' : `${s.images.failed} images`} could not be read:{' '}
+          {s.lastError}
+        </p>
       )}
     </section>
   );
@@ -705,5 +913,34 @@ function ModelHint({ id, models, text }: { id: string | null; models?: ModelInfo
       )}
       {id && models && !info && <span className="model-unknown"> · Not in the model lists — check the id.</span>}
     </>
+  );
+}
+
+/** Keeping a copy of the notes on this device, to read and edit them offline. */
+function OfflineSetting({ user }: { user: User }) {
+  const offline = useOfflineStatus();
+  const [busy, setBusy] = useState(false);
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await setOfflineEnabled(on, user);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="setting">
+      <label className="offline-toggle">
+        <input type="checkbox" checked={offline.enabled} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
+        Keep notes on this device to read and edit them offline
+      </label>
+      <span className="setting-hint">
+        {offline.enabled
+          ? offline.syncedAt
+            ? `Up to date as of ${new Date(offline.syncedAt).toLocaleString()}${offline.pending ? `; ${offline.pending} offline edit(s) waiting to be sent` : ''}.`
+            : 'Copying your notes…'
+          : 'A copy of every page is kept in this browser (not attachments you have not opened). Edits to pages made offline are sent when the server is back. On by default in the installed app; signing out removes the copy.'}
+      </span>
+    </div>
   );
 }

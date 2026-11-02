@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { CalendarDays, ListChecks, Plus, Search, X } from 'lucide-react';
-import { resolveWikilink, type PageTask, type TaskStatus } from '@nicotes/shared';
+import { AlarmClock, CalendarDays, ListChecks, Plus, Repeat, Search, X } from 'lucide-react';
+import { resolveWikilink, stripTaskMarkup, TASK_INLINE_LINK, taskPlainText, type PageTask, type TaskStatus } from '@nicotes/shared';
 import { localDate, useDailyNote } from '../lib/daily';
 import { useLinkContext } from '../lib/links';
 import { useAddTask, useNotebooks, useSettings, useTasks, useUpdateTask } from '../lib/queries';
@@ -192,6 +192,19 @@ function TaskRow({
       <div className="task-main">
         <span className="task-text">
           <TaskText text={task.text} notebookId={task.notebookId} />
+          {task.remind && !task.done && (
+            <span className="task-remind" title="Reminder (Settings → Reminders)">
+              <AlarmClock size={12} />
+              {task.remind.slice(0, 10) === task.due ? '' : `${dueLabel(task.remind.slice(0, 10), today)} `}
+              {task.remind.slice(11)}
+            </span>
+          )}
+          {task.repeat && !task.done && (
+            <span className="task-remind" title="Repeats: ticking it off adds the next one">
+              <Repeat size={12} />
+              {task.repeat}
+            </span>
+          )}
         </span>
         {showPage && (
           <span className="task-where">
@@ -253,10 +266,9 @@ export function DuePicker({
   );
 }
 
-const INLINE = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]|\[([^\]\n]*)\]\([^)\n]*\)/g;
-const plain = (text: string) => text.replace(/\*\*|__|~~|`/g, '');
-const plainText = (text: string) =>
-  plain(text.replace(INLINE, (_m, target?: string, label?: string, linkText?: string) => (label ?? target ?? linkText ?? '').trim()));
+const INLINE = TASK_INLINE_LINK;
+const plain = stripTaskMarkup;
+const plainText = taskPlainText;
 
 /** Task text with [[links]] clickable and Markdown syntax dropped. */
 function TaskText({ text, notebookId }: { text: string; notebookId: string }) {

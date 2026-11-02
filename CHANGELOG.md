@@ -2,6 +2,77 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.5.0 — 2026-11-02
+
+**New**
+
+- **A chat that uses Nicotes for you.** **Chat**, right below search, replaces Ask. Ask it
+  about your notes or tell it what to do in your own words: add a task with a reminder,
+  write in the journal, show what's due this week, start research. Each step it takes is
+  listed above its answer, with links to the pages it touched. It needs an AI service and a
+  model that can use tools (Settings → AI models → Chat).
+- **Reminders.** Write `⏰ 09:00` after a task with a due date to be reminded then, and/or
+  get a summary of the day's tasks every morning. Settings → Reminders sends them as
+  notifications to your phone or computer, or to Telegram through a bot of your own.
+- **Nicotes in Telegram.** Once a Telegram chat is connected, write or speak to the same
+  assistant there. `/todo` lists open tasks with buttons to tick them off, `/calendar` shows
+  the week, `/today` today's journal and `/new` starts over.
+- **Recurring tasks.** Add a rule like `🔁 every week` or `🔁 every month on the 1st` to a
+  task. Ticking it off adds the next one with the due date moved on. It's the syntax of
+  Obsidian's Tasks plugin.
+- **Tasks in your calendar app.** Settings → Tasks → Calendar subscription gives you a
+  secret address for Google Calendar, Apple Calendar, Thunderbird and the like. Open tasks
+  with a due date show up there as all-day events.
+- **Offline.** The installed phone app keeps a copy of your notes. Without a connection you
+  can still open and edit pages; your edits are sent once the server is back, combined with
+  changes made elsewhere meanwhile. If both changed the same lines, your text is kept as a
+  subpage "… (offline copy)". In a browser tab, switch it on under Settings → App.
+- **Canvas pages.** "New canvas" makes a page to draw on, with pen, highlighter, shapes,
+  arrows, text and images. Text on a canvas is found by search.
+- **Voice notes.** The microphone button records into the page. With a transcription
+  service set up (Settings → Voice notes), what you said is written below it too.
+- **Embeds.** `![[Page]]` on a line of its own shows another page inside this one, and
+  `![[Page#Heading]]` just one part of it. `[[Page#Heading]]` links work too.
+- **Print or save as PDF** from a page's ⋯ menu or with Ctrl+P. The page prints alone, on
+  white, the way you see it.
+- **Share pages and notebooks** as read-only links, which can expire and be turned off at
+  any time. Settings → Shared links lists them all.
+- **Two-step sign-in and passkeys.** Settings → Sign-in security adds a code from an
+  authenticator app after the password, or lets you sign in with a passkey.
+- **Import Obsidian vaults.** Zip a vault or a folder of Markdown files and import it.
+  Links, embeds, tasks, tags, Excalidraw drawings and the files your notes use come along.
+- **Search inside files.** Search also finds text in the PDFs and text files your pages
+  show. Photos and scans can be searched too once you turn on Read images with AI.
+- **Adapters and charts.** Settings → Adapters writes values from Home Assistant and the
+  day's weather into a logbook page or the journal once a day. Tables of numbers, such as
+  logbooks, can be shown as charts in View.
+- **Your own AI server.** The AI features can run on your own model server (Ollama, LM
+  Studio and others), alongside OpenRouter and Routeway.
+- **API tokens** under Settings → API tokens let scripts and other apps read or change your
+  notes. [docs/API.md](https://git.nico.software/1n9i9c7om/nicotes/-/blob/main/docs/API.md)
+  lists what they can do.
+
+**Changes**
+
+- **Ask is now the chat.** Old Ask links lead to the chat. Scripts that used `/api/ask`
+  should use `/api/chat` instead.
+- **Libraries with known security problems were updated.**
+- **The browser extension stays at 0.4.1.** It hasn't changed, so there's nothing to
+  update.
+
+**For administrators**
+
+- **All settings come from `.env`.** `docker-compose.yml` now passes the whole `.env` file
+  to Nicotes instead of a fixed list of variables, so Docker Compose needs a `.env` file
+  next to it. `.env.example` now starts with the few required settings; everything else is
+  optional, and much of it can also be set in the app.
+- **New optional settings:** `LOCAL_AI_URL` and `LOCAL_AI_KEY` (your own model server),
+  `TELEGRAM_BOT_TOKEN`, `TRANSCRIBE_URL`, `TRANSCRIBE_KEY` and `TRANSCRIBE_MODEL` (voice
+  notes), `NICOTES_READ_IMAGES` and `OPENROUTER_IMAGES_MODEL` (searching images),
+  `NICOTES_TAG` (the image version to run) and `NICOTES_HTTP_PORT`.
+  `OPENROUTER_ASK_MODEL` now picks the chat's model.
+- Notifications, passkeys and voice recording need HTTPS (or localhost).
+
 ## 0.4.2 — 2026-11-01
 
 **Changes**

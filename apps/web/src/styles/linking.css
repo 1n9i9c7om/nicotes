@@ -672,3 +672,12 @@
 .palette-input:focus-visible {
   box-shadow: none;
 }
+
+/* A match in a file the page shows: its name leads the excerpt. */
+.palette-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
