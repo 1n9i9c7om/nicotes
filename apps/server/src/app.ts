@@ -148,7 +148,8 @@ export function createApp({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       fontSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'"],
+      // Excalidraw fetches the data: image it makes of Mermaid diagrams it cannot draw itself.
+      connectSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       // Extension pages get a random origin per install (moz-extension://<uuid>), so the
