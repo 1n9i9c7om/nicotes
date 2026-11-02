@@ -210,7 +210,7 @@ export function ResearchPage() {
                         ? 'no web search available'
                         : searchLabel(providerOf(settings.data ? modelFor(settings.data, 'research') : ''))}{' '}
                   · limit {formatCost(ai.costLimit)}{' '}
-                  <Link to="/settings" aria-label="AI settings">
+                  <Link to="/settings#research" aria-label="AI settings">
                     <SettingsIcon size={13} />
                   </Link>
                 </>
