@@ -28,6 +28,7 @@ function obsidianVault(): Uint8Array {
         '![photo](../Assets/tomato.png)',
         '![[Basil]]',
         'Seeds: [the list](Seeds%20list.md) and [[Plants/Basil.md|basil]].',
+        'Pests: [[Basil#Care#Pests^x1]]',
         '',
         '```',
         '#not-a-tag [[not a link]]',
@@ -124,13 +125,15 @@ describe('vault import', () => {
     expect(image).not.toBeNull();
     // Both ways of embedding the image point at the same attachment.
     expect(tomatoes.content).toContain(`![photo](${image![1]})`);
-    expect(lines).toContain('[[Basil]]');
+    // Embeds of notes stay embeds; links keep their (innermost) heading.
+    expect(lines).toContain('![[Basil]]');
+    expect(lines).toContain('Pests: [[Basil#Pests]]');
     expect(lines).toContain('Seeds: [[Seed list 2026|the list]] and [[Plants/Basil|basil]].');
     expect(tomatoes.content).toContain('```\n#not-a-tag [[not a link]]\n```');
     expect((await api.raw(image![1]!)).status).toBe(200);
 
     const inbox = (await api.call<Page>('GET', `/api/pages/${byTitle.get('Inbox')!.id}`)).body;
-    expect(inbox.content).toBe('Quick thoughts, see [[Tomatoes|watering]] and [[Missing note]].');
+    expect(inbox.content).toBe('Quick thoughts, see [[Tomatoes#Watering|watering]] and [[Missing note]].');
     const mint = (await api.call<Page>('GET', `/api/pages/${byTitle.get('Mint')!.id}`)).body;
     expect(mint.content).toBe('Spreads. [[Seed list 2026]]');
     const basil = (await api.call<Page>('GET', `/api/pages/${byTitle.get('Basil')!.id}`)).body;

@@ -4,7 +4,8 @@
  *
  * Syntax: `[[Target]]` or `[[Target|Label]]`. A target is a page title, optionally
  * qualified with ancestor and/or notebook titles: `[[Elden Ring/Builds]]`,
- * `[[Games/Elden Ring/Builds]]`.
+ * `[[Games/Elden Ring/Builds]]`. `[[Target#Heading]]` points to a section of the page; it
+ * counts as a link to the page.
  */
 
 const WIKILINK = /(?<!\\)\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/g;
@@ -12,8 +13,20 @@ const INLINE_CODE = /(`+)[^`\n]*?\1/g;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 export interface WikilinkRef {
+  /** The page part, without a `#Heading`. */
   target: string;
   label: string | null;
+  /** The heading after `#`, if any. */
+  section: string | null;
+}
+
+/**
+ * Splits `Page#Heading` into page and section. A `#` only starts a section between two
+ * non-space characters, so titles like "C# notes" or "Issue #42" stay whole.
+ */
+export function splitSection(target: string): { page: string; section: string | null } {
+  const m = /^([^#]*[^\s#])#(\S.*)$/.exec(target.trim());
+  return m ? { page: m[1]!, section: m[2]!.trim() } : { page: target.trim(), section: null };
 }
 
 /** Calls `fn` for every text range outside code blocks and inline code. */
@@ -42,13 +55,17 @@ function mapOutsideCode(markdown: string, fn: (text: string) => string): string 
     .join('\n');
 }
 
-/** Rewrites wikilinks outside code. `fn` returns the replacement target, or null to keep the link. */
+/**
+ * Rewrites wikilinks outside code (embeds `![[…]]` too). `fn` returns the replacement page
+ * target, or null to keep the link; a `#Heading` stays as it was.
+ */
 export function mapWikilinks(markdown: string, fn: (ref: WikilinkRef) => string | null): string {
   return mapOutsideCode(markdown, (text) =>
     text.replace(WIKILINK, (whole, target: string, label: string | undefined) => {
-      const next = fn({ target: target.trim(), label: label?.trim() || null });
+      const { page, section } = splitSection(target);
+      const next = fn({ target: page, label: label?.trim() || null, section });
       if (next === null) return whole;
-      return `[[${next}${label ? `|${label}` : ''}]]`;
+      return `[[${next}${section ? `#${section}` : ''}${label ? `|${label}` : ''}]]`;
     }),
   );
 }
@@ -137,7 +154,10 @@ export function linkCandidates(ctx: LinkContext, target: string): LinkablePage[]
 
 /** Resolves a target to a page, preferring the linking page's notebook, then the oldest page. */
 export function resolveWikilink(ctx: LinkContext, target: string, fromNotebookId?: string): LinkablePage | null {
-  const candidates = linkCandidates(ctx, target);
+  // A title with "#" in it wins over a section of another page.
+  let candidates = linkCandidates(ctx, target);
+  const { page, section } = splitSection(target);
+  if (!candidates.length && section) candidates = linkCandidates(ctx, page);
   return candidates.find((p) => p.notebookId === fromNotebookId) ?? candidates[0] ?? null;
 }
 

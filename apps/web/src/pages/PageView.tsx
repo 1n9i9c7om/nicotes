@@ -51,6 +51,7 @@ import { linksShowing, useShares } from '../lib/shares';
 import { useLocalState } from '../lib/storage';
 import {
   useApplyChanges,
+  useLoadEmbed,
   useNotebooks,
   usePage,
   usePages,
@@ -133,7 +134,8 @@ function PageEditor({ page }: { page: Page }) {
   const bridge = useLinkBridge(notebookId);
   const upload = useCallback((file: File) => uploadFile(file, page.id), [page.id]);
   const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
-  const env = { bridge, upload, onUploadError };
+  const loadPage = useLoadEmbed();
+  const env = { bridge, upload, onUploadError, loadPage };
 
   const tagList = useTags();
   const inherited = useMemo(

@@ -473,3 +473,56 @@
   --color-primary: var(--accent);
   font-size: 14px;
 }
+
+/* ---------- Embedded pages: ![[Page#Heading]] ---------- */
+
+.prose .embed {
+  margin: 1em 0;
+  padding: 10px 16px 4px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--accent-softer);
+}
+
+.prose .embed.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.prose .embed-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+.prose .embed-head::before {
+  content: '↳';
+  color: var(--text-faint);
+}
+
+.prose .embed-head:hover {
+  text-decoration: underline;
+}
+
+.prose .embed.unresolved .embed-head {
+  color: var(--text-muted);
+}
+
+.prose .embed-body > .ProseMirror {
+  padding: 0 0 6px;
+  outline: none;
+}
+
+.prose .embed-body > .ProseMirror > :first-child {
+  margin-top: 0.4em;
+}
+
+.prose .embed-note {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text-faint);
+}

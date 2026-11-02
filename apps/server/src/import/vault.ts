@@ -410,17 +410,21 @@ const notePart = (target: string) => target.split(/[#^]/)[0]!.trim().replace(MAR
 const isExternal = (target: string) => /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#') || target.startsWith('/');
 
 /**
- * Obsidian Markdown in Nicotes' dialect: wikilinks lose headings and block ids, embeds of
- * notes become links, files become attachment links, and links to notes become wikilinks.
+ * Obsidian Markdown in Nicotes' dialect: wikilinks keep a heading (`[[Note#Heading]]`) but
+ * lose block ids, embeds of notes stay embeds, files become attachment links, and links to
+ * notes become wikilinks.
  */
 function convert(note: VaultNote, resolver: Resolver, urls: Map<string, string>): string {
-  const wikilink = (target: string, label?: string) => {
+  const wikilink = (target: string, label?: string, bang = '') => {
     const part = notePart(target);
     const found = part ? resolver.note(part, note.folder) : note;
     // Linked by file name, but the page is called something else (a "title" property).
     const name = found && found.title !== found.name && posix.basename(part).toLowerCase() === found.name.toLowerCase() ? found.title : part;
     if (!name) return label || target.replace(/^[#^]/, '');
-    return label && label !== name ? `[[${name}|${label}]]` : `[[${name}]]`;
+    // "Note#Part#Subpart": the innermost heading.
+    const heading = target.split('^')[0]!.split('#').slice(1).at(-1)?.trim();
+    const linked = `${name}${heading ? `#${heading}` : ''}`;
+    return label && label !== name ? `${bang}[[${linked}|${label}]]` : `${bang}[[${linked}]]`;
   };
   return mapText(note.body, (text) =>
     text
@@ -430,8 +434,8 @@ function convert(note: VaultNote, resolver: Resolver, urls: Map<string, string>)
           const name = posix.basename(file);
           return bang && IMAGE.test(file) ? `![${name}](${urls.get(file)})` : `[${name}](${urls.get(file)})`;
         }
-        // An embedded note shows as a link; sizes of embedded images ("|300") are dropped.
-        return wikilink(target, bang || /^\d+(x\d+)?$/.test(label ?? '') ? undefined : label?.trim());
+        // Sizes of embedded images ("|300") are dropped.
+        return wikilink(target, /^\d+(x\d+)?$/.test(label ?? '') ? undefined : label?.trim(), bang);
       })
       .replace(MD_LINK, (all, bang: string, label: string, angled: string | undefined, plain: string | undefined) => {
         const target = angled ?? plain!;

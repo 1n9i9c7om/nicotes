@@ -1,4 +1,4 @@
-import type { Extensions } from '@tiptap/core';
+import { Editor, type Extensions } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
@@ -9,6 +9,7 @@ import type { LinkBridge } from '../lib/links';
 import { AudioPlayers } from './audio';
 import { Citations } from './citations';
 import { Highlight, TextColor } from './colors';
+import { Embed, type EmbeddedPage } from './embed';
 import { RecurringTasks } from './recurring';
 import { FileUploads, type Uploader } from './uploads';
 import { Wikilink } from './wikilink';
@@ -20,6 +21,23 @@ export interface EditorEnv {
   bridge?: LinkBridge;
   upload?: Uploader;
   onUploadError?: (error: Error) => void;
+  /** Loads pages shown by `![[Page]]` embeds; without it they show as links. */
+  loadPage?: (pageId: string) => Promise<EmbeddedPage | null>;
+  /** How deep in embeds this editor is (0 for the page itself). */
+  depth?: number;
+}
+
+/** A read-only editor showing an embedded page inside another one. */
+function embeddedEditor(env: EditorEnv) {
+  return (element: HTMLElement, markdown: string) =>
+    new Editor({
+      element,
+      extensions: editorExtensions({ bridge: env.bridge, loadPage: env.loadPage, depth: (env.depth ?? 0) + 1 }),
+      content: markdown,
+      contentType: 'markdown',
+      editable: false,
+      editorProps: { attributes: { class: 'prose' } },
+    });
 }
 
 /** Extensions for the visual editor. Markdown is the storage format, so every node must round-trip. */
@@ -38,6 +56,7 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     TextColor,
     Placeholder.configure({ placeholder: env.placeholder ?? 'Start writing… Type [[ to link a page.' }),
     Wikilink.configure({ bridge: env.bridge ?? null }),
+    Embed.configure({ bridge: env.bridge ?? null, load: env.loadPage ?? null, render: embeddedEditor(env), depth: env.depth ?? 0 }),
     WikilinkSuggest.configure({ bridge: env.bridge ?? null }),
     FileUploads.configure({ upload: env.upload ?? null, onError: env.onUploadError ?? console.error }),
     Citations,

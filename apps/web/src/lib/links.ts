@@ -5,6 +5,7 @@ import {
   linkTargetFor,
   pathOf,
   resolveWikilink,
+  splitSection,
   type LinkContext,
 } from '@nicotes/shared';
 import { fuzzyFilter } from './fuzzy';
@@ -54,7 +55,8 @@ export function useOpenWikilink(fromNotebookId: string) {
         navigate(`/p/${page.id}`);
         return;
       }
-      const segments = target.split('/').map((s) => s.trim());
+      // A link to a section of a missing page creates the page.
+      const segments = splitSection(target).page.split('/').map((s) => s.trim());
       const title = segments.pop() ?? target;
       let notebookId = fromNotebookId;
       let parentId: string | null = null;
