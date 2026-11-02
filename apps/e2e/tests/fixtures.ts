@@ -66,6 +66,26 @@ export const visualEditor = (page: Page) => page.getByRole('textbox', { name: 'P
 export const sourceEditor = (page: Page) => page.getByRole('textbox', { name: 'Markdown source' });
 export const saveStatus = (page: Page) => page.locator('.page-bar').getByRole('status');
 
+/** TipTap keeps its editor on the editable element. */
+type EditorElement = HTMLElement & { editor: { state: { selection: { empty: boolean; head: number }; doc: { content: { size: number } } } } };
+
+/**
+ * Puts the caret at the end of the visual editor's last paragraph. The editor learns where a
+ * click or a key put the caret from the browser's `selectionchange`, which can come after the
+ * next key press: a key the editor handles itself (Enter) then acts at the old caret, and an
+ * editor focused just before puts its old caret back. So Ctrl+End until the editor has it.
+ */
+export async function caretToEnd(page: Page) {
+  await expect(async () => {
+    await page.keyboard.press('Control+End');
+    const atEnd = await visualEditor(page).evaluate((el) => {
+      const { selection, doc } = (el as EditorElement).editor.state;
+      return selection.empty && selection.head === doc.content.size - 1;
+    });
+    expect(atEnd).toBe(true);
+  }).toPass();
+}
+
 /** Waits for the autosave after an edit: the indicator leaves "Saved" and comes back. */
 export async function waitForSave(page: Page) {
   await expect(saveStatus(page)).not.toHaveText('Saved');

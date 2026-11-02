@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createNotebook, createPage, getPage, uniq, visualEditor, waitForSave } from './fixtures';
+import { caretToEnd, createNotebook, createPage, getPage, uniq, visualEditor, waitForSave } from './fixtures';
 
 test('a page shows another page, or one of its sections, embedded', async ({ page }) => {
   const nb = await createNotebook(page, uniq('Embeds NB'));
@@ -19,7 +19,7 @@ test('a page shows another page, or one of its sections, embedded', async ({ pag
 
   // "!" and a picked page on a line of their own make an embed.
   await visualEditor(page).getByText('Outro').click();
-  await page.keyboard.press('Control+End');
+  await caretToEnd(page);
   await page.keyboard.press('Enter');
   await page.keyboard.type('![[');
   await page.keyboard.type(bread.title);
