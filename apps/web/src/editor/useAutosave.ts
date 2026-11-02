@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { hashKey, useQueryClient } from '@tanstack/react-query';
-import type { Page, PageSummary } from '@nicotes/shared';
-import { api, ApiError } from '../lib/api';
+import { mergeText, type Page, type PageSummary } from '@nicotes/shared';
+import { api, ApiError, OfflineError } from '../lib/api';
+import { claimPage, forgetEdit, keepEdit, keepPageCopy, pendingEdit } from '../lib/offline';
 import { keys } from '../lib/queries';
 
-export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
+/** "local": kept on this device while offline, sent once the server is back. */
+export type SaveStatus = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict' | 'local';
 
 const DEBOUNCE_MS = 800;
 const RETRY_MS = 5000;
@@ -13,6 +15,10 @@ const HAS_TASK = /\[[ xX]\]/;
 /**
  * Debounced autosave for a page's Markdown content with optimistic concurrency.
  * Mount once per page (key the owner by page id); later changes to `page` are ignored.
+ *
+ * When the page changed elsewhere, both versions are combined line by line where they do not
+ * touch the same lines; otherwise the conflict banner asks. Offline, edits are kept on the
+ * device (with offline notes on) and sent when the server is back, also after a reload.
  */
 export function useAutosave(page: Page) {
   const qc = useQueryClient();
@@ -28,6 +34,14 @@ export function useAutosave(page: Page) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inFlight = useRef(false);
   const blocked = useRef(false); // true while a conflict is unresolved
+  /** The text last kept on this device while offline. */
+  const local = useRef<string | null>(null);
+
+  const showText = useCallback((markdown: string) => {
+    latest.current = markdown;
+    setContentState(markdown);
+    setRevision((r) => r + 1);
+  }, []);
 
   const save = useCallback(async (): Promise<void> => {
     clearTimeout(timer.current);
@@ -42,6 +56,11 @@ export function useAutosave(page: Page) {
     try {
       const result = await api.patch<Page>(`/pages/${page.id}`, { content: body, baseVersion: version.current });
       version.current = result.version;
+      if (local.current !== null) {
+        local.current = null;
+        void forgetEdit(page.id);
+      }
+      void keepPageCopy(result);
       // The task list re-reads pages with checkboxes the next time it is shown.
       if (HAS_TASK.test(body) || HAS_TASK.test(saved.current)) {
         qc.invalidateQueries({ queryKey: keys.tasks, refetchType: 'none' });
@@ -52,10 +71,22 @@ export function useAutosave(page: Page) {
         list?.map((p) => (p.id === result.id ? { ...p, updatedAt: result.updatedAt } : p)),
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409 && error.body?.current) {
+      const current = error instanceof ApiError && error.status === 409 ? error.body?.current : undefined;
+      const merged = current ? mergeText(saved.current, body, current.content) : null;
+      if (current && merged !== null) {
+        // Changed elsewhere, but not the same lines: carry on from both.
+        version.current = current.version;
+        saved.current = current.content;
+        if (latest.current === body) showText(merged);
+        timer.current = setTimeout(save, 0);
+      } else if (current) {
         blocked.current = true;
-        setConflict(error.body.current);
+        setConflict(current);
         setStatus('conflict');
+      } else if (error instanceof OfflineError && (await keepEdit(page.id, body, version.current, saved.current).catch(() => false))) {
+        local.current = body;
+        setStatus(latest.current === body ? 'local' : 'dirty');
+        timer.current = setTimeout(save, RETRY_MS);
       } else {
         setStatus('error');
         timer.current = setTimeout(save, RETRY_MS);
@@ -67,7 +98,7 @@ export function useAutosave(page: Page) {
     // Edits made while the request was in flight still need saving.
     if (latest.current !== saved.current) timer.current = setTimeout(save, DEBOUNCE_MS);
     else setStatus('saved');
-  }, [page.id, qc]);
+  }, [page.id, qc, showText]);
 
   const setContent = useCallback(
     (markdown: string) => {
@@ -98,16 +129,55 @@ export function useAutosave(page: Page) {
       blocked.current = false;
       setConflict(null);
       if (choice === 'theirs') {
-        latest.current = saved.current = conflict.content;
-        setContentState(conflict.content);
-        setRevision((r) => r + 1);
+        saved.current = conflict.content;
+        showText(conflict.content);
         setStatus('saved');
+        if (local.current !== null) {
+          local.current = null;
+          void forgetEdit(page.id);
+        }
       } else {
         void save();
       }
     },
-    [conflict, save],
+    [conflict, save, showText, page.id],
   );
+
+  // An edit kept offline earlier (perhaps before a reload) continues here, and is sent.
+  useEffect(() => {
+    const release = claimPage(page.id);
+    void pendingEdit(page.id).then((pending) => {
+      if (!pending || pending.content === latest.current) return;
+      local.current = pending.content;
+      if (pending.baseVersion === version.current) {
+        saved.current = pending.base;
+        showText(pending.content);
+        setStatus('dirty');
+        timer.current = setTimeout(save, 0);
+        return;
+      }
+      // The page changed elsewhere since: combine, or let the banner ask.
+      const merged = mergeText(pending.base, pending.content, latest.current);
+      if (merged !== null) {
+        showText(merged);
+        setStatus('dirty');
+        timer.current = setTimeout(save, 0);
+      } else {
+        blocked.current = true;
+        setConflict({ ...page, content: saved.current, version: version.current });
+        showText(pending.content);
+        setStatus('conflict');
+      }
+    });
+    const online = () => {
+      if (local.current !== null) void save();
+    };
+    window.addEventListener('online', online);
+    return () => {
+      release();
+      window.removeEventListener('online', online);
+    };
+  }, [page.id]);
 
   // A newer server copy (e.g. links rewritten after a rename) replaces the text silently when
   // nothing is unsaved; with local edits the next save runs into the conflict banner instead.
@@ -129,7 +199,7 @@ export function useAutosave(page: Page) {
   // Flush on page switch/unmount, and warn before closing the tab with unsaved changes.
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (latest.current !== saved.current) {
+      if (latest.current !== saved.current && latest.current !== local.current) {
         void save();
         e.preventDefault();
       }

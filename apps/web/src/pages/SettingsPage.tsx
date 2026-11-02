@@ -18,9 +18,11 @@ import {
   type Settings,
   type SettingSource,
   type SettingsUpdate,
+  type User,
 } from '@nicotes/shared';
 import { formatCost } from '../components/JobProgress';
 import { api } from '../lib/api';
+import { setOfflineEnabled, useOfflineStatus } from '../lib/offline';
 import { ModelPicker } from '../components/ModelPicker';
 import { SettingsAdapters } from '../components/SettingsAdapters';
 import { SettingsBackups } from '../components/SettingsBackups';
@@ -672,6 +674,7 @@ export function SettingsPage() {
             </span>
           )}
         </div>
+        {auth.data?.user && <OfflineSetting user={auth.data.user} />}
       </section>
 
       <section className="settings-card">
@@ -910,5 +913,34 @@ function ModelHint({ id, models, text }: { id: string | null; models?: ModelInfo
       )}
       {id && models && !info && <span className="model-unknown"> · Not in the model lists — check the id.</span>}
     </>
+  );
+}
+
+/** Keeping a copy of the notes on this device, to read and edit them offline. */
+function OfflineSetting({ user }: { user: User }) {
+  const offline = useOfflineStatus();
+  const [busy, setBusy] = useState(false);
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await setOfflineEnabled(on, user);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="setting">
+      <label className="offline-toggle">
+        <input type="checkbox" checked={offline.enabled} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
+        Keep notes on this device to read and edit them offline
+      </label>
+      <span className="setting-hint">
+        {offline.enabled
+          ? offline.syncedAt
+            ? `Up to date as of ${new Date(offline.syncedAt).toLocaleString()}${offline.pending ? `; ${offline.pending} offline edit(s) waiting to be sent` : ''}.`
+            : 'Copying your notes…'
+          : 'A copy of every page is kept in this browser (not attachments you have not opened). Edits to pages made offline are sent when the server is back. On by default in the installed app; signing out removes the copy.'}
+      </span>
+    </div>
   );
 }

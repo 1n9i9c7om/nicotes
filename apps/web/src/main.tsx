@@ -24,7 +24,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { Root } from './App';
-import { ApiError } from './lib/api';
+import { ApiError, OfflineError } from './lib/api';
 import './lib/install';
 import { registerSW } from 'virtual:pwa-register';
 
@@ -46,9 +46,13 @@ registerSW({ immediate: true });
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2,
+      retry: (count, error) => !(error instanceof ApiError && error.status < 500) && !(error instanceof OfflineError) && count < 2,
       refetchOnWindowFocus: false,
+      // Offline, requests still run: they answer from the notes kept on this device (lib/offline.ts)
+      // or fail at once, instead of waiting for the network.
+      networkMode: 'always',
     },
+    mutations: { networkMode: 'always' },
   },
 });
 

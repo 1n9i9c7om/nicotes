@@ -91,3 +91,34 @@ export function diffSegments(before: string, hunks: Hunk[], context = 3): DiffSe
   same(line, source.length, hunks.length === 0, true);
   return segments;
 }
+
+// ---------- Three-way merge ----------
+
+const sameHunk = (a: Hunk, b: Hunk) =>
+  a.start === b.start && a.removed.join('\n') === b.removed.join('\n') && a.added.join('\n') === b.added.join('\n');
+
+/** Two changes of the same base touch the same lines (or insert at the same place). */
+function clash(a: Hunk, b: Hunk) {
+  const [aEnd, bEnd] = [a.start + a.removed.length, b.start + b.removed.length];
+  if (a.start === b.start) return true;
+  if (a.start < bEnd && b.start < aEnd) return true;
+  // An insertion inside lines the other one replaces.
+  return (!a.removed.length && b.start < a.start && a.start < bEnd) || (!b.removed.length && a.start < b.start && b.start < aEnd);
+}
+
+/**
+ * Combines two edited copies of `base` line by line, as for edits made offline while the
+ * page changed elsewhere. Returns null when both changed the same lines differently.
+ */
+export function mergeText(base: string, mine: string, theirs: string): string | null {
+  if (mine === theirs || theirs === base) return mine;
+  if (mine === base) return theirs;
+  const ours = diffHunks(base, mine);
+  const others = diffHunks(base, theirs).filter((t) => !ours.some((o) => sameHunk(o, t)));
+  if (ours.some((o) => others.some((t) => !sameHunk(o, t) && clash(o, t)))) return null;
+  const result = lines(base);
+  for (const hunk of [...ours, ...others].sort((a, b) => b.start - a.start)) {
+    result.splice(hunk.start, hunk.removed.length, ...hunk.added);
+  }
+  return result.join('\n');
+}

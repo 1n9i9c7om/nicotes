@@ -342,9 +342,29 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   created, updated), attachments under `attachments/` with relative links. Opens as an
   Obsidian vault; `[[links]]` stay as written.
 - **PWA:** vite-plugin-pwa (Workbox). Precaches only the app shell; other assets are cached
-  on first use; `/api` is never served from the cache, so no offline data. The manifest's
-  `share_target` points at `/share`, which extracts a URL from `url`, `text` or `title` and
-  opens the importer. Installing requires HTTPS (or localhost).
+  on first use, attachments (NetworkFirst) once viewed; the rest of `/api` never comes from
+  the service worker. The manifest's `share_target` points at `/share`, which extracts a URL
+  from `url`, `text` or `title` and opens the importer. Installing requires HTTPS (or
+  localhost).
+- **Offline notes** (`web/lib/offline.ts`, per device, on by default in the installed app,
+  Settings → App): IndexedDB holds a copy of every page, the last answers of the lists the
+  app starts from (auth status, notebooks, pages, tags, settings) and an outbox of page edits.
+  `GET /api/pages/sync?since=` returns the pages changed since the last sync (with a second
+  of overlap) and all live ids, so deleted pages leave the copy too; it runs at start, every
+  5 minutes and when the browser comes back online. The API client answers GETs from the
+  copy when the server cannot be reached (network error, or 502–504 from a proxy), and
+  queries run with `networkMode: 'always'` so they do not wait for the network.
+- **Offline edits:** a page save that cannot reach the server goes to the outbox with the
+  version and text it was based on ("Saved on this device"); later offline edits of the
+  same page keep that first base. The editor of a page owns its outbox entry: it picks it up
+  when the page opens (also after a reload) and sends it with its normal saves. Pages that
+  are not open are sent by the outbox. Either way, a page changed elsewhere meanwhile is
+  merged line by line (`mergeText` in `shared/diff.ts`: both sides' hunks against the base,
+  applied together unless they touch the same lines); if they clash, the open editor shows
+  the conflict banner, and the outbox keeps the offline text as a subpage "… (offline
+  copy)". Creating, renaming, moving and deleting need the server. Sign-out (and switching
+  the setting off) deletes the copy and the cached attachments; another account signing in
+  on the device starts a fresh copy.
 
 ### AI assistants
 
