@@ -453,6 +453,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
     saving: { icon: <Loader2 size={14} className="spin" />, label: 'Saving…' },
     error: { icon: <CloudOff size={14} />, label: 'Offline – retrying' },
     conflict: { icon: <AlertTriangle size={14} />, label: 'Conflict' },
+    local: { icon: <CloudOff size={14} />, label: 'Saved on this device' },
   };
   const { icon, label } = map[status];
   return (

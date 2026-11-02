@@ -1118,3 +1118,14 @@ body:has(.page-width-handle.dragging) {
     margin: 12px 12px 0;
   }
 }
+
+.offline-banner:not(.banner-warning) {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.offline-banner > svg {
+  flex: none;
+  color: var(--warning);
+}

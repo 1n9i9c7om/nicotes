@@ -50,6 +50,7 @@ import type {
 } from '@nicotes/shared';
 import { isTwoFactorChallenge, parseTasks, TEMPLATE_TAG, updateTaskLine } from '@nicotes/shared';
 import { api } from './api';
+import { clearOffline } from './offline';
 
 export const keys = {
   auth: ['auth'] as const,
@@ -122,6 +123,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => api.post('/auth/logout'),
     onSuccess: () => {
+      void clearOffline();
       dropUserData(qc);
       qc.setQueryData<AuthStatus>(keys.auth, { user: null, setupRequired: false });
     },

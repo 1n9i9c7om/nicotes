@@ -32,6 +32,7 @@ curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
 | `POST /api/notebooks` `{ "title": "Inbox" }` | Creates a notebook |
 | `GET /api/pages?notebookId=…` | Pages (title, parent, tags, no content), optionally of one notebook |
 | `GET /api/pages/<id>` | One page with its Markdown `content` and `version` |
+| `GET /api/pages/sync?since=<ms>` | Every page changed since then (all with `since` left out), in full, plus `ids` of all pages; `at` is the time to ask from next |
 | `POST /api/pages` `{ "notebookId": "…", "title": "…", "content": "…", "parentId": null }` | Creates a page |
 | `PATCH /api/pages/<id>` `{ "content": "…", "baseVersion": 7 }` | Changes a page; `baseVersion` is the `version` you read, so a change made meanwhile is not overwritten (`409`) |
 | `PATCH /api/pages/<id>` `{ "title": "…" }` | Renames a page; `[[links]]` to it are updated |

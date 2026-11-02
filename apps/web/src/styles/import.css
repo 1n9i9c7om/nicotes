@@ -723,3 +723,19 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Offline notes ---------- */
+
+.offline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.setting .offline-toggle input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}

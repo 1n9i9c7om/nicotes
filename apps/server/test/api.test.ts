@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Notebook, Page, PageSummary } from '@nicotes/shared';
+import type { Notebook, Page, PageSummary, PageSync } from '@nicotes/shared';
 import { createApp, type AppOptions } from '../src/app.js';
 import { openDb } from '../src/db/index.js';
 import { dataDir, migrationsFolder, setup } from './helpers.js';
@@ -64,6 +64,23 @@ describe('notebooks and pages', () => {
   const tree = async () => (await api<PageSummary[]>('GET', '/api/pages')).body;
   const createPage = async (title: string, parentId: string | null = null, notebookId = notebook.id) =>
     (await api<Page>('POST', '/api/pages', { notebookId, parentId, title })).body;
+
+  it('hands out every page for offline copies, then only what changed', async () => {
+    const game = await createPage('Elden Ring');
+    const first = (await api<PageSync>('GET', '/api/pages/sync')).body;
+    expect(first.pages.map((p) => [p.title, p.content, p.version])).toEqual([['Elden Ring', '', 1]]);
+    expect(first.ids).toEqual([game.id]);
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const builds = await createPage('Builds', game.id);
+    await api('DELETE', `/api/pages/${game.id}`);
+    const next = (await api<PageSync>('GET', `/api/pages/sync?since=${first.at}`)).body;
+    // The trashed page is gone from the ids; its subpage went to the trash with it.
+    expect(next.ids).toEqual([]);
+    expect(next.pages).toEqual([]);
+    await api('POST', '/api/trash/restore', { kind: 'page', id: game.id });
+    expect((await api<PageSync>('GET', `/api/pages/sync?since=${first.at}`)).body.ids.sort()).toEqual([game.id, builds.id].sort());
+  });
 
   it('creates nested pages in order', async () => {
     const game = await createPage('Elden Ring');

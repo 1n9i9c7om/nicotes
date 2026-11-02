@@ -135,6 +135,17 @@ export interface Page extends PageSummary {
   version: number;
 }
 
+/**
+ * GET /api/pages/sync?since=: the pages changed since `since` (ms) in full, and the ids of all
+ * live pages, so a device can keep a copy of every page for offline use.
+ */
+export interface PageSync {
+  /** Server time of this answer; the next request asks for changes since then. */
+  at: number;
+  pages: Page[];
+  ids: string[];
+}
+
 /** Response of PATCH /pages/:id and PATCH /notebooks/:id. */
 export interface RenameResult {
   /** Pages whose content was rewritten because links to a renamed page/notebook changed. */

@@ -1,4 +1,5 @@
 import type { ApiError as ApiErrorBody, Attachment } from '@nicotes/shared';
+import { keepAnswer, offlineAnswer, reachedServer } from './offline';
 
 export class ApiError extends Error {
   constructor(
@@ -9,16 +10,37 @@ export class ApiError extends Error {
   }
 }
 
+/** The server could not be reached (no network, or a proxy without its server behind it). */
+export class OfflineError extends Error {
+  constructor() {
+    super('Offline: the server cannot be reached');
+  }
+}
+
+const UNREACHABLE = new Set([502, 503, 504]);
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (UNREACHABLE.has(res.status)) throw new OfflineError();
+  } catch {
+    reachedServer(false);
+    // Reading works on from the notes kept on this device.
+    const kept = method === 'GET' ? await offlineAnswer(path).catch(() => undefined) : undefined;
+    if (kept !== undefined) return kept as T;
+    throw new OfflineError();
+  }
+  reachedServer(true);
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) throw new ApiError(res.status, data);
+  if (method === 'GET') keepAnswer(path, data);
   return data as T;
 }
 

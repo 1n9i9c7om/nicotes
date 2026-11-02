@@ -33,6 +33,13 @@ npx playwright install chromium   # once; without it the installed Microsoft Edg
 npm run e2e                       # builds web + server, then runs all specs
 ```
 
+Service workers are blocked in the tests, so `offline.spec.ts` covers offline reading,
+editing and merging within one page load. Reloading the app offline (served by the service
+worker, signed in from the device copy) is worth a manual check when changing
+`lib/offline.ts` or the PWA setup: open the built app on its own port, let it copy the
+notes, switch the browser's network to offline in the developer tools, reload, edit a page,
+then go back online.
+
 After a build, run specs directly with `npm run e2e -w apps/e2e -- tests/editor.spec.ts`
 (add `--headed` or `--ui` to watch). Set `E2E_CHANNEL=msedge` (or `chrome`) to pick a
 browser. Failures leave a trace in `apps/e2e/test-results`

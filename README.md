@@ -311,6 +311,15 @@ Screen" (needs HTTPS, so run it behind a reverse proxy and set
 `NICOTES_SECURE_COOKIES=true`). On Android it then appears in the share menu, and shared
 links open the importer.
 
+**Offline:** the installed app keeps a copy of your notes on the device (in a browser tab,
+switch it on under Settings → App). Without a connection you can still open your notebooks
+and pages (<kbd>Ctrl</kbd> <kbd>K</kbd> finds them by title), see images you opened before,
+and edit pages: edits are kept on the
+device ("Saved on this device") and sent once the server is back, combined with changes
+made elsewhere in the meantime. If both changed the same lines, your offline text is kept
+as a subpage "… (offline copy)". New pages, renames and moves need a connection. Signing
+out removes the copy from the device.
+
 ### Browser sidebar
 
 The extension in `extension/` shows Nicotes in the browser's sidebar, the way Bitwarden

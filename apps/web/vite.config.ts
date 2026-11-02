@@ -71,8 +71,8 @@ export default defineConfig({
       },
       workbox: {
         // Precache only the app shell so it starts instantly; lazily loaded chunks (editor
-        // language modes, font subsets) are cached the first time they are used. Data
-        // always comes from the server.
+        // language modes, font subsets) are cached the first time they are used. Notes for
+        // offline use are kept by the app itself (lib/offline.ts).
         globPatterns: ['index.html', 'assets/index-*.{js,css}', 'favicon.svg', 'icons/*.png'],
         // Shows task reminders that arrive as push messages (public/push-sw.js).
         importScripts: ['push-sw.js'],
@@ -88,6 +88,12 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.startsWith('/assets/'),
             handler: 'CacheFirst',
             options: { cacheName: 'nicotes-assets', expiration: { maxEntries: 300, maxAgeSeconds: 365 * 24 * 3600 } },
+          },
+          {
+            // Images and files pages show stay viewable offline once seen (removed on sign-out).
+            urlPattern: ({ url, request }) => url.pathname.startsWith('/api/attachments/') && request.method === 'GET' && !request.headers.has('range'),
+            handler: 'NetworkFirst',
+            options: { cacheName: 'nicotes-attachments', networkTimeoutSeconds: 8, expiration: { maxEntries: 500, maxAgeSeconds: 90 * 24 * 3600 } },
           },
         ],
       },
