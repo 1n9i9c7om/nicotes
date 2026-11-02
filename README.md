@@ -106,7 +106,7 @@ Obsidian Excalidraw drawings.
 
 **Voice notes:** the microphone button in the toolbar records straight into the page (the
 recording is kept as an attachment, with a player). With a transcription service set up
-under Settings → **Voice notes**, what you said is written below it too: your own Whisper
+under Settings → Integrations → **Voice notes**, what you said is written below it too: your own Whisper
 server (such as [Speaches](https://speaches.ai)), or Groq or OpenAI with a key. Recording
 needs HTTPS (or localhost).
 
@@ -122,7 +122,7 @@ the print dialog makes a PDF named after the page.
 
 Search (<kbd>Ctrl</kbd> <kbd>K</kbd>) also looks inside the PDFs and text files your pages
 show. Photos and scanned images can be searched too once you turn on **Read images with AI**
-under Settings → Search in files: each image is then sent once to an AI model of your choice
+under Settings → Notes & tasks → Search in files: each image is then sent once to an AI model of your choice
 (or one on your own server), which writes down its text or says what it shows.
 
 ### Graph, journal and templates
@@ -138,7 +138,8 @@ the calendar). Any page tagged `#template` can be used for new pages and daily n
 Every `- [ ]` checkbox in any page shows up under **Tasks**, grouped by due date
 (`📅 2026-10-25` in the text, or pick a date in the list); ticking one off there updates its
 page, and new tasks go into today's journal note. Checklists of pages tagged `#recipe` stay
-out (Settings → Tasks). Under Settings → Tasks → **Calendar subscription** you get a secret
+out (Settings → Notes & tasks → Tasks). Under Settings → Notes & tasks → **Calendar
+subscription** you get a secret
 address for Google Calendar, Apple Calendar, Thunderbird and the like: open tasks with a due
 date show up there as all-day events.
 
@@ -150,7 +151,7 @@ imported vaults keep working.
 
 **Reminders:** write `⏰ 09:00` after a task with a due date (or `⏰ 2026-11-04 09:00` after
 any task) to be reminded then, and/or get a summary of the day's tasks every morning.
-Settings → **Reminders** sends them as notifications to your phone or computer (on iPhone
+Settings → Integrations → **Reminders** sends them as notifications to your phone or computer (on iPhone
 and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
 own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in
 the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token.
@@ -174,7 +175,7 @@ edge to reset); the width is remembered per browser.
 
 ### Adapters
 
-Settings → **Adapters** brings data from other services into your notes once a day:
+Settings → Integrations → **Adapters** brings data from other services into your notes once a day:
 
 - **Home Assistant:** sensor values of the day, such as solar energy produced, the average
   outdoor temperature or the electricity drawn from the grid. Enter your Home Assistant
@@ -196,7 +197,7 @@ own (weight, meter readings) that show as charts too.
 read the page (with its subpages, if you like) or the whole notebook, without an account,
 and nothing else. Links between shared pages work; links to anything else show as plain
 text. A link can expire after a day, a week or 30 days, and can be turned off at any time.
-Shared pages show a **Shared** button, and Settings → **Shared links** lists every link
+Shared pages show a **Shared** button, and Settings → Account → **Shared links** lists every link
 with how often it was opened. Shared pages stay out of search engines.
 
 ### Chat (optional)
@@ -205,19 +206,20 @@ with how often it was opened. Shared pages stay out of search engines.
 notes or tell it what to do, in your own words: *"What's due this week?"*, *"Remind me to
 call the dentist tomorrow at 9"*, *"Note in my journal that the heating was fixed"*,
 *"What did I write about the car?"*, *"Research heat pumps for old houses"*. It searches
-and reads pages, writes pages and the journal, adds, ticks off and moves tasks, shows the
-calendar and starts research; each step shows up in the chat and links to the page it
-touched. **New chat** makes it forget the conversation. It needs an AI service (see below)
-and a model that can use tools, chosen under Settings → AI models → Chat.
+and reads pages, writes, moves and renames pages and writes the journal, adds, ticks off
+and moves tasks, shows the calendar and starts research; each step shows up in the chat and
+links to the page it touched. It can also delete a page, but only once you confirm with
+the button it shows (the page goes to the trash). **New chat** makes it forget the conversation. It needs an AI service (see below)
+and a model that can use tools, chosen under Settings → AI → AI models → Chat.
 
 The same assistant answers in **Telegram** once a chat is connected under Settings →
-Reminders: write or send voice messages (with a transcription service set up), use
+Integrations → Reminders: write or send voice messages (with a transcription service set up), use
 `/todo` for open tasks with buttons to tick them off, `/calendar` for the week, `/today`
 and `/new` to start over. What the assistant does in Nicotes shows up there too, in a
 folded list above its answer. Telegram keeps a conversation of its own.
 
 The page menu can also **summarize** a page or **suggest links** to other pages. Switch on
-the **semantic index** (Settings) to find notes by meaning: related pages, "By meaning"
+the **semantic index** (Settings → AI) to find notes by meaning: related pages, "By meaning"
 results in search and in the chat. It sends the text of your notes to OpenRouter for
 embeddings (with the default model a few cents for thousands of pages), or to your own
 model server if you pick one of its embedding models.
@@ -246,21 +248,21 @@ its own knowledge instead: faster and cheaper, but without sources, and possibly
 Past runs are listed under **Recent research**; × removes one from the list (its note stays); **Organize with AI** (notebook or
 page menu) suggests tags, better parent pages and new groups, which you review before
 anything changes, and every applied batch can be undone. Each run shows its cost and stops
-at a configurable limit (default $0.50). Under Settings → **AI models** every feature
+at a configurable limit (default $0.50). Under Settings → AI → **AI models** every feature
 (import, organize, research, chat, the page assistant, summaries, link suggestions, layouts, reading images)
 can use its own model, picked from a searchable list with prices, context size and filters;
 unset ones use the default model.
 
 The AI features run on [OpenRouter](https://openrouter.ai),
 [Routeway](https://routeway.ai) (an OpenAI-compatible gateway) or **your own model
-server**, in any combination: set up each one you want under Settings, and every feature
+server**, in any combination: set up each one you want under Settings → AI, and every feature
 uses the service of the model you pick for it (Routeway models are stored as
 `routeway:<id>`, your own server's as `local:<id>`).
 
 **Your own model server** keeps your notes on your network and costs nothing per use. Any
 server with an OpenAI-compatible API works: [Ollama](https://ollama.com),
-[LM Studio](https://lmstudio.ai), LocalAI, vLLM. Under Settings → **Your own model
-server**, enter the address of its API (Ollama: `http://<host>:11434/v1`, LM Studio:
+[LM Studio](https://lmstudio.ai), LocalAI, vLLM. Under Settings → AI → **Your own
+model server**, enter the address of its API (Ollama: `http://<host>:11434/v1`, LM Studio:
 `http://<host>:1234/v1`); its models then show up in the model pickers, marked Own server.
 Its embedding models (names with "embed", e.g. `nomic-embed-text`) can run the semantic
 index. Local models can't search the web, so web research with them needs SearXNG (below);
@@ -302,7 +304,7 @@ or inside `Folder/`, becomes that parent page). `[[Links]]` (with aliases and he
 embedded notes, tasks with their dates and repeats, `#tags` and tags in the properties come
 along; canvases from the Excalidraw plugin become canvas pages; other properties are kept as a line at the top of the
 page, and the images and files your notes use become attachments. Settings in `.obsidian`
-are ignored. A Nicotes export (Settings → Export) can be imported the same way. This needs
+are ignored. A Nicotes export (Settings → App & data → Export) can be imported the same way. This needs
 no AI key.
 
 ## Phone and browser
@@ -315,7 +317,7 @@ Screen" (needs HTTPS, so run it behind a reverse proxy and set
 links open the importer.
 
 **Offline:** the installed app keeps a copy of your notes on the device (in a browser tab,
-switch it on under Settings → App). Without a connection you can still open your notebooks
+switch it on under Settings → App & data). Without a connection you can still open your notebooks
 and pages (<kbd>Ctrl</kbd> <kbd>K</kbd> finds them by title), see images you opened before,
 and edit pages: edits are kept on the
 device ("Saved on this device") and sent once the server is back, combined with changes
@@ -350,7 +352,7 @@ own sign-in.
 
 ## Scripts and other apps
 
-Under Settings → **API tokens** you can create tokens for scripts and other apps, such as an
+Under Settings → Account → **API tokens** you can create tokens for scripts and other apps, such as an
 iOS shortcut that adds a task to today's journal, Home Assistant, or a backup script. A
 token is shown once; send it as `Authorization: Bearer nct_…`. **Read only** tokens can only
 look at your notes, **Read and write** ones can change them too. No token can change
@@ -359,7 +361,7 @@ settings, download backups or create other tokens, and each one can be revoked a
 
 ## Sign-in security
 
-Settings → **Sign-in security** protects your account beyond the password:
+Settings → Account → **Sign-in security** protects your account beyond the password:
 
 - **Two-step sign-in:** after the password, Nicotes asks for a 6-digit code from an
   authenticator app such as Google Authenticator, Microsoft Authenticator, Aegis or 2FAS.
@@ -390,7 +392,7 @@ codes from the app stop working and a recovery code or this command gets you bac
 Nicotes backs itself up once a day: a consistent copy of the database (taken while it runs),
 the attachments and the key file for stored API keys, as one `nicotes-<time>.tar.gz`. It
 keeps everything from the last 24 hours and the newest backup of each of the last 7 days
-and of each of the last 4 weeks. **Settings → Backups** lists them, makes one on demand and
+and of each of the last 4 weeks. **Settings → App & data → Backups** lists them, makes one on demand and
 downloads them. Interval and retention are set with `NICOTES_BACKUP_*` variables (see
 `.env.example`).
 
@@ -412,7 +414,7 @@ docker compose start nicotes
 A backup downloaded from Settings can be restored the same way after copying it into the
 backup folder. Without Docker, stop the server and run `npm run restore -- <backup file>`
 (or `node apps/server/dist/restore.js <backup file>` with a build); it restores into
-`DATA_DIR`. Separately, Settings → Export downloads all notes as Markdown (an
+`DATA_DIR`. Separately, Settings → App & data → Export downloads all notes as Markdown (an
 Obsidian-compatible vault), handy for reading them without Nicotes.
 
 ## Contributing

@@ -1,4 +1,5 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, like } from 'drizzle-orm';
+import { HTTPException } from 'hono/http-exception';
 import type { ChatAction, ChatChannel, ChatEntry } from '@nicotes/shared';
 import type { JobRunner } from '../ai/jobs.js';
 import { addUsage, chatWithTools, emptyUsage, hasKeyFor, LlmError, missingKeyMessage, type ToolMessage } from '../ai/llm.js';
@@ -8,7 +9,7 @@ import { chatMessages } from '../db/schema.js';
 import { newId } from '../ids.js';
 import { localTime, timeZoneOf } from '../time.js';
 import type { SettingsStore } from '../settings.js';
-import { runTool, toolSpecs, type ToolContext } from './tools.js';
+import { answerConfirmation, runTool, toolSpecs, type ToolContext } from './tools.js';
 
 /** Tool rounds per message: enough to search, read and then write. */
 const MAX_ROUNDS = 8;
@@ -20,6 +21,17 @@ export interface ChatDeps {
   settings: SettingsStore;
   jobs: JobRunner;
   semantic: SemanticIndex;
+}
+
+/**
+ * Earlier answers reach the model with what was done for them, so it neither repeats a claim
+ * without the work nor forgets what it did.
+ */
+const STEPS_PREFIX = '[Steps in Nicotes:';
+
+function withSteps(content: string, actions: ChatAction[]): string {
+  const steps = actions.map((a) => `${a.summary}${a.confirm?.state === 'pending' ? ' (waiting for the user)' : a.ok ? '' : ' (failed)'}`);
+  return `${STEPS_PREFIX} ${steps.join('; ') || 'none'}]\n${content}`;
 }
 
 const toEntry = (row: typeof chatMessages.$inferSelect): ChatEntry => ({
@@ -45,6 +57,32 @@ export function resetChat(db: Db, userId: string, channel: ChatChannel) {
   db.delete(chatMessages).where(and(eq(chatMessages.userId, userId), eq(chatMessages.channel, channel))).run();
 }
 
+/**
+ * The user's answer to a step that waited for them (such as deleting a page): carries it out
+ * or drops it, and returns the chat entry it belongs to with the step updated.
+ */
+export function confirmAction(db: Db, userId: string, actionId: string, yes: boolean): ChatEntry {
+  if (/^[\w-]{1,64}$/.test(actionId)) {
+    const rows = db
+      .select()
+      .from(chatMessages)
+      .where(and(eq(chatMessages.userId, userId), like(chatMessages.actions, `%"id":"${actionId}"%`)))
+      .all();
+    for (const row of rows) {
+      const actions = JSON.parse(row.actions!) as ChatAction[];
+      const action = actions.find((a) => a.confirm?.id === actionId);
+      if (!action?.confirm) continue;
+      if (action.confirm.state !== 'pending') throw new HTTPException(409, { message: 'That was already answered' });
+      action.summary = answerConfirmation(db, userId, action, yes);
+      action.confirm.state = yes ? 'done' : 'declined';
+      const updated = { ...row, actions: JSON.stringify(actions) };
+      db.update(chatMessages).set({ actions: updated.actions }).where(eq(chatMessages.id, row.id)).run();
+      return toEntry(updated);
+    }
+  }
+  throw new HTTPException(404, { message: 'That question is gone (the chat may have been started anew)' });
+}
+
 function save(db: Db, userId: string, channel: ChatChannel, role: ChatEntry['role'], content: string, actions: ChatAction[] = []): ChatEntry {
   const row = { id: newId(), userId, channel, role, content, actions: actions.length ? JSON.stringify(actions) : null, createdAt: Date.now() };
   db.insert(chatMessages).values(row).run();
@@ -60,7 +98,11 @@ function systemPrompt(username: string, now: number, timeZone: string, channel: 
     'Rules:',
     '- Look things up with the tools instead of guessing; never invent notes, tasks or dates. Say so when nothing was found.',
     '- Notes the user asks you to keep go into today\'s journal unless they name a page. Tasks go into today\'s journal unless they name a page.',
+    '- Only a tool changes anything. Never say you added, created, changed, moved or deleted something unless a tool call in your current answer did it and succeeded; if you made none, nothing was changed.',
+    `- Each of your earlier answers starts with "${STEPS_PREFIX} …]": what was really done for it. Never write such a line yourself.`,
+    '- Pages change in between (the user edits and moves them in the app): read a page again instead of relying on earlier answers. Say where a page is with its path (Notebook › Parent › Page).',
     '- Before changing or ticking off a task, find it with list_tasks. Do not delete or rewrite existing text; only add to it.',
+    '- To delete a page, use delete_page: the user then confirms with a button, so tell them it waits for that.',
     '- Mention pages as [[Title]] so they can be opened. Pages are Markdown; tasks are lines like "- [ ] text 📅 YYYY-MM-DD ⏰ HH:MM".',
     '- For a calendar or a task overview, give a compact list grouped by day (weekday and date), today first.',
     '- Answer in the language the user writes in. Be brief and friendly; no preamble about what you are going to do.',
@@ -103,9 +145,11 @@ export async function runChat(
   const history: ToolMessage[] = [];
   let size = 0;
   for (const row of earlier) {
-    size += row.content.length;
+    const entry = toEntry(row);
+    const content = entry.role === 'assistant' ? withSteps(entry.content, entry.actions) : entry.content;
+    size += content.length;
     if (size > HISTORY_CHARS) break;
-    history.unshift({ role: row.role as 'user' | 'assistant', content: row.content });
+    history.unshift({ role: entry.role, content });
   }
   opts.onUser?.(save(db, opts.userId, opts.channel, 'user', opts.text));
 
@@ -127,7 +171,8 @@ export async function runChat(
     const reply = await chatWithTools({ keys: cfg.keys, model, messages, tools, toolChoice: last ? 'none' : 'auto', maxTokens: 3000, signal: opts.signal });
     usage = addUsage(usage, reply.usage);
     if (!reply.toolCalls.length || last) {
-      answer = reply.content.trim();
+      // A model may imitate the steps line of earlier answers.
+      answer = reply.content.trim().replace(/^\[Steps in Nicotes:[^\]\n]*\]\s*/, '');
       break;
     }
     messages.push({

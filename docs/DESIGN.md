@@ -491,17 +491,28 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
   `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
   wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
-  `create_page`, `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
+  `create_page`, `move_page` (new parent, notebook and/or title; links follow via
+  `propagateRenames`), `delete_page` (see below), `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
   `pageId:line`), `add_task` (today's journal unless a page is named; due date, `⏰`
   reminder and `🔁` repeat rule), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
   per day, journal days), `start_research`, `research_status`. Arguments are validated
   with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
   `{error}` and show as failed steps. Up to 8 rounds per message, the last with
   `tool_choice: "none"`, and the per-run cost limit applies. The system prompt has the
-  date and time in the account's time zone. History: the channel's messages (web and
-  Telegram are separate) up to 24k characters; tool traffic is kept only within a turn,
-  the steps are stored with the answer for display. `POST /api/chat` streams `user`,
-  `action` and `answer` events; `DELETE /api/chat` forgets the conversation.
+  date and time in the account's time zone. Search results, `read_page` and the page tools
+  give a page's path (Notebook › Parent › Page), which the step texts show too. History:
+  the channel's messages (web and Telegram are separate) up to 24k characters; tool
+  traffic is kept only within a turn, the steps are stored with the answer for display, and
+  earlier answers reach the model prefixed with `[Steps in Nicotes: …]` ("none" when no tool
+  ran), so it cannot take an earlier claim for work done; a prefix it imitates is cut from
+  its answer. `POST /api/chat` streams `user`, `action` and `answer` events; `DELETE
+  /api/chat` forgets the conversation.
+  **Steps to confirm:** a tool may return `confirm` instead of acting (`delete_page`): the
+  step is stored with `confirm: {id, state: 'pending', yes, no}`, the model is told it waits,
+  and the web chat (buttons on the step) or Telegram (a message with buttons,
+  `c:actionId:1|0`) answers through `confirmAction` (`POST /api/chat/actions/:id`, also
+  for the Telegram bot), which runs or drops it (`CONFIRMED` in `chat/tools.ts`) and
+  rewrites the step's text. Deleting moves the page and its subpages to the trash.
 - **Telegram chat** (`telegram.ts`): once a chat is linked, the reminder service long-polls
   the bot (messages and button presses) and hands updates of the linked chat to
   `TelegramBot`: `/todo` lists open tasks (overdue, today, next 7 days, undated) with a

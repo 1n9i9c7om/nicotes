@@ -2,6 +2,31 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.5.1 — 2026-11-02
+
+**New**
+
+- **The chat can move, rename and delete pages.** Ask it to put a page under another one,
+  into another notebook, or to rename it; links to the page are updated. It can also delete
+  a page, but only once you confirm: it shows the question with a **Move to trash** and a
+  **Keep it** button, in the web app and in Telegram. Deleted pages go to the trash, from
+  where you can restore them.
+
+**Changes**
+
+- **Settings are organized in tabs:** Account, Notes & tasks, AI, Integrations, and App &
+  data. The open tab stays open when you reload, and links to a setting open its tab.
+- **The top bar stays in view on phones.** The menu and search no longer scroll away, so
+  you can switch pages without scrolling back up first.
+- **The chat is more reliable.** It no longer claims to have changed a page when it didn't
+  call a tool, and it says where a page is with its full path (Notebook › Parent › Page)
+  instead of guessing from earlier answers.
+
+**Fixes**
+
+- Typing `!` and picking a page with `[[` at the start of a line that already had text no
+  longer deletes that text. The link is kept as `![[Page]]` within the line.
+
 ## 0.5.0 — 2026-11-02
 
 **New**

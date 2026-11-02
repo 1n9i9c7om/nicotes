@@ -199,7 +199,7 @@ export function ImportPage() {
           )}
 
           <div className="import-actions">
-            <Link to="/settings" className="btn">
+            <Link to="/settings/ai" className="btn">
               <SettingsIcon size={15} /> Settings
             </Link>
             <button className="btn btn-primary" disabled={preview.isPending}>

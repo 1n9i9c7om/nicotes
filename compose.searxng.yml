@@ -2,7 +2,7 @@
 #
 #   docker compose -f compose.searxng.yml up -d
 #
-# Then set SEARXNG_URL (or Settings → Research) to http://localhost:8888 for `npm run dev`,
+# Then set SEARXNG_URL (or Settings → AI → Research & AI) to http://localhost:8888 for `npm run dev`,
 # or http://searxng:8080 when Nicotes runs in the same compose project.
 services:
   searxng:

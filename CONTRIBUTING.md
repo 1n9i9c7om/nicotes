@@ -7,7 +7,7 @@ Thanks for helping! Bug reports, ideas and pull requests are all welcome.
 Open an [issue on GitHub](https://github.com/1n9i9c7om/nicotes/issues/new/choose). For a bug,
 please include:
 
-- the version (Settings → About shows version and build);
+- the version (Settings → App & data → About shows version and build);
 - your browser and device, and whether it happens in the installed phone app or the sidebar;
 - what you did, what you expected and what happened instead.
 

@@ -14,7 +14,7 @@ report. If you have an account on git.nico.software, a
 [confidential issue](https://git.nico.software/1n9i9c7om/nicotes/-/issues/new?issue[confidential]=true)
 works as well.
 
-A good report says which version you run (Settings → About), what an attacker can do, and
+A good report says which version you run (Settings → App & data → About), what an attacker can do, and
 the steps to reproduce it. Once a fix is released, the advisory is published and the
 changelog mentions the fix. The same contact is listed in
 [security.txt](https://pages.nico.software/1n9i9c7om/nicotes/.well-known/security.txt).
@@ -36,7 +36,7 @@ when it can be reached over the internet:
   only use it if you trust everyone who can sign in.
 - **Browser extension.** `NICOTES_BROWSER_EXTENSION=true` lets browser extension pages show
   Nicotes in a frame. Leave it off if you don't use the sidebar.
-- **Sign-in.** Turn on two-step sign-in or passkeys (Settings → Sign-in security). API
+- **Sign-in.** Turn on two-step sign-in or passkeys (Settings → Account → Sign-in security). API
   tokens can be limited to reading and revoked at any time; calendar addresses and shared
   links are secrets too, so turn off ones you no longer use.
 - **AI features.** A feature sends the text of the notes it works on to the service of the
@@ -48,5 +48,5 @@ when it can be reached over the internet:
   choose them, so only give accounts to people you trust. An adapter's stored token is only
   sent to the address it was entered for.
 - **Offline notes.** The installed app keeps a copy of all notes in the browser on that
-  device (Settings → App; off by default in a browser tab). On a shared computer leave it
+  device (Settings → App & data; off by default in a browser tab). On a shared computer leave it
   off; signing out deletes the copy.

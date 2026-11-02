@@ -181,7 +181,9 @@ export const Embed = Node.create<EmbedOptions>({
           const bang = state.doc.resolve(linkStart).nodeBefore;
           if (!bang?.isText || !bang.text!.endsWith('!')) return null;
           const paragraph = $from.parent;
-          if (paragraph.type.name === 'paragraph' && paragraph.childCount === 2 + space && bang.text === '!') {
+          // Alone: "!", the link and at most the picker's space (text after it joins that node).
+          const alone = paragraph.childCount === 2 + space && bang.text === '!' && (!space || paragraph.lastChild!.text === ' ');
+          if (paragraph.type.name === 'paragraph' && alone) {
             const from = $from.before();
             return state.tr.replaceWith(from, from + paragraph.nodeSize, type.create({ target: link.attrs.target, label: link.attrs.label }));
           }

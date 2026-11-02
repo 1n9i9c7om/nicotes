@@ -38,4 +38,14 @@ describe('inline embeds', () => {
     expect(editor.getMarkdown().trim()).toBe('Try ![[Rye]]');
     editor.destroy();
   });
+
+  it('keeps the rest of the line when a link is picked after "!" at its start', () => {
+    const editor = editorFor('Intro');
+    editor.commands.focus('start');
+    editor.commands.insertContent('!');
+    // As picked from the list: the link and a space, which joins the text after it.
+    editor.commands.insertContent([{ type: 'wikilink', attrs: { target: 'Bread', label: null } }, { type: 'text', text: ' ' }]);
+    expect(editor.getMarkdown().trim()).toBe('![[Bread]] Intro');
+    editor.destroy();
+  });
 });

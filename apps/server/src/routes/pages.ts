@@ -324,11 +324,16 @@ export function pageRoutes(db: Db) {
       return c.json(result);
     })
     .delete('/:id', (c) => {
-      const userId = c.var.user.id;
-      const page = findPage(db, userId, c.req.param('id'));
-      const ids = [page.id, ...descendantIds(db, userId, page.id)];
-      // Same timestamp for the whole subtree so it can be restored as one unit later.
-      db.update(pages).set({ deletedAt: deletionTime(db, userId) }).where(inArray(pages.id, ids)).run();
+      trashPage(db, c.var.user.id, c.req.param('id'));
       return c.body(null, 204);
     });
+}
+
+/** Moves a page and its subpages to the trash; returns how many pages that were. */
+export function trashPage(db: Db, userId: string, id: string): number {
+  const page = findPage(db, userId, id);
+  const ids = [page.id, ...descendantIds(db, userId, page.id)];
+  // Same timestamp for the whole subtree so it can be restored as one unit later.
+  db.update(pages).set({ deletedAt: deletionTime(db, userId) }).where(inArray(pages.id, ids)).run();
+  return ids.length;
 }

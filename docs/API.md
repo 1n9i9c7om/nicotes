@@ -6,7 +6,7 @@ outside; the full set is in `apps/server/src/routes`.
 
 ## Signing in with a token
 
-Create a token under **Settings → API tokens** and send it with every request:
+Create a token under **Settings → Account → API tokens** and send it with every request:
 
 ```bash
 curl -H "Authorization: Bearer nct_…" https://notes.example.com/api/notebooks
@@ -68,7 +68,7 @@ curl -s -H "Authorization: Bearer nct_…" -H "Content-Type: application/json" \
 
 A page with a table whose first column is `Date` shows as charts in its View, one chart per
 column of numbers. Scripts can keep such a logbook by reading the page and writing it back
-with a new row (the adapters under Settings → Adapters do the same, but are managed only in
+with a new row (the adapters under Settings → Integrations → Adapters do the same, but are managed only in
 the app, since they hold other services' tokens):
 
 ```markdown
@@ -87,6 +87,7 @@ The chat assistant can be used from scripts too (it needs an AI service set up i
 | `POST /api/chat` `{ "text": "What's due today?" }` | Sends a message; the answer streams as server-sent events, one JSON object per `data:` line: `user`, `action` (each step it takes), then `answer` (with `entry.content`) or `error` |
 | `GET /api/chat` | The conversation so far |
 | `DELETE /api/chat` | Forgets the conversation |
+| `POST /api/chat/actions/:id` `{ "confirm": true }` | Answers a step that waits for confirmation (an `action` with `confirm.state: "pending"`, such as deleting a page): `true` carries it out, `false` drops it. Returns the answer with the step updated |
 
 A token shares the web app's conversation of its account. Sending a message needs a
 read-and-write token, since the chat can change notes.
@@ -95,7 +96,7 @@ read-and-write token, since the chat can change notes.
 
 `GET /api/calendar/<token>.ics` is an iCalendar feed of the open tasks with a due date
 (all-day events). It needs no `Authorization` header: the calendar token in the address,
-created under Settings → Tasks → Calendar subscription, is the key. Calendar tokens work
+created under Settings → Notes & tasks → Calendar subscription, is the key. Calendar tokens work
 nowhere else, and an unknown token answers `404`.
 
 ## Export
