@@ -27,12 +27,13 @@ sit in between: a calm web app where notes live in **notebooks and nested pages*
 it upfront.
 
 - 🗂️ **Notebooks and subpages** you can drag around, with colours, tags and a full-text search (<kbd>Ctrl</kbd> <kbd>K</kbd>).
-- 🔗 **`[[Links]]`, backlinks and a graph**, plus unlinked mentions that turn into links with one click.
-- ✅ **Every checkbox in one task list**, grouped by due date, with a daily journal note.
-- 🍳 **Pages that know what they are**: recipes with servings and timers, checklists, step-by-step guides, a read-aloud reader.
-- 🤖 **Optional AI** through OpenRouter, Routeway or your own model server (Ollama, LM Studio …): ask your notes, research the web, an assistant whose changes you review like a diff.
-- 📱 **On every screen**: installable on your phone, and in the sidebar of Firefox, Chrome and Edge.
-- 💾 **Your data, on your server**: one container, daily backups and a Markdown export that opens in Obsidian.
+- 🔗 **`[[Links]]`, backlinks and a graph**, plus unlinked mentions that turn into links with one click, and pages embedded in other pages.
+- ✅ **Every checkbox in one task list**, grouped by due date, with repeating tasks, reminders (on your phone or in Telegram) and a daily journal note.
+- 🍳 **Pages that know what they are**: recipes with servings and timers, checklists, step-by-step guides, a read-aloud reader, charts of tables.
+- 🤖 **Optional AI** through OpenRouter, Routeway or your own model server (Ollama, LM Studio …): a chat that works with your notes (also in Telegram), web research, and a page assistant whose changes you review like a diff.
+- 📱 **On every screen**: installable on your phone, readable and editable offline, and in the sidebar of Firefox, Chrome and Edge.
+- 📈 **Logbooks that fill themselves**: adapters bring in Home Assistant sensors or the weather every day, drawn as charts.
+- 💾 **Your data, on your server**: one container, daily backups, an Obsidian vault import, a Markdown export that opens in Obsidian, and print or PDF of any page.
 - ✏️ **Canvas pages** to draw, sketch and arrange freely, and **voice notes** that write themselves down.
 - 🔗 **Read-only links** to a page or a notebook, for people without an account.
 - 🔐 **Locked down**: two-step sign-in with an authenticator app, and passkeys.
@@ -164,9 +165,9 @@ Next to Visual and Markdown, **View** shows a page the way its content wants to 
 checklist to tick and drag around, a recipe with adjustable servings, timers (for a range
 like "20–30 minutes" you pick the time, starting in the middle) and a full-screen cook mode, a step-by-step guide, a reader that reads stories aloud and
 highlights the current sentence, or **charts** of tables of numbers (a chart per column,
-with the value of each day on hover). The layout is detected automatically; with an OpenRouter
-key the AI decides for unclear pages (a fraction of a cent each), and you can always pick one
-yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
+with the value of each day on hover). The layout is detected automatically; with an AI
+service set up (see below), the AI decides for unclear pages (a fraction of a cent each),
+and you can always pick one yourself. Changes made in a view (ticking, adding, reordering) edit the page itself.
 
 In every mode, drag either edge of the page to make it wider or narrower (double-click the
 edge to reset); the width is remembered per browser.
@@ -296,8 +297,9 @@ compose project, `http://crawl4ai:11235`.
 or Markdown folder**. Before anything is created you see how many notes, files and tags it
 holds and which notebooks it becomes: one per top-level folder, or everything in one
 notebook. Notes become pages and subfolders parent pages (a folder note, `Folder.md` next to
-or inside `Folder/`, becomes that parent page). `[[Links]]`, aliases in links, `#tags` and
-tags in the properties come along; other properties are kept as a line at the top of the
+or inside `Folder/`, becomes that parent page). `[[Links]]` (with aliases and headings),
+embedded notes, tasks with their dates and repeats, `#tags` and tags in the properties come
+along; canvases from the Excalidraw plugin become canvas pages; other properties are kept as a line at the top of the
 page, and the images and files your notes use become attachments. Settings in `.obsidian`
 are ignored. A Nicotes export (Settings → Export) can be imported the same way. This needs
 no AI key.

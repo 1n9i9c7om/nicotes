@@ -24,9 +24,10 @@ npm run build      # production build of web + server
 
 `apps/e2e` drives the real web UI with [Playwright](https://playwright.dev) against the built
 server, started on free ports with throwaway data dirs in the system temp folder (one with a
-test account from `NICOTES_ADMIN_USER`, one empty for the first-run setup screen). AI features
-are not covered: the test servers run without an OpenRouter key and all outbound requests
-go to a dead proxy.
+test account from `NICOTES_ADMIN_USER`, one empty for the first-run setup screen, one for the
+sign-in security tests). AI features are not covered: the test servers run without an AI key
+and all outbound requests go to a dead proxy. Tests that need another service (the Home
+Assistant adapter) start a small fake of it in the test process.
 
 ```bash
 npx playwright install chromium   # once; without it the installed Microsoft Edge is used
