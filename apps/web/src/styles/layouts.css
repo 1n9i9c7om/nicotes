@@ -749,7 +749,7 @@
 
 .reader-bar {
   position: sticky;
-  top: 0;
+  top: var(--mobile-bar-height);
   z-index: 5;
   display: flex;
   flex-wrap: wrap;

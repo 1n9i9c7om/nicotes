@@ -785,7 +785,7 @@
 
 .page-bar {
   position: sticky;
-  top: 0;
+  top: var(--mobile-bar-height);
   z-index: 10;
   display: flex;
   align-items: center;
@@ -1017,6 +1017,10 @@ body:has(.page-width-handle.dragging) {
 /* ---------- Mobile ---------- */
 
 @media (max-width: 800px) {
+  :root {
+    --mobile-bar-height: 52px;
+  }
+
   .shell {
     grid-template-columns: 1fr;
   }
@@ -1055,11 +1059,15 @@ body:has(.page-width-handle.dragging) {
     pointer-events: auto;
   }
 
+  /* Stays in view, so the menu and search are always at hand. */
   .mobile-bar {
+    position: sticky;
+    top: 0;
+    z-index: 15;
     display: flex;
     align-items: center;
     gap: 10px;
-    height: 52px;
+    height: var(--mobile-bar-height);
     padding: 0 12px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-sidebar);
@@ -1091,7 +1099,6 @@ body:has(.page-width-handle.dragging) {
 
   .page-bar {
     padding: 6px 12px;
-    top: 0;
   }
 
   .segmented button span {

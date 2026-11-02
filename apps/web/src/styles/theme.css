@@ -46,6 +46,8 @@
   --radius: 8px;
   --radius-lg: 12px;
   --sidebar-width: 280px;
+  /* Height of the bar that stays at the top of the page on phones (none on wider screens). */
+  --mobile-bar-height: 0px;
   --tree-indent: 14px;
   --content-width: 780px;
   --shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 0 0 1px var(--border);
