@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { resolveWikilink, taskPlainText, type PageTask } from '@nicotes/shared';
+import { resolveWikilink, taskPlainText, type ChatAction, type PageTask } from '@nicotes/shared';
 import type { Db } from './db/index.js';
 import { loadLinkContext } from './links.js';
 import { listTasks, updateTask } from './routes/tasks.js';
@@ -21,8 +21,8 @@ export interface TelegramUpdate {
 }
 
 export interface BotChat {
-  /** Answers a message with the chat assistant (Markdown). */
-  ask: (userId: string, text: string) => Promise<string>;
+  /** Answers a message with the chat assistant (Markdown); `onAction` hears each step it takes. */
+  ask: (userId: string, text: string, onAction?: (action: ChatAction) => void) => Promise<string>;
   reset: (userId: string) => void;
   /** Writes down a voice message; null without a transcription service. */
   transcribe?: (userId: string, audio: { bytes: Buffer; filename: string; mime: string }) => Promise<string | null>;
@@ -80,6 +80,29 @@ export function telegramHtml(markdown: string, link: (target: string) => string 
     .replace(/^(\s*)[-*+] /gm, '$1• ');
   // eslint-disable-next-line no-control-regex
   return text.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => blocks[Number(i)]!);
+}
+
+const STEP_ICONS: [RegExp, string][] = [
+  [/^search/, '🔎'],
+  [/journal/, '📓'],
+  [/task/, '☑️'],
+  [/^calendar/, '📅'],
+  [/research/, '🔭'],
+  [/^(create|append)/, '📝'],
+];
+
+/**
+ * What the assistant did in Nicotes, one line per tool call, folded into a quote that
+ * Telegram shows collapsed when it is long. Pages it touched link to Nicotes.
+ */
+export function stepsHtml(actions: ChatAction[], pageUrl: (id: string) => string | null): string {
+  const lines = actions.map((a) => {
+    const icon = a.ok ? (STEP_ICONS.find(([re]) => re.test(a.tool))?.[1] ?? '📄') : '⚠️';
+    const href = a.pageId ? pageUrl(a.pageId) : null;
+    const summary = escape(clip(a.summary, 120));
+    return `${icon} ${href ? `<a href="${escape(href)}">${summary}</a>` : summary}`;
+  });
+  return `<blockquote expandable>${lines.join('\n')}</blockquote>`;
 }
 
 /** Telegram allows 4096 characters per message: long answers are split at paragraphs. */
@@ -183,6 +206,11 @@ export class TelegramBot {
     };
   }
 
+  private pageUrl(userId: string) {
+    const appUrl = this.settings.internal(userId, 'appUrl');
+    return (id: string) => (appUrl ? `${appUrl}/p/${id}` : null);
+  }
+
   private send(token: string, chatId: number, html: string, keyboard?: Keyboard) {
     return this.telegram(token, 'sendMessage', {
       chat_id: chatId,
@@ -236,10 +264,35 @@ export class TelegramBot {
     }
     if (!this.chat) return;
     // Answers can take a while: show "typing…" until it is there.
-    const typing = setInterval(() => void this.telegram(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {}), 4500);
-    void this.telegram(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
+    const showTyping = () => void this.telegram(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
+    const typing = setInterval(showTyping, 4500);
+    showTyping();
+    // The steps the assistant takes, in one message that grows as they happen. Updates are
+    // sent one at a time; steps that came in meanwhile go out together.
+    const actions: ChatAction[] = [];
+    const pageUrl = this.pageUrl(userId);
+    let stepsId: number | null = null;
+    let shown = 0;
+    let updates = Promise.resolve();
+    const onAction = (action: ChatAction) => {
+      actions.push(action);
+      updates = updates
+        .then(async () => {
+          if (shown === actions.length) return;
+          shown = actions.length;
+          const html = stepsHtml(actions, pageUrl);
+          if (stepsId === null) {
+            stepsId = ((await this.send(token, chatId, html)) as { message_id: number }).message_id;
+            showTyping(); // a new message ends "typing…"
+          } else {
+            await this.telegram(token, 'editMessageText', { chat_id: chatId, message_id: stepsId, text: html, parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+          }
+        })
+        .catch(() => {});
+    };
     try {
-      const answer = await this.chat.ask(userId, text);
+      const answer = await this.chat.ask(userId, text, onAction);
+      await updates;
       for (const part of splitMessage(telegramHtml(answer, this.linker(userId)))) await this.send(token, chatId, part);
     } catch (err) {
       await this.send(token, chatId, `Sorry, that did not work: ${escape((err as Error).message)}`);

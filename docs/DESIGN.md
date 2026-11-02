@@ -508,7 +508,9 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   button per task (`d:pageId:line:hash of the line`, so a changed task is not ticked by
   mistake), `/calendar` a Monday–Sunday week with « / » buttons (`w:date`, edited in place),
   `/new` resets, voice messages are fetched (`getFile`) and transcribed. Other text goes to
-  the chat (channel `telegram`, "typing…" while it works); its Markdown is converted to
+  the chat (channel `telegram`, "typing…" while it works). Its steps go into one message
+  (an expandable `<blockquote>`, sent with the first step and edited as more come, one
+  request at a time; pages link to the app when its address is known); its Markdown is converted to
   Telegram's HTML (bold, italics, code, lists, links; `[[links]]` point to the app's
   address) and split into 4000-character messages. Other chats are ignored.
 - **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
