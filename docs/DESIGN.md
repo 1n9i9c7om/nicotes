@@ -452,14 +452,12 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   the chat (channel `telegram`, "typing…" while it works); its Markdown is converted to
   Telegram's HTML (bold, italics, code, lists, links; `[[links]]` point to the app's
   address) and split into 4000-character messages. Other chats are ignored.
-- **Ask your notes** (API only since the chat replaced its page): `POST /api/ai/ask`
-  streams the retrieved passages (semantic, or FTS keyword fallback), the answer and the
-  cost; the model may only use the numbered passages and cites them as `[n]`.
 - **Read scopes:** what an AI feature may read besides the open page — `page` (nothing),
   `section` (the parent page's subtree; a top-level page's own subtree), `notebook` or
-  `all` (`ai/scope.ts`). Retrieval (semantic and keyword) takes the allowed page ids.
-  `/api/ai/ask` searches everything unless the request names `notebookIds`.
-- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events like Ask: steps,
+  `all` (`ai/scope.ts`). Retrieval (`ai/retrieve.ts`: passages by meaning when the semantic
+  index is on, else full-text search and the sections with the most matching words) takes
+  the allowed page ids.
+- **Page assistant:** `POST /api/ai/pages/:id/assistant` streams events: steps,
   the context it read (notes within the read scope picked in the panel, which starts at `page`
   every time it opens; optionally a few web
   sources found via SearXNG/OpenRouter and read like Research does), the message, and —
@@ -629,7 +627,8 @@ URL ─► crawl4ai /crawl (if configured) ─┐
    daily notes with a journal calendar.
 7. ✅ **Connections & insight** — connections panel (backlinks, unlinked mentions, related
    pages, AI link suggestions), tasks across pages with due dates, semantic index with
-   search by meaning, "Ask your notes" with citations, page summaries.
+   search by meaning, "Ask your notes" with citations (later replaced by the chat), page
+   summaries.
 8. ✅ **Hardening** — automatic backups with restore, Playwright end-to-end tests
    (`npm run e2e`), a model per AI feature.
 9. ✅ **Interactive views** — checklist, recipe with cook mode, guide, reader with
