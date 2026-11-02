@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { dateSchema } from './history';
+import { RECUR_TOKEN } from './recurring';
 import { addToSection, appendBlock } from './sections';
 
 /**
@@ -33,6 +34,8 @@ export interface TaskItem {
   due: string | null;
   /** "YYYY-MM-DDTHH:MM", local time; null without a reminder (or a time but no date). */
   remind: string | null;
+  /** The repeat rule (`🔁 every week` → "every week"), if the task recurs. */
+  repeat: string | null;
   /** Nearest heading above the task. */
   heading: string | null;
   /** Indentation level (0 for top-level tasks). */
@@ -40,7 +43,7 @@ export interface TaskItem {
 }
 
 const stripDue = (text: string) => text.replace(DUE_TOKEN, '').replace(/\s{2,}/g, ' ').trim();
-const stripMeta = (text: string) => stripDue(text.replace(REMIND_TOKEN, ''));
+const stripMeta = (text: string) => stripDue(text.replace(REMIND_TOKEN, '').replace(RECUR_TOKEN, ''));
 
 function remindAt(body: string, due: string | null): string | null {
   const m = [...body.matchAll(REMIND_TOKEN)].at(-1);
@@ -79,6 +82,7 @@ export function parseTasks(markdown: string): TaskItem[] {
       done: m[3] !== ' ',
       due,
       remind: remindAt(body, due),
+      repeat: RECUR_TOKEN.exec(body)?.[1] ?? null,
       heading,
       depth: Math.floor(m[1]!.replace(/\t/g, '  ').length / 2),
     });

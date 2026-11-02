@@ -83,9 +83,9 @@ describe('tasks', () => {
       '- [] not a task either',
     ].join('\n');
     expect(parseTasks(md)).toEqual([
-      { line: 1, raw: '- [ ] Flour 📅 2026-10-25', text: 'Flour', done: false, due: '2026-10-25', remind: null, heading: 'Shopping', depth: 0 },
-      { line: 2, raw: '  - [x] Eggs due:2026-10-21', text: 'Eggs', done: true, due: '2026-10-21', remind: null, heading: 'Shopping', depth: 1 },
-      { line: 3, raw: '1. [ ] Call @2026-10-22 mom', text: 'Call mom', done: false, due: '2026-10-22', remind: null, heading: 'Shopping', depth: 0 },
+      { line: 1, raw: '- [ ] Flour 📅 2026-10-25', text: 'Flour', done: false, due: '2026-10-25', remind: null, repeat: null, heading: 'Shopping', depth: 0 },
+      { line: 2, raw: '  - [x] Eggs due:2026-10-21', text: 'Eggs', done: true, due: '2026-10-21', remind: null, repeat: null, heading: 'Shopping', depth: 1 },
+      { line: 3, raw: '1. [ ] Call @2026-10-22 mom', text: 'Call mom', done: false, due: '2026-10-22', remind: null, repeat: null, heading: 'Shopping', depth: 0 },
     ]);
   });
 

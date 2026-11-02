@@ -6,6 +6,7 @@ import {
   isCanvas,
   MATCH_END,
   MATCH_START,
+  parseRecurRule,
   resolveWikilink,
   taskPlainText,
   type ChatAction,
@@ -281,7 +282,7 @@ export const TOOLS: Tool[] = [
   tool({
     name: 'add_task',
     description:
-      'Adds a task. It goes into today\'s journal unless a page is given. Optional due date and a reminder time (HH:MM) on that day, or a reminder date and time.',
+      'Adds a task. It goes into today\'s journal unless a page is given. Optional due date and a reminder time (HH:MM) on that day, or a reminder date and time. For repeating tasks give `repeat`, e.g. "every week", "every monday, thursday", "every month on the 1st", "every 2 weeks when done"; ticking one off then adds the next.',
     schema: z.object({
       text: z.string().min(1).max(1000),
       due: dateSchema.optional(),
@@ -290,12 +291,17 @@ export const TOOLS: Tool[] = [
         .regex(/^(\d{4}-\d{2}-\d{2} )?([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM or YYYY-MM-DD HH:MM')
         .optional(),
       page: z.string().max(300).optional(),
+      repeat: z
+        .string()
+        .max(100)
+        .refine((r) => parseRecurRule(r) !== null, 'A rule like "every week", "every monday" or "every month on the 1st"')
+        .optional(),
     }),
-    run(ctx, { text, due, remind_at, page: name }) {
+    run(ctx, { text, due, remind_at, page: name, repeat }) {
       const pageId = name ? pageByName(ctx, name).id : ensureDailyNote(ctx.db, ctx.settings, ctx.userId, ctx.today).pageId;
       // A time alone needs a day to belong to.
       const remind = remind_at ? (remind_at.length === 5 && !due ? `${ctx.today} ${remind_at}` : remind_at) : null;
-      const line = `${text.replace(/\s*\n\s*/g, ' ').trim()}${remind ? ` ⏰ ${remind}` : ''}`;
+      const line = `${text.replace(/\s*\n\s*/g, ' ').trim()}${repeat ? ` 🔁 ${repeat.trim()}` : ''}${remind ? ` ⏰ ${remind}` : ''}`;
       addTask(ctx.db, ctx.userId, pageId, line, due ?? null);
       return { data: { ok: true }, summary: `Added the task ${quoted(text)}${due ? ` (due ${due})` : ''}`, pageId };
     },
@@ -309,7 +315,7 @@ export const TOOLS: Tool[] = [
       const task = openTasks(ctx, 'all').find((t) => t.pageId === pageId && t.line === line);
       if (!task) throw new Error('That task is gone or moved; list the tasks again');
       if (done === undefined && due === undefined) throw new Error('Nothing to change');
-      updateTask(ctx.db, ctx.userId, { pageId, line, raw: task.raw, done, due });
+      updateTask(ctx.db, ctx.userId, { pageId, line, raw: task.raw, done, due }, ctx.today);
       const what = done === true ? 'Ticked off' : done === false ? 'Reopened' : 'Changed';
       return { data: { ok: true }, summary: `${what} ${quoted(taskPlainText(task.text))}`, pageId };
     },

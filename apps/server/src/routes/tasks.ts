@@ -7,6 +7,7 @@ import {
   taskCreateSchema,
   taskUpdateSchema,
   TEMPLATE_TAG,
+  tickTaskLine,
   updateTaskLine,
   type Page,
   type PageTask,
@@ -21,6 +22,7 @@ import { indexPageLinks, type Tx } from '../links.js';
 import { snapshotPage } from '../versions.js';
 import { findPage } from './pages.js';
 import type { SettingsStore } from '../settings.js';
+import { localTime, timeZoneOf } from '../time.js';
 import { inheritedTags, tagsByPage } from './tags.js';
 
 const MAX_TASKS = 2000;
@@ -81,8 +83,11 @@ export function saveContent(tx: Tx, userId: string, page: Page, content: string)
   indexPageLinks(tx, userId, page.id, content);
 }
 
-/** Ticks a task off (or reopens it) and/or sets its due date, if its line is unchanged. */
-export function updateTask(db: Db, userId: string, input: TaskUpdate) {
+/**
+ * Ticks a task off (or reopens it) and/or sets its due date, if its line is unchanged. A
+ * recurring task ticked off gets its next occurrence above it; `today` is the account's date.
+ */
+export function updateTask(db: Db, userId: string, input: TaskUpdate, today: string) {
   db.transaction((tx) => {
     const page = findPage(tx, userId, input.pageId);
     const lines = page.content.split('\n');
@@ -90,8 +95,10 @@ export function updateTask(db: Db, userId: string, input: TaskUpdate) {
     if (lines[input.line] !== input.raw) {
       throw new HTTPException(409, { message: 'This task was changed in the meantime' });
     }
-    lines[input.line] = updateTaskLine(input.raw, { done: input.done, due: input.due });
-    saveContent(tx, userId, page, lines.join('\n'));
+    lines[input.line] = updateTaskLine(input.raw, { due: input.due });
+    const updated = input.done === true ? tickTaskLine(lines, input.line, today) : lines;
+    if (input.done === false) updated[input.line] = updateTaskLine(updated[input.line]!, { done: false });
+    saveContent(tx, userId, page, updated.join('\n'));
   });
 }
 
@@ -112,7 +119,7 @@ export function taskRoutes(db: Db, settings: SettingsStore) {
     })
     .patch('/', async (c) => {
       const input = await readJson(c, taskUpdateSchema);
-      updateTask(db, c.var.user.id, input);
+      updateTask(db, c.var.user.id, input, localTime(Date.now(), timeZoneOf(settings, c.var.user.id)).date);
       return c.json(findPage(db, c.var.user.id, input.pageId));
     })
     .post('/', async (c) => {
