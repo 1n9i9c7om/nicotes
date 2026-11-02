@@ -17,9 +17,9 @@ import type { SemanticIndex } from '../ai/semantic.js';
 import type { Db } from '../db/index.js';
 import { dailyNotes, notebooks, pages } from '../db/schema.js';
 import { newId } from '../ids.js';
-import { loadLinkContext } from '../links.js';
+import { loadLinkContext, propagateRenames } from '../links.js';
 import { ensureDailyNote } from '../routes/daily.js';
-import { createPage, findPage } from '../routes/pages.js';
+import { applyMove, createPage, descendantIds, findPage, trashPage } from '../routes/pages.js';
 import { searchPages } from '../routes/search.js';
 import { addTask, listTasks, saveContent, updateTask } from '../routes/tasks.js';
 import type { SettingsStore } from '../settings.js';
@@ -38,9 +38,11 @@ export interface ToolContext {
 interface ToolResult {
   /** Sent back to the model as JSON. */
   data: unknown;
-  /** Shown to the user: what was done. */
+  /** Shown to the user: what was done, or the question for a step to confirm. */
   summary: string;
   pageId?: string;
+  /** The step waits for the user, who answers with these buttons (see CONFIRMED). */
+  confirm?: { yes: string; no: string };
 }
 
 interface Tool<S extends z.ZodObject = z.ZodObject> {
@@ -75,6 +77,31 @@ function pageByName(ctx: ToolContext, name: string): Page {
   const found = resolveWikilink(loadLinkContext(ctx.db, ctx.userId), name.replace(/^\[\[|\]\]$/g, ''));
   if (!found) throw new Error(`There is no page "${name}"; search for it first`);
   return findPage(ctx.db, ctx.userId, found.id);
+}
+
+/** Where pages are: "Notebook › Parent › Page", looked up from one read of the account's pages. */
+function pathFinder(ctx: ToolContext) {
+  const notebookTitles = new Map(
+    ctx.db.select({ id: notebooks.id, title: notebooks.title }).from(notebooks).where(eq(notebooks.userId, ctx.userId)).all().map((n) => [n.id, n.title]),
+  );
+  const all = new Map(
+    ctx.db
+      .select({ id: pages.id, title: pages.title, parentId: pages.parentId, notebookId: pages.notebookId })
+      .from(pages)
+      .where(and(eq(pages.userId, ctx.userId), isNull(pages.deletedAt)))
+      .all()
+      .map((p) => [p.id, p]),
+  );
+  return (id: string) => {
+    const titles: string[] = [];
+    let page = all.get(id);
+    const notebook = notebookTitles.get(page?.notebookId ?? '') ?? '?';
+    for (let depth = 0; page && depth < 50; depth++) {
+      titles.unshift(page.title || 'Untitled');
+      page = page.parentId ? all.get(page.parentId) : undefined;
+    }
+    return [notebook, ...titles].join(' › ');
+  };
 }
 
 /** What a model should read of a page: canvas pages only have their texts. */
@@ -114,8 +141,9 @@ export const TOOLS: Tool[] = [
     schema: z.object({ query: z.string().min(1).max(200), limit: z.number().int().min(1).max(20).optional() }),
     run(ctx, { query, limit }) {
       const hits = searchPages(ctx.db, ctx.userId, query, limit ?? 8);
+      const path = pathFinder(ctx);
       return {
-        data: hits.map((h) => ({ id: h.id, title: h.title, excerpt: plainExcerpt(h.excerpt), file: h.attachment?.filename })),
+        data: hits.map((h) => ({ id: h.id, title: h.title, path: path(h.id), excerpt: plainExcerpt(h.excerpt), file: h.attachment?.filename })),
         summary: `Searched for ${quoted(query)} (${hits.length} found)`,
       };
     },
@@ -135,7 +163,8 @@ export const TOOLS: Tool[] = [
   }),
   tool({
     name: 'read_page',
-    description: 'Reads a page: its Markdown, notebook, tags, subpages and when it changed. Accepts a page id or a title.',
+    description:
+      'Reads a page: its Markdown, where it is ("path": notebook › parent pages › page), tags, subpages and when it changed. Accepts a page id or a title.',
     schema: z.object({ page: z.string().min(1).max(300) }),
     run(ctx, { page: name }) {
       const page = pageByName(ctx, name);
@@ -146,12 +175,11 @@ export const TOOLS: Tool[] = [
         .orderBy(asc(pages.sortOrder))
         .all()
         .map((p) => p.title);
-      const notebook = ctx.db.select({ title: notebooks.title }).from(notebooks).where(eq(notebooks.id, page.notebookId)).get();
       return {
         data: {
           id: page.id,
           title: page.title,
-          notebook: notebook?.title,
+          path: pathFinder(ctx)(page.id),
           tags: page.tags,
           kind: isCanvas(page.content) ? 'canvas (a drawing; only its texts are shown)' : 'page',
           updated: new Date(page.updatedAt).toISOString(),
@@ -197,7 +225,8 @@ export const TOOLS: Tool[] = [
   }),
   tool({
     name: 'create_page',
-    description: 'Creates a page with Markdown content in a notebook, optionally below a parent page. Link other pages as [[Title]].',
+    description:
+      'Creates a page with Markdown content in a notebook, at its top level or below a parent page (give the parent\'s id when titles are alike). Link other pages as [[Title]]. Returns where the page is.',
     schema: z.object({
       notebook: z.string().min(1).max(200),
       title: z.string().min(1).max(300),
@@ -209,7 +238,56 @@ export const TOOLS: Tool[] = [
       const parentPage = parent ? pageByName(ctx, parent) : null;
       if (parentPage && parentPage.notebookId !== nb.id) throw new Error('The parent page is in another notebook');
       const page = createPage(ctx.db, ctx.userId, { notebookId: nb.id, parentId: parentPage?.id ?? null, title, content });
-      return { data: { id: page.id, title: page.title }, summary: `Created the page ${quoted(title)}`, pageId: page.id };
+      const path = pathFinder(ctx)(page.id);
+      return { data: { id: page.id, title: page.title, path }, summary: `Created ${quoted(path, 120)}`, pageId: page.id };
+    },
+  }),
+  tool({
+    name: 'move_page',
+    description:
+      'Moves a page (with its subpages) below another page ("parent"), or to the top level of a notebook (parent null), and/or renames it ("title"). Links to it are updated. Returns where it is now.',
+    schema: z.object({
+      page: z.string().min(1).max(300),
+      parent: z.string().min(1).max(300).nullable().optional(),
+      notebook: z.string().min(1).max(200).optional(),
+      title: z.string().trim().min(1).max(300).optional(),
+    }),
+    run(ctx, { page: name, parent, notebook: notebookName, title }) {
+      const page = pageByName(ctx, name);
+      if (parent === undefined && !notebookName && !title) throw new Error('Give a new parent, notebook or title');
+      const parentPage = parent ? pageByName(ctx, parent) : null;
+      const notebookId = notebookName ? notebookByName(ctx, notebookName).id : (parentPage?.notebookId ?? page.notebookId);
+      if (parentPage && parentPage.notebookId !== notebookId) throw new Error('The parent page is in another notebook');
+      // Only a title: the page stays where it is. A notebook without a parent: its top level.
+      const parentId = parent === undefined && !notebookName ? page.parentId : (parentPage?.id ?? null);
+      const moving = parentId !== page.parentId || notebookId !== page.notebookId;
+      const renaming = !!title && title !== page.title;
+      ctx.db.transaction((tx) =>
+        propagateRenames(tx, ctx.userId, () => {
+          if (moving) applyMove(tx, ctx.userId, page.id, { notebookId, parentId, index: Number.MAX_SAFE_INTEGER });
+          if (renaming) tx.update(pages).set({ title, updatedAt: Date.now() }).where(eq(pages.id, page.id)).run();
+        }),
+      );
+      const path = pathFinder(ctx)(page.id);
+      const summary = moving ? `Moved ${quoted(page.title || 'Untitled')} to ${quoted(path, 120)}` : renaming ? `Renamed ${quoted(page.title || 'Untitled')} to ${quoted(title!)}` : `Left ${quoted(path, 120)} as it was`;
+      return { data: { ok: true, path }, summary, pageId: page.id };
+    },
+  }),
+  tool({
+    name: 'delete_page',
+    description:
+      'Asks the user to confirm deleting a page with its subpages: they get buttons for it, and nothing is deleted until they press one. Deleted pages go to the trash, where they can be restored. Tell the user it waits for their confirmation; never say it is deleted.',
+    schema: z.object({ page: z.string().min(1).max(300) }),
+    run(ctx, { page: name }) {
+      const page = pageByName(ctx, name);
+      const subpages = descendantIds(ctx.db, ctx.userId, page.id).length;
+      const path = pathFinder(ctx)(page.id);
+      return {
+        data: { waiting_for_user: true, path, subpages },
+        summary: `Delete ${quoted(path, 120)}${subpages ? ` and its ${subpages === 1 ? 'subpage' : `${subpages} subpages`}` : ''}?`,
+        pageId: page.id,
+        confirm: { yes: 'Move to trash', no: 'Keep it' },
+      };
     },
   }),
   tool({
@@ -393,6 +471,29 @@ export const TOOLS: Tool[] = [
 
 export const toolByName = new Map(TOOLS.map((t) => [t.name, t]));
 
+/**
+ * Steps that wait for the user: what happens when they confirm or decline. Both return
+ * what is shown (and told to the model) from then on.
+ */
+const CONFIRMED: Record<string, { yes: (db: Db, userId: string, action: ChatAction) => string; no: (db: Db, userId: string, action: ChatAction) => string }> = {
+  delete_page: {
+    yes(db, userId, { pageId }) {
+      const page = pageId ? db.select({ title: pages.title }).from(pages).where(and(eq(pages.id, pageId), eq(pages.userId, userId), isNull(pages.deletedAt))).get() : undefined;
+      if (!page) return 'The page was already deleted';
+      const count = trashPage(db, userId, pageId!);
+      return `Moved ${quoted(page.title || 'Untitled')}${count > 1 ? ` and ${count - 1 === 1 ? 'its subpage' : `${count - 1} subpages`}` : ''} to the trash`;
+    },
+    no: (_db, _userId, action) => `Kept it: ${action.summary.replace(/^Delete /, '').replace(/\?$/, '')}`,
+  },
+};
+
+/** Carries out (yes) or drops (no) a step the user was asked to confirm; returns its new summary. */
+export function answerConfirmation(db: Db, userId: string, action: ChatAction, yes: boolean): string {
+  const step = CONFIRMED[action.tool];
+  if (!step) throw new Error(`Nothing to confirm for ${action.tool}`);
+  return yes ? step.yes(db, userId, action) : step.no(db, userId, action);
+}
+
 /** The tools as the model sees them. */
 export const toolSpecs = () =>
   TOOLS.map((t) => {
@@ -414,7 +515,9 @@ export async function runTool(ctx: ToolContext, name: string, rawArgs: string): 
     const args = t.schema.safeParse(parsed);
     if (!args.success) throw new Error(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
     const out = await t.run(ctx, args.data);
-    return { result: JSON.stringify(out.data), action: { tool: name, summary: out.summary, pageId: out.pageId, ok: true } };
+    const action: ChatAction = { tool: name, summary: out.summary, pageId: out.pageId, ok: true };
+    if (out.confirm) action.confirm = { id: newId(), state: 'pending', ...out.confirm };
+    return { result: JSON.stringify(out.data), action };
   } catch (err) {
     const message = (err as Error).message;
     return { result: JSON.stringify({ error: message }), action: { tool: name, summary: `${name.replace(/_/g, ' ')}: ${message}`, ok: false } };

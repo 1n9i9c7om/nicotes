@@ -5,7 +5,9 @@ import {
   AlertTriangle,
   CalendarDays,
   Check,
+  CircleHelp,
   FilePen,
+  FolderInput,
   FileText,
   ListChecks,
   Loader2,
@@ -16,6 +18,7 @@ import {
   Send,
   Square,
   Telescope,
+  Trash2,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -42,8 +45,14 @@ const ICONS: Record<string, LucideIcon> = {
   add_task: ListChecks,
   update_task: Check,
   calendar: CalendarDays,
+  move_page: FolderInput,
   start_research: Telescope,
   research_status: Telescope,
+};
+
+/** Icons of confirmed steps (a declined one shows a plain tick). */
+const ICONS_DONE: Record<string, LucideIcon> = {
+  delete_page: Trash2,
 };
 
 const SUGGESTIONS = [
@@ -53,16 +62,51 @@ const SUGGESTIONS = [
   'What did I note about the car?',
 ];
 
-function Actions({ actions }: { actions: ChatAction[] }) {
+/**
+ * The steps of an answer. Steps waiting for the user (such as deleting a page) ask with two
+ * buttons, once the answer is saved (`onAnswer`).
+ */
+function Actions({ actions, onAnswer }: { actions: ChatAction[]; onAnswer?: (action: ChatAction, yes: boolean) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
   if (!actions.length) return null;
+  const answer = async (action: ChatAction, yes: boolean) => {
+    setBusy(true);
+    try {
+      await onAnswer?.(action, yes);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <ul className="chat-actions">
       {actions.map((a, i) => {
-        const Icon = a.ok ? (ICONS[a.tool] ?? Check) : AlertTriangle;
+        const pending = a.confirm?.state === 'pending';
+        const Icon = pending ? CircleHelp : a.ok ? ((a.confirm?.state === 'done' && ICONS_DONE[a.tool]) || ICONS[a.tool] || Check) : AlertTriangle;
+        const text = a.pageId && a.confirm?.state !== 'done' ? <Link to={`/p/${a.pageId}`}>{a.summary}</Link> : <span>{a.summary}</span>;
+        if (!pending) {
+          return (
+            <li key={i} className={a.ok ? undefined : 'failed'}>
+              <Icon size={13} />
+              {text}
+            </li>
+          );
+        }
         return (
-          <li key={i} className={a.ok ? undefined : 'failed'}>
-            <Icon size={13} />
-            {a.pageId ? <Link to={`/p/${a.pageId}`}>{a.summary}</Link> : <span>{a.summary}</span>}
+          <li key={i} className="confirm" role="group" aria-label={a.summary}>
+            <span className="confirm-question">
+              <Icon size={15} />
+              {text}
+            </span>
+            {onAnswer && (
+              <span className="confirm-buttons">
+                <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => void answer(a, true)}>
+                  {a.confirm!.yes}
+                </button>
+                <button className="btn btn-sm" disabled={busy} onClick={() => void answer(a, false)}>
+                  {a.confirm!.no}
+                </button>
+              </span>
+            )}
           </li>
         );
       })}
@@ -144,6 +188,18 @@ export function ChatPage() {
     void send(q);
   }, [params, history.isSuccess]);
 
+  // The answer to a step that waited for the user, such as deleting a page.
+  const answerStep = async (action: ChatAction, yes: boolean) => {
+    setError(null);
+    try {
+      const entry = await api.post<ChatEntry>(`/chat/actions/${action.confirm!.id}`, { confirm: yes });
+      qc.setQueryData<ChatEntry[]>(chatKey, (list = []) => list.map((m) => (m.id === entry.id ? entry : m)));
+      if (yes) void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== chatKey[0] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const reset = async () => {
     await api.delete('/chat');
     qc.setQueryData<ChatEntry[]>(chatKey, []);
@@ -202,7 +258,7 @@ export function ChatPage() {
             </div>
           ) : (
             <div key={m.id} className="chat-msg from-assistant">
-              <Actions actions={m.actions} />
+              <Actions actions={m.actions} onAnswer={answerStep} />
               <Markdown text={m.content} />
             </div>
           ),

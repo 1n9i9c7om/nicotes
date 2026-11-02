@@ -24,6 +24,8 @@ export interface BotChat {
   /** Answers a message with the chat assistant (Markdown); `onAction` hears each step it takes. */
   ask: (userId: string, text: string, onAction?: (action: ChatAction) => void) => Promise<string>;
   reset: (userId: string) => void;
+  /** The user's answer to a step that waits for them; returns the step as it is now. */
+  confirm?: (userId: string, actionId: string, yes: boolean) => ChatAction;
   /** Writes down a voice message; null without a transcription service. */
   transcribe?: (userId: string, audio: { bytes: Buffer; filename: string; mime: string }) => Promise<string | null>;
 }
@@ -97,7 +99,7 @@ const STEP_ICONS: [RegExp, string][] = [
  */
 export function stepsHtml(actions: ChatAction[], pageUrl: (id: string) => string | null): string {
   const lines = actions.map((a) => {
-    const icon = a.ok ? (STEP_ICONS.find(([re]) => re.test(a.tool))?.[1] ?? '📄') : '⚠️';
+    const icon = a.confirm?.state === 'pending' ? '❓' : a.ok ? (STEP_ICONS.find(([re]) => re.test(a.tool))?.[1] ?? '📄') : '⚠️';
     const href = a.pageId ? pageUrl(a.pageId) : null;
     const summary = escape(clip(a.summary, 120));
     return `${icon} ${href ? `<a href="${escape(href)}">${summary}</a>` : summary}`;
@@ -294,6 +296,16 @@ export class TelegramBot {
       const answer = await this.chat.ask(userId, text, onAction);
       await updates;
       for (const part of splitMessage(telegramHtml(answer, this.linker(userId)))) await this.send(token, chatId, part);
+      // Steps that wait for the user (such as deleting a page) get buttons of their own.
+      for (const { summary, confirm } of actions) {
+        if (confirm?.state !== 'pending') continue;
+        await this.send(token, chatId, escape(summary), [
+          [
+            { text: `✓ ${confirm.yes}`, callback_data: `c:${confirm.id}:1` },
+            { text: confirm.no, callback_data: `c:${confirm.id}:0` },
+          ],
+        ]);
+      }
     } catch (err) {
       await this.send(token, chatId, `Sorry, that did not work: ${escape((err as Error).message)}`);
     } finally {
@@ -329,6 +341,17 @@ export class TelegramBot {
     if (week) {
       await answer();
       return edit(this.calendarView(userId, week[1]));
+    }
+    const confirm = /^c:([\w-]+):([01])$/.exec(data);
+    if (confirm && this.chat?.confirm) {
+      try {
+        const action = this.chat.confirm(userId, confirm[1]!, confirm[2] === '1');
+        await answer();
+        return edit({ text: escape(action.summary), keyboard: [] });
+      } catch (err) {
+        await answer((err as Error).message);
+        return edit({ text: escape((err as Error).message), keyboard: [] });
+      }
     }
     const done = /^d:([\w-]+):(\d+):([\w-]+)$/.exec(data);
     if (done) {

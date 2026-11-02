@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { ChatEntry } from '@nicotes/shared';
+import type { ChatAction, ChatEntry } from '@nicotes/shared';
 import { createNotebook, createPage, sidebar, uniq } from './fixtures';
 
 test('the chat is right below search, and old Ask links lead to it', async ({ page }) => {
@@ -42,4 +42,30 @@ test('answers show what the assistant did in Nicotes, with links to the pages', 
   await expect(steps.nth(2)).toHaveClass('failed');
   await steps.nth(1).getByRole('link').click();
   await expect(page).toHaveURL(new RegExp(`/p/${car.id}$`));
+});
+
+test('deleting a page waits for the user to confirm in the chat', async ({ page }) => {
+  const question: ChatAction = {
+    tool: 'delete_page',
+    summary: 'Delete “Games › Old list”?',
+    pageId: 'p1',
+    ok: true,
+    confirm: { id: 'c1', state: 'pending', yes: 'Move to trash', no: 'Keep it' },
+  };
+  const entry: ChatEntry = { id: 'a1', role: 'assistant', content: 'It waits for your confirmation.', actions: [question], createdAt: 2 };
+  let answered: unknown;
+  await page.route('**/api/chat', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: [entry] }) : route.continue()));
+  await page.route('**/api/chat/actions/c1', (route) => {
+    answered = route.request().postDataJSON();
+    const done: ChatAction = { ...question, summary: 'Moved “Old list” to the trash', confirm: { ...question.confirm!, state: 'done' } };
+    return route.fulfill({ json: { ...entry, actions: [done] } });
+  });
+  await page.goto('/chat');
+
+  const card = page.getByRole('group', { name: 'Delete “Games › Old list”?' });
+  await expect(card.getByRole('button', { name: 'Keep it' })).toBeVisible();
+  await card.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(page.locator('.chat-actions li')).toHaveText(['Moved “Old list” to the trash']);
+  await expect(page.getByRole('button', { name: 'Move to trash' })).toHaveCount(0);
+  expect(answered).toEqual({ confirm: true });
 });

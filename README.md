@@ -205,9 +205,10 @@ with how often it was opened. Shared pages stay out of search engines.
 notes or tell it what to do, in your own words: *"What's due this week?"*, *"Remind me to
 call the dentist tomorrow at 9"*, *"Note in my journal that the heating was fixed"*,
 *"What did I write about the car?"*, *"Research heat pumps for old houses"*. It searches
-and reads pages, writes pages and the journal, adds, ticks off and moves tasks, shows the
-calendar and starts research; each step shows up in the chat and links to the page it
-touched. **New chat** makes it forget the conversation. It needs an AI service (see below)
+and reads pages, writes, moves and renames pages and writes the journal, adds, ticks off
+and moves tasks, shows the calendar and starts research; each step shows up in the chat and
+links to the page it touched. It can also delete a page, but only once you confirm with
+the button it shows (the page goes to the trash). **New chat** makes it forget the conversation. It needs an AI service (see below)
 and a model that can use tools, chosen under Settings → AI models → Chat.
 
 The same assistant answers in **Telegram** once a chat is connected under Settings →

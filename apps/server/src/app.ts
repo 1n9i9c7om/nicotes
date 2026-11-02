@@ -18,7 +18,7 @@ import { insightRoutes } from './ai/insight.js';
 import { layoutRoutes } from './ai/layout.js';
 import { AttachmentReader, type ImageReader } from './attachmentText.js';
 import { requireAuth } from './auth.js';
-import { resetChat, runChat } from './chat/agent.js';
+import { confirmAction, resetChat, runChat } from './chat/agent.js';
 import { chatRoutes } from './chat/routes.js';
 import { transcribe } from './ai/transcribe.js';
 import { users } from './db/schema.js';
@@ -112,6 +112,7 @@ export function createApp({
       return (await runChat(chatDeps, { userId, username, channel: 'telegram', text, onAction })).content;
     },
     reset: (userId) => resetChat(db, userId, 'telegram'),
+    confirm: (userId, actionId, yes) => confirmAction(db, userId, actionId, yes).actions.find((a) => a.confirm?.id === actionId)!,
     transcribe: async (userId, audio) => {
       const service = settings.transcription(userId);
       return service ? transcribe(service, audio) : null;
