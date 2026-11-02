@@ -27,9 +27,16 @@ function freePort(): Promise<number> {
 // The config is loaded again in every worker; values picked by the main process travel
 // through the environment so all of them talk to the same servers.
 if (!process.env.E2E_DATA_ROOT) {
-  // Data dirs of earlier runs (the server still held the database when they ended).
+  // Data dirs of earlier runs (the server still held the database when they ended). Recent
+  // ones may belong to a run going on in another checkout, and one still open can't go.
   for (const name of readdirSync(tmpdir())) {
-    if (name.startsWith('nicotes-e2e-')) rmSync(join(tmpdir(), name), { recursive: true, force: true, maxRetries: 2 });
+    const started = Number(/^nicotes-e2e-(\d+)$/.exec(name)?.[1]);
+    if (!started || Date.now() - started < 3_600_000) continue;
+    try {
+      rmSync(join(tmpdir(), name), { recursive: true, force: true, maxRetries: 2 });
+    } catch {
+      // Still in use; a later run removes it.
+    }
   }
   const dir = join(tmpdir(), `nicotes-e2e-${Date.now()}`);
   mkdirSync(dir, { recursive: true });
