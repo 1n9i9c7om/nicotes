@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AskEvent, AssistantEvent, Notebook, Page, PageVersionSummary } from '@nicotes/shared';
+import type { AssistantEvent, Notebook, Page, PageVersionSummary } from '@nicotes/shared';
 import { PAGE_END, PAGE_START, ReplySplitter, tidyProposal } from '../src/ai/assistant.js';
+import { retrieve } from '../src/ai/retrieve.js';
+import { notebookPageIds } from '../src/ai/scope.js';
+import { users } from '../src/db/schema.js';
 import { setup } from './helpers.js';
 
 /** Fake OpenRouter chat completions, streamed as server-sent events in the given pieces. */
@@ -161,25 +164,22 @@ describe('applying reviewed changes', () => {
 describe('read scopes', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('limits Ask to the chosen notebooks', async () => {
-    const api = setup({ settingsEnv: { openrouterApiKey: 'sk-test' } as never });
+  it('limits the notes searched to the chosen notebooks', async () => {
+    const api = setup();
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    const userId = api.db.select({ id: users.id }).from(users).get()!.id;
     const a = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'A' })).body;
     const b = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'B' })).body;
     await api.call('POST', '/api/pages', { notebookId: a.id, title: 'Starter A', content: 'Feed the sourdough starter daily' });
     const inB = (await api.call<Page>('POST', '/api/pages', { notebookId: b.id, title: 'Starter B', content: 'Sourdough starter weekly' })).body;
 
-    const ask = async (notebookIds?: string[]) => {
-      fakeStream(['Answer.']);
-      const res = await api.rawPost('/api/ai/ask', { question: 'How often to feed the sourdough starter?', notebookIds });
-      const events = (await res.text())
-        .split('\n')
-        .filter((l) => l.startsWith('data:'))
-        .map((l) => JSON.parse(l.slice(5)) as AskEvent);
-      return (events[0] as Extract<AskEvent, { type: 'sources' }>).sources.map((s) => s.pageId);
+    const find = async (notebookIds?: string[]) => {
+      const allowed = notebookIds ? notebookPageIds(api.db, userId, notebookIds) : null;
+      const found = await retrieve(api.db, api.semantic, userId, 'How often to feed the sourdough starter?', allowed);
+      return found.passages.map((p) => p.pageId);
     };
-    expect(await ask()).toHaveLength(2);
-    expect(await ask([b.id])).toEqual([inB.id]);
-    expect(await ask([])).toEqual([]);
+    expect(await find()).toHaveLength(2);
+    expect(await find([b.id])).toEqual([inB.id]);
+    expect(await find([])).toEqual([]);
   });
 });

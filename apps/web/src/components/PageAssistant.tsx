@@ -5,7 +5,7 @@ import {
   DEFAULT_ASSISTANT_SCOPE,
   READ_SCOPE_INFO,
   READ_SCOPES,
-  type AskSource,
+  type NoteSource,
   type AssistantEvent,
   type AssistantRequest,
   type ReadScope,
@@ -25,7 +25,7 @@ interface Turn {
   message: string;
   reply: string;
   step: string;
-  notes: AskSource[];
+  notes: NoteSource[];
   web: WebSource[];
   webError?: string;
   /** The assistant rewrote the page without changing anything. */

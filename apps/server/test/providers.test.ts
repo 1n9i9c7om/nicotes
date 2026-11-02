@@ -177,9 +177,8 @@ describe('Routeway settings', () => {
     const api = setup({ settingsEnv: { openrouterApiKey: 'sk-or' } as never });
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
     await api.call('PATCH', '/api/settings', { askModel: 'routeway:deepseek-v4.1-flash' });
-    const res = await api.rawPost('/api/ai/ask', { question: 'Anything new?' });
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain('Asking needs a Routeway API key');
+    const res = await api.rawPost('/api/chat', { text: 'Anything new?' });
+    expect(await res.text()).toContain('The chat needs a Routeway API key');
   });
 });
 
@@ -312,8 +311,7 @@ describe('your own model server', () => {
     const api = setup();
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
     await api.call('PATCH', '/api/settings', { askModel: 'local:llama3.2' });
-    const res = await api.rawPost('/api/ai/ask', { question: 'Anything new?' });
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain('Asking needs the address of your own model server');
+    const res = await api.rawPost('/api/chat', { text: 'Anything new?' });
+    expect(await res.text()).toContain('The chat needs the address of your own model server');
   });
 });

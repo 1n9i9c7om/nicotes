@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AiLinkSuggestions,
-  type AskEvent,
   MATCH_END,
   MATCH_START,
   type MentionsResult,
@@ -14,6 +13,8 @@ import {
   type SemanticStatus,
   type Settings,
 } from '@nicotes/shared';
+import { retrieve } from '../src/ai/retrieve.js';
+import { users } from '../src/db/schema.js';
 import { setup } from './helpers.js';
 
 describe('unlinked mentions', () => {
@@ -253,86 +254,37 @@ describe('semantic index', () => {
   });
 });
 
-describe('ask your notes', () => {
-  /** Fake OpenRouter: embeddings as above, chat completions streamed as server-sent events. */
-  function fakeOpenRouter(answer: string[]) {
-    const prompts: string[] = [];
-    fakeEmbeddings();
-    const embeddings = globalThis.fetch;
-    vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (!url.endsWith('/chat/completions')) return embeddings(input, init);
-      const body = JSON.parse(String(init?.body)) as { stream: boolean; messages: { content: string }[] };
-      expect(body.stream).toBe(true);
-      prompts.push(body.messages.map((m) => m.content).join('\n'));
-      const encoder = new TextEncoder();
-      const event = (data: unknown) => encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(': OPENROUTER PROCESSING\n\n'));
-            for (const text of answer) controller.enqueue(event({ choices: [{ delta: { content: text } }] }));
-            controller.enqueue(event({ choices: [{ delta: {} }], usage: { prompt_tokens: 200, completion_tokens: 30, cost: 0.0004 } }));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          },
-        }),
-        { status: 200, headers: { 'content-type': 'text/event-stream' } },
-      );
-    });
-    return prompts;
-  }
-
+describe('finding the passages a question is about', () => {
   let api: ReturnType<typeof setup>;
   let notes: Notebook;
+  let userId: string;
   beforeEach(async () => {
     api = setup({ settingsEnv: { openrouterApiKey: 'sk-test' } as never, semanticQuietMs: 0 });
     await api.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
+    userId = api.db.select({ id: users.id }).from(users).get()!.id;
     notes = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Notes' })).body;
   });
   afterEach(() => vi.unstubAllGlobals());
 
   const create = async (title: string, content = '') =>
     (await api.call<Page>('POST', '/api/pages', { notebookId: notes.id, title, content })).body;
-  const ask = async (question: string, history: { question: string; answer: string }[] = []) => {
-    const res = await api.rawPost('/api/ai/ask', { question, history });
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
-    return (await res.text())
-      .split('\n')
-      .filter((l) => l.startsWith('data:'))
-      .map((l) => JSON.parse(l.slice(5)) as AskEvent);
-  };
 
-  it('answers from passages found by meaning, streaming the text', async () => {
-    const prompts = fakeOpenRouter(['Feed it ', 'daily [1].']);
+  it('finds them by meaning when the semantic index is on', async () => {
+    fakeEmbeddings();
     await api.call('PATCH', '/api/settings', { semanticIndex: true });
     const starter = await create('Starter', 'Feed the sourdough starter with flour and water every day.');
     await create('Factory', 'Trains and belts move ore to the smelters.');
     await api.semantic.run();
 
-    const events = await ask('How often do I feed the sourdough starter?');
-    const sources = events.find((e) => e.type === 'sources');
-    expect(sources).toMatchObject({ retrieval: 'semantic', sources: [{ n: 1, pageId: starter.id, title: 'Starter' }] });
-    expect(events.filter((e) => e.type === 'delta').map((e) => (e as { text: string }).text).join('')).toBe('Feed it daily [1].');
-    expect(events.at(-1)).toEqual({ type: 'done', cost: 0.0004, model: expect.any(String) });
-    expect(prompts[0]).toContain('[1] Starter\nFeed the sourdough starter');
-    expect(prompts[0]).toContain('Answer in English.');
+    const found = await retrieve(api.db, api.semantic, userId, 'How often do I feed the sourdough starter?');
+    expect(found.retrieval).toBe('semantic');
+    expect(found.passages[0]).toMatchObject({ pageId: starter.id, title: 'Starter' });
   });
 
-  it('falls back to keyword search and passes the conversation along', async () => {
-    const prompts = fakeOpenRouter(['Weekly.']);
+  it('falls back to keywords, picking the section that matches', async () => {
     const starter = await create('Starter', '## Care\n\nFeed the sourdough starter with flour and water every day.');
-    const events = await ask('Wie oft füttere ich den Sourdough Starter?', [{ question: 'What is a starter?', answer: 'A culture [1].' }]);
-    expect(events[0]).toMatchObject({ type: 'sources', retrieval: 'keyword', sources: [{ pageId: starter.id, heading: 'Care' }] });
-    expect(prompts[0]).toContain('What is a starter?\nA culture [1].');
-    expect(prompts[0]).toContain('Answer in German.');
-  });
-
-  it('refuses without an API key', async () => {
-    const plain = setup();
-    await plain.call('POST', '/api/auth/setup', { username: 'nico', password: 'secret-pass' });
-    const res = await plain.rawPost('/api/ai/ask', { question: 'Anything?' });
-    expect(res.status).toBe(400);
+    const found = await retrieve(api.db, api.semantic, userId, 'Wie oft füttere ich den Sourdough Starter?');
+    expect(found).toMatchObject({ retrieval: 'keyword', passages: [{ pageId: starter.id, heading: 'Care' }] });
   });
 });
 

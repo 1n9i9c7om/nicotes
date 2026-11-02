@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { assistantRequestSchema, type AskSource, type AssistantEvent, type WebSource } from '@nicotes/shared';
+import { assistantRequestSchema, type NoteSource, type AssistantEvent, type WebSource } from '@nicotes/shared';
 import type { AppEnv } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { readJson } from '../http.js';
 import { extractUrl } from '../import/extract.js';
 import { findPage } from '../routes/pages.js';
 import type { AiConfig, SettingsStore } from '../settings.js';
-import { retrieve } from './ask.js';
+import { retrieve } from './retrieve.js';
 import { guessLanguage, languageName } from './language.js';
 import { addUsage, completeJson, emptyUsage, hasKeyFor, LlmError, missingKeyMessage, streamChat, type Usage } from './llm.js';
 import { host, pickSources, webSearch } from './research.js';
@@ -160,7 +160,7 @@ export function assistantRoutes(db: Db, settings: SettingsStore, index: Semantic
       let usage = emptyUsage();
       try {
         // Other notes, within the read scope the user chose.
-        let notes: AskSource[] = [];
+        let notes: NoteSource[] = [];
         let noteText = '';
         const allowed = scopePageIds(db, userId, page, input.scope);
         if (input.scope !== 'page') {

@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 // ---------- Semantic index ----------
 
 export interface SemanticStatus {
@@ -32,21 +30,10 @@ export interface SemanticResults<T> {
   results: T[];
 }
 
-// ---------- Ask your notes ----------
+// ---------- Notes an AI feature read ----------
 
-export const askRequestSchema = z.object({
-  question: z.string().trim().min(2).max(2000),
-  /** Earlier turns of the conversation, oldest first. */
-  history: z
-    .array(z.object({ question: z.string().max(2000), answer: z.string().max(20_000) }))
-    .max(6)
-    .default([]),
-  /** Only search these notebooks; all when left out. */
-  notebookIds: z.array(z.string().max(64)).max(200).optional(),
-});
-export type AskRequest = z.input<typeof askRequestSchema>;
-
-export interface AskSource {
+/** A passage of a note given to the model, cited as [n]. */
+export interface NoteSource {
   /** Citation number, as in [1]. */
   n: number;
   pageId: string;
@@ -55,13 +42,6 @@ export interface AskSource {
   heading: string;
   excerpt: string;
 }
-
-/** Server-sent events of POST /api/ai/ask, one JSON object per `data:` line. */
-export type AskEvent =
-  | { type: 'sources'; sources: AskSource[]; retrieval: 'semantic' | 'keyword' }
-  | { type: 'delta'; text: string }
-  | { type: 'done'; cost: number; model: string }
-  | { type: 'error'; message: string };
 
 // ---------- Summaries ----------
 
