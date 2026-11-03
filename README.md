@@ -155,7 +155,9 @@ Settings → Integrations → **Reminders** sends them as notifications to your 
 and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
 own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in
 the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token. The
-bot only answers the Telegram account that connected it, in a private chat with it.
+bot only answers the Telegram account that connected it, in a private chat with it. Links in
+its messages point to the address you opened these settings at; set `NICOTES_BASE_URL` in
+`.env` (e.g. `https://notes.example.com`) to choose it yourself.
 
 Below each page, **Connections** shows backlinks, **unlinked
 mentions** (pages that name each other without a link, linked with one click) and, with

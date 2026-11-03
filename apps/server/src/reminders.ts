@@ -58,6 +58,8 @@ const telegramApi: TelegramApi = async (token, method, body, signal) => {
 };
 
 export interface ReminderOptions {
+  /** NICOTES_BASE_URL: the address links point to, instead of the one the app was last used at. */
+  baseUrl?: string;
   /** Tests: fakes for the push services and Telegram, and the clock. */
   sendPush?: PushSender;
   telegram?: TelegramApi;
@@ -87,6 +89,7 @@ export class ReminderService {
   private sendPush: PushSender;
   private telegram: TelegramApi;
   private now: () => number;
+  private baseUrl: string | null;
   /** Answers the linked chat: commands, buttons, and the chat assistant. */
   private telegramBot: TelegramBot;
 
@@ -98,7 +101,8 @@ export class ReminderService {
     this.sendPush = options.sendPush ?? ((sub, payload, opts) => webpush.sendNotification(sub, payload, opts));
     this.telegram = options.telegram ?? telegramApi;
     this.now = options.now ?? Date.now;
-    this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now);
+    this.baseUrl = options.baseUrl ?? null;
+    this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now, (userId) => this.appUrl(userId));
     settings.onUpdate((userId, input) => {
       // Another bot cannot write to the chat the old one was linked to.
       if (input.telegramBotToken !== undefined) this.disconnectTelegram(userId);
@@ -120,6 +124,11 @@ export class ReminderService {
   /** The address the app was last used at, for links in Telegram messages. */
   rememberAppUrl(userId: string, origin: string) {
     if (this.settings.internal(userId, 'appUrl') !== origin) this.settings.setInternal(userId, 'appUrl', origin);
+  }
+
+  /** Where links in messages point: NICOTES_BASE_URL, else the address the app was last used at. */
+  appUrl(userId: string): string | null {
+    return this.baseUrl ?? this.settings.internal(userId, 'appUrl');
   }
 
   // ---------- Push ----------
@@ -350,7 +359,7 @@ export class ReminderService {
   /** Sends a notice to every device and the linked chat; one result per target. */
   async deliver(userId: string, notice: ReminderNotice): Promise<ReminderTestResult[]> {
     const results: ReminderTestResult[] = [];
-    const appUrl = this.settings.internal(userId, 'appUrl');
+    const appUrl = this.appUrl(userId);
     const subs = this.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).all();
     if (subs.length) {
       const { publicKey, privateKey } = this.vapidKeys(userId);
