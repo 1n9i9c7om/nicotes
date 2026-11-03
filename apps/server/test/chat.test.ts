@@ -215,12 +215,45 @@ describe('chat', () => {
     expect((await api.call('GET', `/api/pages/${page.id}`)).status).toBe(200);
   });
 
+  it('knows which notebooks exist, and lists pages as a tree and the journal\'s days', async () => {
+    const api = await signedIn();
+    const games = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    const idleon = (await api.call<Page>('POST', '/api/pages', { notebookId: games.id, title: 'IdleOn', content: '' })).body;
+    const todo = (await api.call<Page>('POST', '/api/pages', { notebookId: games.id, parentId: idleon.id, title: "IdleOn To-Do's", content: '' })).body;
+    await api.call('POST', '/api/daily', { date: '2026-11-03' });
+    await api.call('POST', '/api/daily', { date: '2026-10-28' });
+    const sent = fakeModel([{ calls: [{ name: 'list_pages', args: {} }, { name: 'list_journal', args: { from: '2026-11-01' } }] }, { content: 'Here it is.' }]);
+    await chat(api, 'Show me a tree of my notes');
+
+    expect(sent[0]!.messages[0]!.content).toContain('Their notes right now: notebooks "Games" (2 pages), "Journal" (');
+    expect(sent[0]!.messages[0]!.content).toContain('The journal has notes for 2 days, 2026-10-28 to 2026-11-03.');
+    const [tree, journal] = sent[1]!.messages.filter((m) => m.role === 'tool').map((m) => JSON.parse(m.content!));
+    expect(tree.tree.split('\n').slice(0, 3)).toEqual(['Games (notebook, 2 pages)', `  - IdleOn [${idleon.id}]`, `    - IdleOn To-Do's [${todo.id}]`]);
+    expect(tree.tree).toContain('Journal (notebook,');
+    expect(journal).toEqual({ days: 1, notes: [{ date: '2026-11-03', id: expect.any(String) }] });
+  });
+
+  it('lets the model decide when the service cannot be made to call a tool', async () => {
+    const api = await signedIn();
+    const choices: string[] = [];
+    vi.stubGlobal('fetch', async (_input: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Sent;
+      choices.push(body.tool_choice);
+      if (body.tool_choice === 'required') return Response.json({ error: { message: 'tool_choice "required" is not supported' } }, { status: 400 });
+      return Response.json({ choices: [{ message: { content: 'Hello!' } }], usage: { cost: 0 } });
+    });
+    const events = await chat(api, 'Hi');
+    expect(choices).toEqual(['required', 'auto']);
+    expect((events.at(-1) as Extract<ChatEvent, { type: 'answer' }>).entry.content).toBe('Hello!');
+  });
+
   it('stops calling tools after eight rounds and answers', async () => {
     const api = await signedIn();
     const sent = fakeModel([...Array.from({ length: 8 }, () => ({ calls: [{ name: 'list_notebooks', args: {} }] })), { content: 'Here is what I found.' }]);
     const events = await chat(api, 'Loop forever');
     expect(sent).toHaveLength(9);
-    expect(sent.map((s) => s.tool_choice)).toEqual([...Array(8).fill('auto'), 'none']);
+    // The first round has to call a tool, the last one has to answer.
+    expect(sent.map((s) => s.tool_choice)).toEqual(['required', ...Array(7).fill('auto'), 'none']);
     expect((events.at(-1) as Extract<ChatEvent, { type: 'answer' }>).entry.content).toBe('Here is what I found.');
   });
 

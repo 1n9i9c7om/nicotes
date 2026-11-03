@@ -494,16 +494,21 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   an agent with OpenAI-style tool calling (`chatWithTools` in `ai/llm.ts`, not streamed;
   the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
   `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
-  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
+  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`
+  (one notebook or all, as an indented text tree with ids, ≤ 400 lines), `recent_pages`,
   `create_page`, `move_page` (new parent, notebook and/or title; links follow via
-  `propagateRenames`), `delete_page` (see below), `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
+  `propagateRenames`), `delete_page` (see below), `append_to_page`, `list_journal` (days with
+  a note, any range), `read_journal`, `write_journal`, `list_tasks` (refs are
   `pageId:line`), `add_task` (today's journal unless a page is named; due date, `⏰`
   reminder and `🔁` repeat rule), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
   per day, journal days), `start_research`, `research_status`. Arguments are validated
   with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
-  `{error}` and show as failed steps. Up to 8 rounds per message, the last with
-  `tool_choice: "none"`, and the per-run cost limit applies. The system prompt has the
-  date and time in the account's time zone. Search results, `read_page` and the page tools
+  `{error}` and show as failed steps. Up to 8 rounds per message: the first with
+  `tool_choice: "required"`, so every answer rests on a lookup or an action rather than on
+  earlier messages (a 400/404 for it falls back to `"auto"`, for servers without it), the
+  last with `"none"`; the per-run cost limit applies. The system prompt has the date and
+  time in the account's time zone and the notebooks with their page counts and the
+  journal's extent (`notesOverview`), so the model never has to remember what exists. Search results, `read_page` and the page tools
   give a page's path (Notebook › Parent › Page), which the step texts show too. History:
   the channel's messages (web and Telegram are separate) up to 24k characters; tool
   traffic is kept only within a turn, the steps are stored with the answer for display, and
