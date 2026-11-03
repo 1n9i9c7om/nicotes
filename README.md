@@ -154,7 +154,8 @@ any task) to be reminded then, and/or get a summary of the day's tasks every mor
 Settings → Integrations → **Reminders** sends them as notifications to your phone or computer (on iPhone
 and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
 own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in
-the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token.
+the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token. The
+bot only answers the Telegram account that connected it, in a private chat with it.
 
 Below each page, **Connections** shows backlinks, **unlinked
 mentions** (pages that name each other without a link, linked with one click) and, with
