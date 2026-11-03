@@ -159,7 +159,8 @@ export function SettingsReminders({ reminders, save, telegramToken }: Props) {
             @BotFather
           </a>{' '}
           in Telegram for a new bot (<code>/newbot</code>), paste its token here, then connect your chat with it. Besides
-          reminders, you can talk to the chat assistant there (/todo and /calendar have buttons).
+          reminders, you can talk to the chat assistant there (/todo and /calendar have buttons). The bot only answers
+          the Telegram account that connected it, in a private chat; groups can't be connected.
         </p>
         {telegramToken}
         {telegram?.error && (
@@ -172,6 +173,7 @@ export function SettingsReminders({ reminders, save, telegramToken }: Props) {
             <div className="setting-actions">
               <span className="check ok">
                 <CheckCircle2 size={15} /> Reminders go to your chat with @{telegram.bot}
+                {telegram.account && <> ({telegram.account}; nobody else is answered)</>}
               </span>
               <button className="btn btn-sm" disabled={unlink.isPending} onClick={() => unlink.mutate()}>
                 Disconnect
