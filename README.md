@@ -98,7 +98,7 @@ toolbar's highlighter button colours the selected text or its background from a 
 palette; colours are stored the way Obsidian writes them (`==highlight==`,
 `<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
 
-**Canvas pages:** "New canvas" in a notebook's or page's ⋯ menu makes a page to draw on, as
+**Canvas pages:** **New canvas** on a notebook's page (or in a notebook's or page's ⋯ menu) makes a page to draw on, as
 in OneNote: pen and highlighter (with pen pressure), shapes, arrows, text and pasted
 images, powered by [Excalidraw](https://excalidraw.com). Text on a canvas is found by
 search, `[[Page]]` links on shapes open that page, and canvases export (and import) as
