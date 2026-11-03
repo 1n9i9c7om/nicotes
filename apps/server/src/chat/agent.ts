@@ -9,7 +9,7 @@ import { chatMessages } from '../db/schema.js';
 import { newId } from '../ids.js';
 import { localTime, timeZoneOf } from '../time.js';
 import type { SettingsStore } from '../settings.js';
-import { answerConfirmation, runTool, toolSpecs, type ToolContext } from './tools.js';
+import { answerConfirmation, notesOverview, runTool, toolSpecs, type ToolContext } from './tools.js';
 
 /** Tool rounds per message: enough to search, read and then write. */
 const MAX_ROUNDS = 8;
@@ -89,14 +89,16 @@ function save(db: Db, userId: string, channel: ChatChannel, role: ChatEntry['rol
   return toEntry(row);
 }
 
-function systemPrompt(username: string, now: number, timeZone: string, channel: ChatChannel): string {
+function systemPrompt(username: string, now: number, timeZone: string, channel: ChatChannel, notes: string): string {
   const { date, time } = localTime(now, timeZone);
   const weekday = new Date(`${date}T12:00:00Z`).toLocaleDateString('en', { weekday: 'long', timeZone: 'UTC' });
   return [
     `You are the assistant inside Nicotes, the personal notes app of ${username}. You act in the app for them with the tools: search and read their notes, write pages and the journal, manage tasks, show the calendar, start web research.`,
     `Now: ${weekday}, ${date}, ${time} (${timeZone}). Work out dates like "tomorrow" or "next Friday" from this.`,
+    `Their notes right now: ${notes} Use list_pages for the pages in them, list_journal for the journal's days.`,
     'Rules:',
-    '- Look things up with the tools instead of guessing; never invent notes, tasks or dates. Say so when nothing was found.',
+    '- Look things up with the tools instead of guessing or answering from earlier messages; never invent notes, notebooks, tasks or dates. Say so when nothing was found.',
+    '- Every answer starts with at least one tool call: for a request the call that does it, for a question the lookup that answers it.',
     '- Notes the user asks you to keep go into today\'s journal unless they name a page. Tasks go into today\'s journal unless they name a page.',
     '- Only a tool changes anything. Never say you added, created, changed, moved or deleted something unless a tool call in your current answer did it and succeeded; if you made none, nothing was changed.',
     `- Each of your earlier answers starts with "${STEPS_PREFIX} …]": what was really done for it. Never write such a line yourself.`,
@@ -157,7 +159,7 @@ export async function runChat(
   const timeZone = timeZoneOf(settings, opts.userId);
   const ctx: ToolContext = { ...deps, userId: opts.userId, today: localTime(now, timeZone).date };
   const messages: ToolMessage[] = [
-    { role: 'system', content: systemPrompt(opts.username, now, timeZone, opts.channel) },
+    { role: 'system', content: systemPrompt(opts.username, now, timeZone, opts.channel, notesOverview(ctx)) },
     ...history,
     { role: 'user', content: opts.text },
   ];
@@ -166,9 +168,11 @@ export async function runChat(
   let usage = emptyUsage();
   let answer = '';
   for (let round = 0; ; round++) {
-    // In the last round the model has to answer with what it found.
+    // The first round has to call a tool, so an answer rests on a lookup or an action rather
+    // than on earlier messages; in the last round the model has to answer with what it found.
     const last = round >= MAX_ROUNDS || usage.cost >= cfg.costLimit;
-    const reply = await chatWithTools({ keys: cfg.keys, model, messages, tools, toolChoice: last ? 'none' : 'auto', maxTokens: 3000, signal: opts.signal });
+    const toolChoice = last ? 'none' : round === 0 ? 'required' : 'auto';
+    const reply = await chatWithTools({ keys: cfg.keys, model, messages, tools, toolChoice, maxTokens: 3000, signal: opts.signal });
     usage = addUsage(usage, reply.usage);
     if (!reply.toolCalls.length || last) {
       // A model may imitate the steps line of earlier answers.

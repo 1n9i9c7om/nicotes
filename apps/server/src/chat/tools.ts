@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, isNull, lte, max, min } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   appendBlock,
@@ -59,12 +59,44 @@ const MAX_PAGE_CHARS = 12_000;
 
 const plainExcerpt = (text: string) => text.split(MATCH_START).join('').split(MATCH_END).join('').replace(/\s+/g, ' ').trim();
 
-function notebookByName(ctx: ToolContext, name: string) {
-  const all = ctx.db
+/** Lines list_pages returns at most. */
+const MAX_TREE_LINES = 400;
+
+function liveNotebooks(ctx: ToolContext) {
+  return ctx.db
     .select({ id: notebooks.id, title: notebooks.title })
     .from(notebooks)
     .where(and(eq(notebooks.userId, ctx.userId), isNull(notebooks.deletedAt)))
+    .orderBy(asc(notebooks.sortOrder))
     .all();
+}
+
+/**
+ * The notebooks with their page counts and the journal's extent, for the system prompt: the
+ * model then knows what exists without remembering it from earlier messages.
+ */
+export function notesOverview(ctx: ToolContext): string {
+  const counts = ctx.db
+    .select({ title: notebooks.title, pages: count(pages.id) })
+    .from(notebooks)
+    .leftJoin(pages, and(eq(pages.notebookId, notebooks.id), isNull(pages.deletedAt)))
+    .where(and(eq(notebooks.userId, ctx.userId), isNull(notebooks.deletedAt)))
+    .groupBy(notebooks.id)
+    .orderBy(asc(notebooks.sortOrder))
+    .all();
+  const journal = ctx.db
+    .select({ days: count(dailyNotes.date), first: min(dailyNotes.date), last: max(dailyNotes.date) })
+    .from(dailyNotes)
+    .innerJoin(pages, eq(pages.id, dailyNotes.pageId))
+    .where(and(eq(dailyNotes.userId, ctx.userId), isNull(pages.deletedAt)))
+    .get();
+  const books = counts.length ? `notebooks ${counts.map((n) => `"${n.title}" (${n.pages} pages)`).join(', ')}` : 'no notebooks yet';
+  const days = journal?.days ? ` The journal has notes for ${journal.days} days, ${journal.first} to ${journal.last}.` : ' The journal is empty.';
+  return `${books}.${days}`;
+}
+
+function notebookByName(ctx: ToolContext, name: string) {
+  const all = liveNotebooks(ctx);
   const found = all.find((n) => n.id === name) ?? all.find((n) => n.title.toLowerCase() === name.trim().toLowerCase());
   if (!found) throw new Error(`There is no notebook "${name}". Notebooks: ${all.map((n) => n.title).join(', ') || 'none'}`);
   return found;
@@ -209,18 +241,75 @@ export const TOOLS: Tool[] = [
   }),
   tool({
     name: 'list_pages',
-    description: 'Lists the pages of a notebook (by title or id) as a tree.',
-    schema: z.object({ notebook: z.string().min(1).max(200) }),
+    description:
+      'The pages of a notebook (by title or id), or of all notebooks when none is given, as an indented tree: one line per page, "- Title [id]", subpages indented below their parent.',
+    schema: z.object({ notebook: z.string().min(1).max(200).optional() }),
     run(ctx, { notebook: name }) {
-      const nb = notebookByName(ctx, name);
+      const books = name ? [notebookByName(ctx, name)] : liveNotebooks(ctx);
+      const lines: string[] = [];
+      for (const nb of books) {
+        const rows = ctx.db
+          .select({ id: pages.id, title: pages.title, parentId: pages.parentId })
+          .from(pages)
+          .where(and(eq(pages.notebookId, nb.id), isNull(pages.deletedAt)))
+          .orderBy(asc(pages.sortOrder), asc(pages.createdAt))
+          .all();
+        const children = new Map<string | null, typeof rows>();
+        for (const row of rows) children.set(row.parentId, [...(children.get(row.parentId) ?? []), row]);
+        lines.push(`${nb.title} (notebook, ${rows.length} pages)`);
+        const walk = (parentId: string | null, depth: number) => {
+          for (const row of children.get(parentId) ?? []) {
+            lines.push(`${'  '.repeat(depth)}- ${row.title || 'Untitled'} [${row.id}]`);
+            walk(row.id, depth + 1);
+          }
+        };
+        walk(null, 1);
+      }
+      const shown = lines.slice(0, MAX_TREE_LINES);
+      if (lines.length > shown.length) shown.push(`[… ${lines.length - shown.length} more lines; ask for one notebook]`);
+      return { data: { tree: shown.join('\n') }, summary: name ? `Looked at the pages of ${quoted(books[0]!.title)}` : 'Looked at all pages' };
+    },
+  }),
+  tool({
+    name: 'list_journal',
+    description: 'The days that have a journal note (newest first), optionally between two dates (inclusive). Read one with read_journal.',
+    schema: z.object({ from: dateSchema.optional(), to: dateSchema.optional() }),
+    run(ctx, { from, to }) {
       const rows = ctx.db
-        .select({ id: pages.id, title: pages.title, parentId: pages.parentId })
-        .from(pages)
-        .where(and(eq(pages.notebookId, nb.id), isNull(pages.deletedAt)))
-        .orderBy(asc(pages.sortOrder))
-        .limit(300)
+        .select({ date: dailyNotes.date, id: dailyNotes.pageId })
+        .from(dailyNotes)
+        .innerJoin(pages, eq(pages.id, dailyNotes.pageId))
+        .where(
+          and(
+            eq(dailyNotes.userId, ctx.userId),
+            isNull(pages.deletedAt),
+            from ? gte(dailyNotes.date, from) : undefined,
+            to ? lte(dailyNotes.date, to) : undefined,
+          ),
+        )
+        .orderBy(desc(dailyNotes.date))
+        .limit(400)
         .all();
-      return { data: rows, summary: `Looked at the pages of ${quoted(nb.title)}` };
+      return { data: { days: rows.length, notes: rows }, summary: `Looked at the journal (${rows.length} days)` };
+    },
+  }),
+  tool({
+    name: 'recent_pages',
+    description: 'Pages changed most recently (newest first), with where they are and when they changed; optionally only since a date.',
+    schema: z.object({ since: dateSchema.optional(), limit: z.number().int().min(1).max(50).optional() }),
+    run(ctx, { since, limit }) {
+      const rows = ctx.db
+        .select({ id: pages.id, title: pages.title, updatedAt: pages.updatedAt })
+        .from(pages)
+        .where(and(eq(pages.userId, ctx.userId), isNull(pages.deletedAt), since ? gte(pages.updatedAt, Date.parse(`${since}T00:00:00Z`)) : undefined))
+        .orderBy(desc(pages.updatedAt))
+        .limit(limit ?? 15)
+        .all();
+      const path = pathFinder(ctx);
+      return {
+        data: rows.map((r) => ({ id: r.id, path: path(r.id), changed: new Date(r.updatedAt).toISOString() })),
+        summary: `Looked at recently changed pages (${rows.length})`,
+      };
     },
   }),
   tool({

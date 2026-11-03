@@ -267,8 +267,11 @@ export async function chatWithTools(
   opts: Omit<ChatOptions, 'messages' | 'json' | 'webResults'> & {
     messages: ToolMessage[];
     tools: ToolSpec[];
-    /** "none": answer now, no more calls (the tools stay listed, as earlier calls refer to them). */
-    toolChoice?: 'auto' | 'none';
+    /**
+     * "none": answer now, no more calls (the tools stay listed, as earlier calls refer to them).
+     * "required": call at least one tool first; where the service can't, the model decides.
+     */
+    toolChoice?: 'auto' | 'none' | 'required';
   },
 ): Promise<{ content: string; toolCalls: ToolCall[]; usage: Usage }> {
   const r = route(opts);
@@ -293,6 +296,12 @@ export async function chatWithTools(
   };
   let res = await send(body);
   let data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  // Not every model server (or OpenRouter provider) takes "required".
+  if ((res.status === 400 || res.status === 404) && body.tool_choice === 'required') {
+    body.tool_choice = 'auto';
+    res = await send(body);
+    data = (await res.json().catch(() => ({}))) as ToolCompletion;
+  }
   const simpler = res.status === 400 ? fallbackBody(body, data.error?.message) : null;
   if (simpler) {
     res = await send(simpler);

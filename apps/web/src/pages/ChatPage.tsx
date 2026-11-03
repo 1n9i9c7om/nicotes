@@ -37,6 +37,8 @@ const ICONS: Record<string, LucideIcon> = {
   read_page: FileText,
   list_notebooks: FileText,
   list_pages: FileText,
+  recent_pages: FileText,
+  list_journal: NotebookPen,
   create_page: FilePen,
   append_to_page: FilePen,
   read_journal: NotebookPen,
