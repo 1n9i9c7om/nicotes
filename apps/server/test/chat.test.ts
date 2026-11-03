@@ -233,6 +233,23 @@ describe('chat', () => {
     expect(journal).toEqual({ days: 1, notes: [{ date: '2026-11-03', id: expect.any(String) }] });
   });
 
+  it('answers questions about Nicotes from its user guide', async () => {
+    const api = await signedIn();
+    const sent = fakeModel([
+      { calls: [{ name: 'nicotes_help', args: { question: 'canvas drawing' } }, { name: 'nicotes_help', args: { question: 'telegram bot token' } }] },
+      { content: 'Use "New canvas" in the ⋯ menu.' },
+    ]);
+    const events = await chat(api, 'Wie kann ich zeichnen?');
+    const [canvas, telegram] = sent[1]!.messages.filter((m) => m.role === 'tool').map((m) => JSON.parse(m.content!) as { sections: { title: string; text: string }[]; contents: string[] });
+    expect(canvas!.sections[0]!.title).toBe('Features › Writing');
+    expect(canvas!.sections[0]!.text).toContain('New canvas');
+    expect(canvas!.contents).toEqual(expect.arrayContaining(['Quick start', 'Features › Chat (optional)', 'Backups']));
+    expect(telegram!.sections.map((s) => s.title)).toContain('Features › Tasks and connections');
+    const actions = events.filter((e) => e.type === 'action').map((e) => (e as Extract<ChatEvent, { type: 'action' }>).action.summary);
+    expect(actions[0]).toBe('Looked up “Features › Writing” in the Nicotes guide');
+    expect(sent[0]!.messages[0]!.content).toContain('nicotes_help');
+  });
+
   it('lets the model decide when the service cannot be made to call a tool', async () => {
     const api = await signedIn();
     const choices: string[] = [];

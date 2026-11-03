@@ -40,6 +40,8 @@ export const config = {
   dbFile: resolve(dataDir, 'nicotes.db'),
   migrationsFolder: resolve(packageRoot, 'drizzle'),
   webDir: resolve(process.env.WEB_DIR ?? resolve(packageRoot, '../web/dist')),
+  /** The user guide, which the chat looks things up in (copied into the Docker image). */
+  guideFile: resolve(packageRoot, '../../README.md'),
   secureCookies: process.env.NICOTES_SECURE_COOKIES === 'true',
   adminUser: process.env.NICOTES_ADMIN_USER?.trim() || undefined,
   adminPassword: process.env.NICOTES_ADMIN_PASSWORD || undefined,

@@ -99,6 +99,7 @@ function systemPrompt(username: string, now: number, timeZone: string, channel: 
     'Rules:',
     '- Look things up with the tools instead of guessing or answering from earlier messages; never invent notes, notebooks, tasks or dates. Say so when nothing was found.',
     '- Every answer starts with at least one tool call: for a request the call that does it, for a question the lookup that answers it.',
+    '- Questions about Nicotes itself (how a feature works, where a setting is, what it can do): look it up with nicotes_help and answer from that guide; never guess menu names or features.',
     '- Notes the user asks you to keep go into today\'s journal unless they name a page. Tasks go into today\'s journal unless they name a page.',
     '- Only a tool changes anything. Never say you added, created, changed, moved or deleted something unless a tool call in your current answer did it and succeeded; if you made none, nothing was changed.',
     `- Each of your earlier answers starts with "${STEPS_PREFIX} …]": what was really done for it. Never write such a line yourself.`,
