@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, count, eq, lt, max } from 'drizzle-orm';
 import webpush from 'web-push';
 import {
+  parseDigestTimes,
   taskPlainText,
   type PageTask,
   type PushDevice,
@@ -58,6 +59,8 @@ const telegramApi: TelegramApi = async (token, method, body, signal) => {
 };
 
 export interface ReminderOptions {
+  /** NICOTES_BASE_URL: the address links point to, instead of the one the app was last used at. */
+  baseUrl?: string;
   /** Tests: fakes for the push services and Telegram, and the clock. */
   sendPush?: PushSender;
   telegram?: TelegramApi;
@@ -87,6 +90,7 @@ export class ReminderService {
   private sendPush: PushSender;
   private telegram: TelegramApi;
   private now: () => number;
+  private baseUrl: string | null;
   /** Answers the linked chat: commands, buttons, and the chat assistant. */
   private telegramBot: TelegramBot;
 
@@ -98,7 +102,8 @@ export class ReminderService {
     this.sendPush = options.sendPush ?? ((sub, payload, opts) => webpush.sendNotification(sub, payload, opts));
     this.telegram = options.telegram ?? telegramApi;
     this.now = options.now ?? Date.now;
-    this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now);
+    this.baseUrl = options.baseUrl ?? null;
+    this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now, (userId) => this.appUrl(userId));
     settings.onUpdate((userId, input) => {
       // Another bot cannot write to the chat the old one was linked to.
       if (input.telegramBotToken !== undefined) this.disconnectTelegram(userId);
@@ -120,6 +125,11 @@ export class ReminderService {
   /** The address the app was last used at, for links in Telegram messages. */
   rememberAppUrl(userId: string, origin: string) {
     if (this.settings.internal(userId, 'appUrl') !== origin) this.settings.setInternal(userId, 'appUrl', origin);
+  }
+
+  /** Where links in messages point: NICOTES_BASE_URL, else the address the app was last used at. */
+  appUrl(userId: string): string | null {
+    return this.baseUrl ?? this.settings.internal(userId, 'appUrl');
   }
 
   // ---------- Push ----------
@@ -350,7 +360,7 @@ export class ReminderService {
   /** Sends a notice to every device and the linked chat; one result per target. */
   async deliver(userId: string, notice: ReminderNotice): Promise<ReminderTestResult[]> {
     const results: ReminderTestResult[] = [];
-    const appUrl = this.settings.internal(userId, 'appUrl');
+    const appUrl = this.appUrl(userId);
     const subs = this.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).all();
     if (subs.length) {
       const { publicKey, privateKey } = this.vapidKeys(userId);
@@ -469,26 +479,47 @@ export class ReminderService {
       });
     }
 
-    const since = digestTime ? minutes(local.time) - minutes(digestTime) : -1;
-    if (digestTime && since >= 0 && since <= GRACE_MINUTES) {
-      const today = tasks.filter((t) => t.due === local.date);
-      const overdue = tasks.filter((t) => t.due && t.due < local.date);
-      const key = `digest:${local.date}`;
-      if (!today.length && !overdue.length) {
-        this.db.insert(remindersSent).values({ userId, key, sentAt: now }).onConflictDoNothing().run();
-        return;
-      }
-      const shown = (today.length ? today : overdue).slice(0, 6);
-      const lines = shown.map((t) => `• ${clip(taskPlainText(t.text) || 'Task', 80)}`);
-      const rest = (today.length || overdue.length) - shown.length;
-      if (rest > 0) lines.push(`and ${rest} more`);
-      if (today.length && overdue.length) lines.push(`Plus ${plural(overdue.length, 'overdue task')}.`);
-      await this.once(userId, key, {
-        title: today.length ? `${plural(today.length, 'task')} due today` : `${plural(overdue.length, 'task')} overdue`,
-        body: lines.join('\n'),
-        url: '/tasks',
-        tag: 'digest',
-      });
+    // The daily summaries: the first of the day what's due (or overdue), later ones what's
+    // still open today and what's due tomorrow. One with nothing to tell is skipped.
+    for (const [i, time] of parseDigestTimes(digestTime).entries()) {
+      const since = minutes(local.time) - minutes(time);
+      if (since < 0 || since > GRACE_MINUTES) continue;
+      // The morning one keeps the key it had when there was only one.
+      const key = i === 0 ? `digest:${local.date}` : `digest:${local.date}:${time}`;
+      const notice = i === 0 ? morningSummary(tasks, local.date) : laterSummary(tasks, local.date);
+      if (notice) await this.once(userId, key, { ...notice, url: '/tasks', tag: 'digest' });
+      else this.db.insert(remindersSent).values({ userId, key, sentAt: now }).onConflictDoNothing().run();
     }
   }
+}
+
+const bullets = (tasks: PageTask[], max: number) => {
+  const lines = tasks.slice(0, max).map((t) => `• ${clip(taskPlainText(t.text) || 'Task', 80)}`);
+  if (tasks.length > max) lines.push(`and ${tasks.length - max} more`);
+  return lines;
+};
+
+const nextDay = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/** Tasks due today, or else the overdue ones. */
+function morningSummary(tasks: PageTask[], date: string): { title: string; body: string } | null {
+  const today = tasks.filter((t) => t.due === date);
+  const overdue = tasks.filter((t) => t.due && t.due < date);
+  if (!today.length && !overdue.length) return null;
+  const lines = bullets(today.length ? today : overdue, 6);
+  if (today.length && overdue.length) lines.push(`Plus ${plural(overdue.length, 'overdue task')}.`);
+  return { title: today.length ? `${plural(today.length, 'task')} due today` : `${plural(overdue.length, 'task')} overdue`, body: lines.join('\n') };
+}
+
+/** Later in the day: what's still open today, and what's due tomorrow. */
+function laterSummary(tasks: PageTask[], date: string): { title: string; body: string } | null {
+  const today = tasks.filter((t) => t.due === date);
+  const tomorrow = tasks.filter((t) => t.due === nextDay(date));
+  if (!today.length && !tomorrow.length) return null;
+  const lines = bullets(today, 5);
+  if (tomorrow.length) lines.push(...(today.length ? ['', 'Tomorrow:'] : []), ...bullets(tomorrow, 5));
+  return {
+    title: today.length ? `${plural(today.length, 'task')} still open today` : `${plural(tomorrow.length, 'task')} due tomorrow`,
+    body: lines.join('\n'),
+  };
 }

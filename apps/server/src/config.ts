@@ -16,12 +16,32 @@ function count(name: string, fallback: number): number {
   return fallback;
 }
 
+/** The address Nicotes is reached at, for links it sends (Telegram, notifications). */
+function baseUrl(): string | undefined {
+  const raw = process.env.NICOTES_BASE_URL?.trim();
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      if (url.pathname.replace(/\/$/, '')) console.warn(`NICOTES_BASE_URL: only ${url.origin} is used; Nicotes runs at the root of its address`);
+      return url.origin;
+    }
+  } catch {
+    // reported below
+  }
+  console.warn(`Ignoring NICOTES_BASE_URL=${raw}: expected an address like https://notes.example.com`);
+  return undefined;
+}
+
 export const config = {
   port: Number(process.env.NICOTES_PORT ?? 3000),
+  baseUrl: baseUrl(),
   dataDir,
   dbFile: resolve(dataDir, 'nicotes.db'),
   migrationsFolder: resolve(packageRoot, 'drizzle'),
   webDir: resolve(process.env.WEB_DIR ?? resolve(packageRoot, '../web/dist')),
+  /** The user guide, which the chat looks things up in (copied into the Docker image). */
+  guideFile: resolve(packageRoot, '../../README.md'),
   secureCookies: process.env.NICOTES_SECURE_COOKIES === 'true',
   adminUser: process.env.NICOTES_ADMIN_USER?.trim() || undefined,
   adminPassword: process.env.NICOTES_ADMIN_PASSWORD || undefined,

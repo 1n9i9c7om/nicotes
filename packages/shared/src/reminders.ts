@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+/** Daily summaries a day at most. */
+export const MAX_DIGEST_TIMES = 4;
+
+/**
+ * The times of the daily summaries, sorted, from the setting ("07:30" or "07:30, 20:00").
+ * The first is the morning summary; later ones tell what's still open and what's due tomorrow.
+ */
+export function parseDigestTimes(value: string | null | undefined): string[] {
+  const times = (value ?? '').split(/[\s,;]+/).filter((t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t));
+  return [...new Set(times)].sort().slice(0, MAX_DIGEST_TIMES);
+}
+
 /** A browser or installed app that gets reminders as push notifications. */
 export interface PushDevice {
   id: string;
