@@ -113,6 +113,24 @@ describe('reminders', () => {
     ]);
   });
 
+  it('sends a later summary of what is still open today and due tomorrow', async () => {
+    const f = fakes();
+    const { api, page, subscribe } = await withTasks(f);
+    await subscribe('https://push.example/abc');
+    const saved = await api.call<{ reminders: { digestTime: string | null } }>('PATCH', '/api/settings', { reminderDigestTime: '20:00, 07:30' });
+    expect(saved.body.reminders.digestTime).toBe('07:30, 20:00');
+    expect((await api.call('PATCH', '/api/settings', { reminderDigestTime: '07:30, 25:00' })).status).toBe(400);
+    await api.call('POST', '/api/pages', { notebookId: page.notebookId, title: 'Health', content: '- [ ] Dentist 📅 2026-11-05' });
+
+    f.setNow('2026-11-04T06:31:00Z'); // 07:31 in Berlin
+    await api.reminders.tick();
+    f.setNow('2026-11-04T19:01:00Z'); // 20:01
+    await api.reminders.tick();
+    await api.reminders.tick();
+    expect(f.pushed.map((p) => p.notice.title)).toEqual(['2 tasks due today', '2 tasks still open today']);
+    expect(f.pushed[1]!.notice.body).toBe('• Call mum\n• Buy milk\n\nTomorrow:\n• Dentist');
+  });
+
   it('forgets devices that unsubscribed', async () => {
     const f = fakes();
     const { api, subscribe } = await withTasks(f);

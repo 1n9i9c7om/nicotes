@@ -647,18 +647,17 @@
 
 /* ---------- Reminders ---------- */
 
-.reminder-digest {
+.reminder-digests {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px 16px;
 }
 
-.setting .reminder-digest input[type='checkbox'] {
-  width: 17px;
-  height: 17px;
-  padding: 0;
-  border-radius: 5px;
+.reminder-digest {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .setting .reminder-digest input[type='time'] {

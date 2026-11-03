@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { parseDigestTimes } from './reminders';
 import { normalizeTag } from './tags';
 
 // ---------- Settings ----------
 
 export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-5.3-flashx';
-/** Embeddings for semantic search, related pages and "Ask your notes". */
+/** Embeddings for semantic search, related pages and the chat's search by meaning. */
 export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 /** Pages with these tags keep their checklists out of the task list (imported recipes). */
 export const DEFAULT_TASK_EXCLUDE_TAGS = ['recipe'];
@@ -202,9 +203,11 @@ export const settingsUpdateSchema = z.object({
     .optional(),
   semanticIndex: z.boolean().nullable().optional(),
   embeddingModel: modelId,
+  /** One or more times for the daily summaries, "07:30" or "07:30, 20:00"; stored sorted. */
   reminderDigestTime: z
     .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected a time like 08:00')
+    .regex(/^\s*([01]\d|2[0-3]):[0-5]\d(\s*[,;\s]\s*([01]\d|2[0-3]):[0-5]\d){0,3}\s*$/, 'Expected times like 08:00 or 08:00, 20:00 (at most 4)')
+    .transform((value) => parseDigestTimes(value).join(', '))
     .nullable()
     .optional(),
   reminderTimeZone: z
