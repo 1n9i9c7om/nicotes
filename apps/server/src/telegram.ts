@@ -99,6 +99,7 @@ export function telegramHtml(markdown: string, link: (target: string) => string 
 }
 
 const STEP_ICONS: [RegExp, string][] = [
+  [/^nicotes_help/, '💡'],
   [/^search/, '🔎'],
   [/journal/, '📓'],
   [/task/, '☑️'],

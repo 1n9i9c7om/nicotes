@@ -17,6 +17,7 @@ import type { SemanticIndex } from '../ai/semantic.js';
 import type { Db } from '../db/index.js';
 import { dailyNotes, notebooks, pages } from '../db/schema.js';
 import { newId } from '../ids.js';
+import { searchGuide } from './help.js';
 import { loadLinkContext, propagateRenames } from '../links.js';
 import { ensureDailyNote } from '../routes/daily.js';
 import { applyMove, createPage, descendantIds, findPage, trashPage } from '../routes/pages.js';
@@ -167,6 +168,20 @@ function openTasks(ctx: ToolContext, status: 'open' | 'done' | 'all' = 'open') {
 const quoted = (text: string, max = 60) => `“${text.length > max ? `${text.slice(0, max - 1)}…` : text}”`;
 
 export const TOOLS: Tool[] = [
+  tool({
+    name: 'nicotes_help',
+    description:
+      "Looks up how Nicotes itself works in its user guide: features, where a setting is (\"Settings → …\"), how to install or connect something. Ask in English keywords, e.g. \"canvas drawing\" or \"telegram reminders\". Returns the best matching sections and the guide's table of contents.",
+    schema: z.object({ question: z.string().min(2).max(300) }),
+    run(_ctx, { question }) {
+      const { sections, contents } = searchGuide(question);
+      if (!contents.length) return { data: { error: 'The user guide is not available on this server' }, summary: 'Looked in the Nicotes guide (missing)' };
+      return {
+        data: { version: process.env.NICOTES_VERSION || undefined, sections, contents },
+        summary: sections.length ? `Looked up ${quoted(sections[0]!.title)} in the Nicotes guide` : `Looked in the Nicotes guide for ${quoted(question)} (nothing found)`,
+      };
+    },
+  }),
   tool({
     name: 'search_notes',
     description: 'Full-text search over all pages (and PDFs and other files they show). Use short keyword queries; "#tag" filters by tag.',

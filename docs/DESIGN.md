@@ -493,7 +493,9 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Chat** (`chat/agent.ts`, `chat/tools.ts`, `chat/routes.ts`, table `chat_messages`):
   an agent with OpenAI-style tool calling (`chatWithTools` in `ai/llm.ts`, not streamed;
   the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
-  `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
+  `nicotes_help` (the README's `##`/`###` sections best matching the question's words, ≤ 3
+  and 9k characters, plus the table of contents; `chat/help.ts`, the Docker image carries
+  the README for it), `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
   wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`
   (one notebook or all, as an indented text tree with ids, ≤ 400 lines), `recent_pages`,
   `create_page`, `move_page` (new parent, notebook and/or title; links follow via

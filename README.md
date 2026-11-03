@@ -212,8 +212,11 @@ call the dentist tomorrow at 9"*, *"Note in my journal that the heating was fixe
 and reads pages, writes, moves and renames pages and writes the journal, adds, ticks off
 and moves tasks, shows the calendar and starts research; each step shows up in the chat and
 links to the page it touched. It can also delete a page, but only once you confirm with
-the button it shows (the page goes to the trash). **New chat** makes it forget the conversation. It needs an AI service (see below)
-and a model that can use tools, chosen under Settings → AI → AI models → Chat.
+the button it shows (the page goes to the trash). It also answers questions about Nicotes
+itself (*"How do I draw?"*), from this guide. **New chat** makes it forget the conversation.
+It needs an AI service (see below) and a model that can use tools well, chosen under
+Settings → AI → AI models → Chat: small, cheap models tend to claim they did something
+without doing it, so if the steps don't match the answer, try a stronger one.
 
 The same assistant answers in **Telegram** once a chat is connected under Settings →
 Integrations → Reminders: write or send voice messages (with a transcription service set up), use

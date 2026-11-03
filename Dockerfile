@@ -39,6 +39,8 @@ COPY --from=build /app/apps/server/package.json ./apps/server/
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
+# The user guide, which the chat answers questions about Nicotes from.
+COPY --from=build /app/README.md ./README.md
 RUN mkdir -p /data /backups && chown node:node /data /backups
 # Build information for Settings → About, passed by CI (empty in local builds). Kept last so a
 # new commit only changes this layer.
