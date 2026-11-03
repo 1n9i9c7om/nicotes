@@ -2,6 +2,21 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.5.2 — 2026-11-03
+
+**Fixes**
+
+- **The Telegram bot only answers you.** A Telegram chat could also be connected in a
+  group, where everyone in it could then read and change your notes through the bot and press
+  its buttons. Now Nicotes can only be connected in a private chat with the bot. The bot
+  answers only the Telegram account that connected it, and Settings → Integrations →
+  Reminders shows which account that is.
+  - A private chat you connected before keeps working; there's nothing to do.
+  - A group connected before no longer gets reminders or answers. Connect your private chat
+    with the bot instead.
+- Making a new Telegram link right as the bot stopped checking for messages could leave it
+  waiting until you made another one.
+
 ## 0.5.1 — 2026-11-02
 
 **New**
