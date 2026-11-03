@@ -101,7 +101,7 @@ export class ReminderService {
     this.telegramBot = new TelegramBot(db, settings, this.telegram, this.now);
     settings.onUpdate((userId, input) => {
       // Another bot cannot write to the chat the old one was linked to.
-      if (input.telegramBotToken !== undefined) settings.setInternal(userId, 'telegram.chatId', null);
+      if (input.telegramBotToken !== undefined) this.disconnectTelegram(userId);
     });
   }
 
@@ -189,16 +189,29 @@ export class ReminderService {
 
   async telegramStatus(userId: string): Promise<ReminderStatus['telegram']> {
     const token = this.settings.reminders(userId).telegramToken;
-    if (!token) return { bot: null, connected: false, linkUrl: null, error: null };
+    if (!token) return { bot: null, connected: false, account: null, linkUrl: null, error: null };
     const { name, error } = await this.bot(token);
     const pending = this.settings.internal(userId, 'telegram.linkCode');
     const code = pending && this.links.get(pending)?.userId === userId ? pending : null;
+    const linked = this.linkedChat(userId);
     return {
       bot: name,
-      connected: this.settings.internal(userId, 'telegram.chatId') !== null,
+      connected: linked !== null,
+      account: linked ? this.settings.internal(userId, 'telegram.account') : null,
       linkUrl: code && name ? `https://t.me/${name}?start=${code}` : null,
       error,
     };
+  }
+
+  /**
+   * The linked chat: a private chat with one Telegram account, the only one the bot answers
+   * and the only one it writes to. Links from before the account was kept still work (a
+   * private chat's id is the person's id); chats in groups (negative ids) no longer count.
+   */
+  private linkedChat(userId: string): { chatId: string; telegramUserId: string } | null {
+    const chatId = this.settings.internal(userId, 'telegram.chatId');
+    if (!chatId || chatId.startsWith('-')) return null;
+    return { chatId, telegramUserId: this.settings.internal(userId, 'telegram.userId') ?? chatId };
   }
 
   /** A t.me link that opens the bot with a one-time code; /start with it links the chat. */
@@ -215,7 +228,7 @@ export class ReminderService {
   }
 
   disconnectTelegram(userId: string) {
-    this.settings.setInternal(userId, 'telegram.chatId', null);
+    for (const key of ['telegram.chatId', 'telegram.userId', 'telegram.account']) this.settings.setInternal(userId, key, null);
   }
 
   /** Lets linked Telegram chats talk to the chat assistant; they are listened to from now on. */
@@ -231,22 +244,24 @@ export class ReminderService {
         .select({ id: users.id })
         .from(users)
         .all()
-        .filter(({ id }) => this.settings.internal(id, 'telegram.chatId') !== null)
+        .filter(({ id }) => this.linkedChat(id) !== null)
         .map(({ id }) => this.settings.reminders(id).telegramToken)
         .filter((t): t is string => !!t),
     );
     for (const token of tokens) void this.poll(token);
   }
 
-  /** The account whose linked chat this is (for this bot). */
-  private chatOwner(token: string, chatId: number): string | null {
+  /** The account whose linked chat this is (for this bot), if the linked person wrote it. */
+  private chatOwner(token: string, chatId: number, telegramUserId: number): string | null {
     return (
       this.db
         .select({ id: users.id })
         .from(users)
         .all()
-        .find(({ id }) => this.settings.internal(id, 'telegram.chatId') === String(chatId) && this.settings.reminders(id).telegramToken === token)?.id ??
-      null
+        .find(({ id }) => {
+          const linked = this.linkedChat(id);
+          return linked?.chatId === String(chatId) && linked.telegramUserId === String(telegramUserId) && this.settings.reminders(id).telegramToken === token;
+        })?.id ?? null
     );
   }
 
@@ -273,19 +288,33 @@ export class ReminderService {
           const message = update.message;
           const code = /^\/start\s+(\S+)/.exec(message?.text ?? '')?.[1];
           if (!code) {
+            // Anyone else (another chat, or someone else in it) is ignored.
             const chatId = message?.chat.id ?? update.callback_query?.message?.chat.id;
-            const owner = chatId !== undefined && this.telegramBot.chat ? this.chatOwner(token, chatId) : null;
+            const from = message?.from?.id ?? update.callback_query?.from.id;
+            const owner = chatId !== undefined && from !== undefined && this.telegramBot.chat ? this.chatOwner(token, chatId, from) : null;
             if (owner) await this.telegramBot.handle(token, owner, update).catch((err) => console.error('Telegram chat failed:', err));
             continue;
           }
           if (!message) continue;
           const link = this.links.take(code);
           if (!link || link.token !== token) {
-            await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: 'Open the link from Nicotes (Settings → Reminders) to connect this chat.' }).catch(() => {});
+            await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: 'Open the link from Nicotes (Settings → Integrations → Reminders) to connect this chat.' }).catch(() => {});
             continue;
           }
-          this.settings.setInternal(link.userId, 'telegram.chatId', String(message.chat.id));
           this.settings.setInternal(link.userId, 'telegram.linkCode', null);
+          // Only a chat with the person who opened the link: in a group, everyone in it could
+          // read and change the notes through the bot. The code was seen there, so it is used up.
+          if (message.chat.type !== 'private' || !message.from) {
+            await this.telegram(token, 'sendMessage', {
+              chat_id: message.chat.id,
+              text: 'Nicotes can only be connected in a private chat with me, not in a group. Make a new link in Nicotes (Settings → Integrations → Reminders) and open it in Telegram yourself.',
+            }).catch(() => {});
+            continue;
+          }
+          const { id, username, first_name } = message.from;
+          this.settings.setInternal(link.userId, 'telegram.chatId', String(message.chat.id));
+          this.settings.setInternal(link.userId, 'telegram.userId', String(id));
+          this.settings.setInternal(link.userId, 'telegram.account', username ? `@${username}` : (first_name ?? null));
           const more = this.telegramBot.chat ? ' You can also write to me, e.g. “What is due this week?”, or try /todo and /calendar.' : '';
           await this.telegram(token, 'sendMessage', { chat_id: message.chat.id, text: `Connected to Nicotes ✓ Reminders will arrive here.${more}` }).catch(() => {});
         }
@@ -296,11 +325,13 @@ export class ReminderService {
     } finally {
       this.polling.delete(token);
     }
+    // A link made while this loop was ending found it still running: start over for it.
+    if (!this.stopped && this.wanted(token)) void this.poll(token);
   }
 
   private wanted(token: string): boolean {
     if (this.waitingFor(token)) return true;
-    return !!this.telegramBot.chat && this.db.select({ id: users.id }).from(users).all().some(({ id }) => this.settings.reminders(id).telegramToken === token && this.settings.internal(id, 'telegram.chatId') !== null);
+    return !!this.telegramBot.chat && this.db.select({ id: users.id }).from(users).all().some(({ id }) => this.settings.reminders(id).telegramToken === token && this.linkedChat(id) !== null);
   }
 
   private waitingFor(token: string): boolean {
@@ -344,7 +375,7 @@ export class ReminderService {
       }
     }
     const token = this.settings.reminders(userId).telegramToken;
-    const chatId = this.settings.internal(userId, 'telegram.chatId');
+    const chatId = this.linkedChat(userId)?.chatId;
     if (token && chatId) {
       const link = appUrl ? `\n<a href="${escapeHtml(`${appUrl}${notice.url}`)}">Open in Nicotes</a>` : '';
       try {
@@ -364,7 +395,7 @@ export class ReminderService {
 
   private hasChannel(userId: string): boolean {
     const devices = this.db.select({ n: count() }).from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).get()?.n ?? 0;
-    return devices > 0 || (this.settings.reminders(userId).telegramToken !== null && this.settings.internal(userId, 'telegram.chatId') !== null);
+    return devices > 0 || (this.settings.reminders(userId).telegramToken !== null && this.linkedChat(userId) !== null);
   }
 
   /** Open tasks, parsed again only when pages changed (or every 10 minutes). */
