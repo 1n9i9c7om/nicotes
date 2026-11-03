@@ -122,9 +122,12 @@ and tsup respectively).
 - **Reminders** (`reminders.ts`, `routes/reminders.ts`; tables `push_subscriptions`,
   `reminders_sent`): tasks may carry `⏰ HH:MM` (on the due date) or `⏰ YYYY-MM-DD HH:MM`,
   parsed into `remind` (local time). A per-account time zone (saved from the browser) and an
-  optional morning-summary time live in settings. `ReminderService` ticks once a minute:
-  open tasks (re-parsed only when pages changed) whose reminder time has come, at most two
-  hours late, and the summary of tasks due today plus overdue ones. Each goes out once (key
+  optional list of summary times (`reminders.digestTime`, "07:30, 20:00", ≤ 4, kept sorted;
+  `parseDigestTimes`) live in settings. `ReminderService` ticks once a minute: open tasks
+  (re-parsed only when pages changed) whose reminder time has come, at most two hours late,
+  and the summaries: the first of the day tasks due today plus overdue ones (key
+  `digest:<date>`), later ones what's still open today plus what's due tomorrow
+  (`digest:<date>:<time>`); one with nothing to tell is skipped. Each goes out once (key
   in `reminders_sent`, pruned after three days); if every target fails it is retried up to
   five times. Channels: Web Push via `web-push` with a VAPID key pair per account (private
   key encrypted; subscriptions answering 404/410 are dropped; the generated service worker

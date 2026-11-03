@@ -150,7 +150,9 @@ on; the ticked one stays as a record. This is the syntax of Obsidian's Tasks plu
 imported vaults keep working.
 
 **Reminders:** write `⏰ 09:00` after a task with a due date (or `⏰ 2026-11-04 09:00` after
-any task) to be reminded then, and/or get a summary of the day's tasks every morning.
+any task) to be reminded then, and/or get summaries of your tasks at set times every day:
+the first (say in the morning) lists what's due today, later ones (say in the evening)
+what's still open today and what's due tomorrow.
 Settings → Integrations → **Reminders** sends them as notifications to your phone or computer (on iPhone
 and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
 own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCircle2, Send, XCircle } from 'lucide-react';
-import type { PushDevice, ReminderStatus, ReminderTestResult, Settings, SettingsUpdate } from '@nicotes/shared';
+import { Bell, CheckCircle2, Plus, Send, X, XCircle } from 'lucide-react';
+import { MAX_DIGEST_TIMES, parseDigestTimes, type PushDevice, type ReminderStatus, type ReminderTestResult, type Settings, type SettingsUpdate } from '@nicotes/shared';
 import { api } from '../lib/api';
 import { deviceName } from '../lib/device';
 import { timeAgo } from '../lib/format';
@@ -32,7 +32,13 @@ export function SettingsReminders({ reminders, save, telegramToken }: Props) {
   const zone = reminders.timeZone;
   // Times mean the browser's time zone unless one was saved.
   const withZone = (input: SettingsUpdate) => save(zone ? input : { ...input, reminderTimeZone: browserZone });
-  const [digestTime, setDigestTime] = useState(reminders.digestTime ?? '08:00');
+  const [digestTimes, setDigestTimes] = useState(() => parseDigestTimes(reminders.digestTime));
+  // Saved sorted and without doubles, as the server keeps them.
+  const saveTimes = (times: string[]) => {
+    const value = parseDigestTimes(times.join(', ')).join(', ') || null;
+    setDigestTimes(parseDigestTimes(value));
+    if (value !== reminders.digestTime) withZone({ reminderDigestTime: value });
+  };
   const [here, setHere] = useState<string | null>(null);
 
   const vapidKey = status.data?.vapidPublicKey;
@@ -76,27 +82,35 @@ export function SettingsReminders({ reminders, save, telegramToken }: Props) {
       </h2>
       <p className="muted">
         Write <code>⏰ 09:00</code> after a task with a due date, or <code>⏰ 2026-11-04 09:00</code> after any task, to
-        be reminded then. A summary of the day's tasks can come every morning too.
+        be reminded then. Summaries of your tasks can come at set times every day too.
       </p>
 
       <div className="setting">
-        <span className="setting-label">Morning summary</span>
-        <div className="reminder-digest">
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={reminders.digestTime !== null}
-              onChange={(e) => withZone({ reminderDigestTime: e.target.checked ? digestTime : null })}
-            />
-            Tasks due today (and overdue ones) at
-          </label>
-          <input
-            type="time"
-            aria-label="Summary time"
-            value={digestTime}
-            onChange={(e) => setDigestTime(e.target.value)}
-            onBlur={() => reminders.digestTime !== null && digestTime && digestTime !== reminders.digestTime && withZone({ reminderDigestTime: digestTime })}
-          />
+        <span className="setting-label">Daily summaries</span>
+        <p className="setting-hint">
+          The first one each day lists the tasks due today (or the overdue ones); later ones what's still open today
+          and what's due tomorrow, e.g. in the morning and in the evening.
+        </p>
+        <div className="reminder-digests">
+          {digestTimes.map((time, i) => (
+            <div key={i} className="reminder-digest">
+              <input
+                type="time"
+                aria-label={`Summary ${i + 1} time`}
+                value={time}
+                onChange={(e) => setDigestTimes(digestTimes.map((t, j) => (j === i ? e.target.value : t)))}
+                onBlur={() => saveTimes(digestTimes)}
+              />
+              <button type="button" className="icon-btn" aria-label={`Remove summary ${i + 1}`} onClick={() => saveTimes(digestTimes.filter((_, j) => j !== i))}>
+                <X size={15} />
+              </button>
+            </div>
+          ))}
+          {digestTimes.length < MAX_DIGEST_TIMES && (
+            <button type="button" className="btn btn-sm" onClick={() => saveTimes([...digestTimes, digestTimes.length ? '20:00' : '08:00'])}>
+              <Plus size={14} /> {digestTimes.length ? 'Add a summary' : 'Get a daily summary'}
+            </button>
+          )}
         </div>
         <p className="setting-hint">
           Times are in {zone ?? `${browserZone}, this browser's time zone`}.{' '}
