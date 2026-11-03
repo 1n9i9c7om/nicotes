@@ -62,7 +62,7 @@ describe('chat', () => {
     ]);
     const events = await chat(api, 'Remind me to buy milk tomorrow morning');
     expect(events.map((e) => e.type)).toEqual(['user', 'action', 'answer']);
-    expect(events[1]).toEqual({ type: 'action', action: { tool: 'add_task', summary: 'Added the task “Buy milk” (due 2026-11-05)', pageId: expect.any(String), ok: true } });
+    expect(events[1]).toEqual({ type: 'action', action: { tool: 'add_task', summary: 'Added the task “Buy milk” (due 2026-11-05)', pageId: expect.any(String), ok: true, args: '{"text":"Buy milk","due":"2026-11-05","remind_at":"08:30"}' } });
     const answer = events[2] as Extract<ChatEvent, { type: 'answer' }>;
     expect(answer.entry.content).toBe('Added **Buy milk** for tomorrow, with a reminder at 8:30.');
 
@@ -100,14 +100,25 @@ describe('chat', () => {
     expect(calendar.days).toEqual([{ date: '2026-11-06', weekday: 'Friday', journal: false, tasks: [expect.objectContaining({ text: 'Book the service', done: false })] }]);
     expect(sent[2]!.messages.at(-1)!.content).toContain('The car is a blue Golf.');
 
-    // A follow-up: the earlier messages go along, answers with what was done for them.
+    // A follow-up: the earlier messages go along, an answer after its steps replayed as the
+    // tool calls they were, with what each did as the result.
     await chat(api, 'Which car is it again?');
-    expect(sent[3]!.messages.slice(1).map((m) => [m.role, m.content])).toEqual([
-      ['user', 'What is on this week?'],
-      ['assistant', '[Steps in Nicotes: Looked at the calendar 2026-11-04 – 2026-11-10; Searched for “car” (1 found); Read “Car”]\nFriday: book the car service ([[Car]]).'],
+    const replayed = sent[3]!.messages.slice(1) as { role: string; content: string | null; tool_calls?: { function: { name: string; arguments: string } }[]; tool_call_id?: string }[];
+    expect(replayed.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'tool', 'tool', 'assistant', 'user']);
+    expect(replayed[1]!.tool_calls!.map((c) => [c.function.name, JSON.parse(c.function.arguments)])).toEqual([
+      ['calendar', { from: '2026-11-04', to: '2026-11-10' }],
+      ['search_notes', { query: 'car' }],
+      ['read_page', { page: 'Car' }],
+    ]);
+    expect(replayed.slice(2, 5).map((m) => JSON.parse(m.content!))).toEqual([
+      { done: 'Looked at the calendar 2026-11-04 – 2026-11-10' },
+      { done: 'Searched for “car” (1 found)' },
+      { done: 'Read “Car”' },
+    ]);
+    expect(replayed.slice(5).map((m) => [m.role, m.content])).toEqual([
+      ['assistant', 'Friday: book the car service ([[Car]]).'],
       ['user', 'Which car is it again?'],
     ]);
-    expect(sent[3]!.messages[0]!.content).toContain('Never write such a line yourself');
 
     expect((await api.call('DELETE', '/api/chat')).status).toBe(204);
     expect((await api.call<ChatEntry[]>('GET', '/api/chat')).body).toEqual([]);
@@ -139,13 +150,26 @@ describe('chat', () => {
     expect((await api.call<Page>('GET', `/api/pages/${page.id}`)).body.content).toBe('- [x] Water the plants');
   });
 
-  it('tells the model which answers did nothing, and drops a steps line it imitates', async () => {
+  it('replays an answer that called nothing as text alone, and keeps long arguments short', async () => {
     const api = await signedIn();
-    const sent = fakeModel([{ content: '[Steps in Nicotes: Added to “Games”]\nAdded both tasks.' }, { content: 'Sorry, I have not added them yet.' }]);
+    const nb = (await api.call<Notebook>('POST', '/api/notebooks', { title: 'Games' })).body;
+    await api.call('POST', '/api/pages', { notebookId: nb.id, title: 'Log', content: '' });
+    const sent = fakeModel([
+      { content: 'Added both tasks.' },
+      { calls: [{ name: 'append_to_page', args: { page: 'Log', text: 'x'.repeat(1000) } }] },
+      { content: 'Now they are there.' },
+      { content: 'OK.' },
+    ]);
     await chat(api, 'Add two tasks');
-    expect((await api.call<ChatEntry[]>('GET', '/api/chat')).body.at(-1)!.content).toBe('Added both tasks.');
     await chat(api, 'I do not see them');
-    expect(sent[1]!.messages[2]).toEqual({ role: 'assistant', content: '[Steps in Nicotes: none]\nAdded both tasks.' });
+    // No tool call to show for the first answer: the model sees that.
+    expect(sent[1]!.messages.slice(1, 3)).toEqual([
+      { role: 'user', content: 'Add two tasks' },
+      { role: 'assistant', content: 'Added both tasks.' },
+    ]);
+    await chat(api, 'Thanks');
+    const call = (sent[3]!.messages.find((m) => m.tool_calls) as { tool_calls: { function: { arguments: string } }[] }).tool_calls[0]!;
+    expect(JSON.parse(call.function.arguments)).toEqual({ page: 'Log', text: `${'x'.repeat(300)}…` });
   });
 
   it('says where pages are, and creates, moves and renames them', async () => {
@@ -189,13 +213,14 @@ describe('chat', () => {
       pageId: old.id,
       ok: true,
       confirm: { id: expect.any(String), state: 'pending', yes: 'Move to trash', no: 'Keep it' },
+      args: '{"page":"Old list"}',
     });
     expect(JSON.parse(sent[1]!.messages.at(-1)!.content!)).toEqual({ waiting_for_user: true, path: 'Games › Old list', subpages: 1 });
     expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(200);
 
     // The next message tells the model the step still waits.
     await chat(api, 'Thanks');
-    expect(sent[2]!.messages[2]!.content).toBe('[Steps in Nicotes: Delete “Games › Old list” and its subpage? (waiting for the user)]\nPress the button to delete it.');
+    expect(JSON.parse(sent[2]!.messages[3]!.content!)).toEqual({ waiting_for_user: 'Delete “Games › Old list” and its subpage?' });
 
     const confirmed = await api.call<ChatEntry>('POST', `/api/chat/actions/${action.confirm!.id}`, { confirm: true });
     expect(confirmed.body.actions[0]).toMatchObject({ summary: 'Moved “Old list” and its subpage to the trash', confirm: { state: 'done' } });

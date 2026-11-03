@@ -17,6 +17,8 @@ export interface ChatAction {
   /** The page it read, wrote or found, to link to. */
   pageId?: string;
   ok: boolean;
+  /** The arguments the tool was called with (JSON, cut short), shown to the model in later turns. */
+  args?: string;
   /**
    * Steps the user has to confirm first, such as deleting a page: nothing happens until
    * they answer (POST /api/chat/actions/:id). `yes` and `no` label the buttons.
