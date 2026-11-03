@@ -2,6 +2,40 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.5.3 — 2026-11-03
+
+**New**
+
+- **Several daily summaries.** Under Settings → Integrations → Reminders you can now get
+  more than one summary a day, for example in the morning and in the evening. The first one
+  lists what's due today; later ones what's still open today and what's due tomorrow.
+- **Ask the chat about Nicotes itself.** Questions like "How do I draw?" or "Where do I
+  connect Telegram?" are answered from the user guide.
+- **New canvas on the notebook page.** Drawing pages were only in the ⋯ menus; the notebook
+  page now has a **New canvas** button next to **New page**.
+
+**Changes**
+
+- **The chat is more reliable.**
+  - It no longer says it added or changed something when it didn't. Every answer now starts
+    with a lookup or the action itself, which you see as a step.
+  - It no longer answers about your notes from memory: it knows which notebooks exist and
+    looks things up.
+  - It can show the tree of all your pages, every day of the journal, and the pages you
+    changed last.
+  - Small, cheap models still do worse at this; if the steps don't match the answer, choose
+    a stronger one for Chat under Settings → AI → AI models.
+
+**Fixes**
+
+- The buttons at the top of a notebook page no longer run off the screen on phones.
+
+**For administrators**
+
+- **`NICOTES_BASE_URL`** (optional, in `.env`) sets the address that links in Telegram
+  messages and notifications point to, for example `https://notes.example.com`. Without it
+  they use the address the reminder settings were last opened at.
+
 ## 0.5.2 — 2026-11-03
 
 **Fixes**
