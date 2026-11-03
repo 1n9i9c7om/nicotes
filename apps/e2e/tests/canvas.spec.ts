@@ -40,3 +40,11 @@ test('draws on a canvas page and keeps the drawing', async ({ page }) => {
   // Text pages' tools are not shown for drawings.
   await expect(page.getByRole('group', { name: 'Editor mode' })).toHaveCount(0);
 });
+
+test('the notebook page makes a canvas too', async ({ page }) => {
+  const notebook = await createNotebook(page, uniq('Sketches'));
+  await page.goto(`/n/${notebook.id}`);
+  await page.getByRole('button', { name: 'New canvas' }).click();
+  await expect(page).toHaveURL(/\/p\//);
+  await expect(page.locator('.canvas-host canvas').first()).toBeVisible({ timeout: 20_000 });
+});
