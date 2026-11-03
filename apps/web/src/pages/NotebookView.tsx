@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Download, FilePlus, Palette } from 'lucide-react';
+import { Download, FilePlus, Palette, PenTool } from 'lucide-react';
+import { EMPTY_CANVAS } from '@nicotes/shared';
 import { NotebookDialog } from '../components/NotebookDialog';
 import { timeAgo } from '../lib/format';
 import { useCreatePage, useNotebooks, usePages } from '../lib/queries';
@@ -22,8 +23,8 @@ export function NotebookView() {
   if (!notebook) return <NotFound what="Notebook" />;
 
   const roots = tree.children.get(rootKey(notebook.id)) ?? [];
-  const addPage = async () => {
-    const page = await createPage.mutateAsync({ notebookId: notebook.id });
+  const addPage = async (canvas = false) => {
+    const page = await createPage.mutateAsync({ notebookId: notebook.id, ...(canvas ? { content: EMPTY_CANVAS } : {}) });
     navigate(`/p/${page.id}`, { state: { created: page } });
   };
 
@@ -44,7 +45,10 @@ export function NotebookView() {
           <Link className="btn" to={`/import?notebook=${notebook.id}`}>
             <Download size={16} /> Import
           </Link>
-          <button className="btn btn-primary" onClick={addPage} disabled={createPage.isPending}>
+          <button className="btn" onClick={() => void addPage(true)} disabled={createPage.isPending}>
+            <PenTool size={16} /> New canvas
+          </button>
+          <button className="btn btn-primary" onClick={() => void addPage()} disabled={createPage.isPending}>
             <FilePlus size={16} /> New page
           </button>
         </div>

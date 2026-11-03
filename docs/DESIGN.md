@@ -122,9 +122,12 @@ and tsup respectively).
 - **Reminders** (`reminders.ts`, `routes/reminders.ts`; tables `push_subscriptions`,
   `reminders_sent`): tasks may carry `⏰ HH:MM` (on the due date) or `⏰ YYYY-MM-DD HH:MM`,
   parsed into `remind` (local time). A per-account time zone (saved from the browser) and an
-  optional morning-summary time live in settings. `ReminderService` ticks once a minute:
-  open tasks (re-parsed only when pages changed) whose reminder time has come, at most two
-  hours late, and the summary of tasks due today plus overdue ones. Each goes out once (key
+  optional list of summary times (`reminders.digestTime`, "07:30, 20:00", ≤ 4, kept sorted;
+  `parseDigestTimes`) live in settings. `ReminderService` ticks once a minute: open tasks
+  (re-parsed only when pages changed) whose reminder time has come, at most two hours late,
+  and the summaries: the first of the day tasks due today plus overdue ones (key
+  `digest:<date>`), later ones what's still open today plus what's due tomorrow
+  (`digest:<date>:<time>`); one with nothing to tell is skipped. Each goes out once (key
   in `reminders_sent`, pruned after three days); if every target fails it is retried up to
   five times. Channels: Web Push via `web-push` with a VAPID key pair per account (private
   key encrypted; subscriptions answering 404/410 are dropped; the generated service worker
@@ -493,24 +496,33 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 - **Chat** (`chat/agent.ts`, `chat/tools.ts`, `chat/routes.ts`, table `chat_messages`):
   an agent with OpenAI-style tool calling (`chatWithTools` in `ai/llm.ts`, not streamed;
   the "Chat" model, task id `ask`, must support tools). Tools reuse the routes' code:
-  `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
-  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`,
+  `nicotes_help` (the README's `##`/`###` sections best matching the question's words, ≤ 3
+  and 9k characters, plus the table of contents; `chat/help.ts`, the Docker image carries
+  the README for it), `search_notes` (FTS incl. files), `search_by_meaning`, `read_page` (by id or title as a
+  wikilink; canvas pages give their texts; 12k characters), `list_notebooks`, `list_pages`
+  (one notebook or all, as an indented text tree with ids, ≤ 400 lines), `recent_pages`,
   `create_page`, `move_page` (new parent, notebook and/or title; links follow via
-  `propagateRenames`), `delete_page` (see below), `append_to_page`, `read_journal`, `write_journal`, `list_tasks` (refs are
+  `propagateRenames`), `delete_page` (see below), `append_to_page`, `list_journal` (days with
+  a note, any range), `read_journal`, `write_journal`, `list_tasks` (refs are
   `pageId:line`), `add_task` (today's journal unless a page is named; due date, `⏰`
   reminder and `🔁` repeat rule), `update_task` (checks the line still matches), `calendar` (≤ 62 days: tasks
   per day, journal days), `start_research`, `research_status`. Arguments are validated
   with the tools' zod schemas (sent as JSON Schema); failures go back to the model as
-  `{error}` and show as failed steps. Up to 8 rounds per message, the last with
-  `tool_choice: "none"`, and the per-run cost limit applies. The system prompt has the
-  date and time in the account's time zone. Search results, `read_page` and the page tools
+  `{error}` and show as failed steps. Up to 8 rounds per message: the first with
+  `tool_choice: "required"`, so every answer rests on a lookup or an action rather than on
+  earlier messages (a 400/404 for it falls back to `"auto"`, for servers without it), the
+  last with `"none"`; the per-run cost limit applies. The system prompt has the date and
+  time in the account's time zone and the notebooks with their page counts and the
+  journal's extent (`notesOverview`), so the model never has to remember what exists. Search results, `read_page` and the page tools
   give a page's path (Notebook › Parent › Page), which the step texts show too. History:
-  the channel's messages (web and Telegram are separate) up to 24k characters; tool
-  traffic is kept only within a turn, the steps are stored with the answer for display, and
-  earlier answers reach the model prefixed with `[Steps in Nicotes: …]` ("none" when no tool
-  ran), so it cannot take an earlier claim for work done; a prefix it imitates is cut from
-  its answer. `POST /api/chat` streams `user`, `action` and `answer` events; `DELETE
-  /api/chat` forgets the conversation.
+  the channel's messages (web and Telegram are separate) up to 24k characters, starting
+  with a question. The steps are stored with the answer (with their arguments, long strings
+  cut to 300 characters) and replayed before it as the tool calls they were, each with its
+  summary as the result (`{done}`, `{error}`, `{waiting_for_user}`; ids of 9 hex digits, as
+  some providers require). With the answers' text alone, earlier "I added it" answers read
+  as the way to answer, and models repeated them without calling anything; an answer that
+  called nothing is replayed as text only. `POST /api/chat` streams `user`, `action` and
+  `answer` events; `DELETE /api/chat` forgets the conversation.
   **Steps to confirm:** a tool may return `confirm` instead of acting (`delete_page`): the
   step is stored with `confirm: {id, state: 'pending', yes, no}`, the model is told it waits,
   and the web chat (buttons on the step) or Telegram (a message with buttons,
@@ -658,6 +670,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and attachments |
 | `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start (not with the example password) |
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
+| `NICOTES_BASE_URL` | address the reminder settings were last opened at | Where links in Telegram messages and notifications point (origin only) |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |

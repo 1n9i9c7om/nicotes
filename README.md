@@ -98,7 +98,7 @@ toolbar's highlighter button colours the selected text or its background from a 
 palette; colours are stored the way Obsidian writes them (`==highlight==`,
 `<mark style="background: green">`, `<span style="color: red">`), so they survive an export.
 
-**Canvas pages:** "New canvas" in a notebook's or page's ⋯ menu makes a page to draw on, as
+**Canvas pages:** **New canvas** on a notebook's page (or in a notebook's or page's ⋯ menu) makes a page to draw on, as
 in OneNote: pen and highlighter (with pen pressure), shapes, arrows, text and pasted
 images, powered by [Excalidraw](https://excalidraw.com). Text on a canvas is found by
 search, `[[Page]]` links on shapes open that page, and canvases export (and import) as
@@ -150,12 +150,16 @@ on; the ticked one stays as a record. This is the syntax of Obsidian's Tasks plu
 imported vaults keep working.
 
 **Reminders:** write `⏰ 09:00` after a task with a due date (or `⏰ 2026-11-04 09:00` after
-any task) to be reminded then, and/or get a summary of the day's tasks every morning.
+any task) to be reminded then, and/or get summaries of your tasks at set times every day:
+the first (say in the morning) lists what's due today, later ones (say in the evening)
+what's still open today and what's due tomorrow.
 Settings → Integrations → **Reminders** sends them as notifications to your phone or computer (on iPhone
 and iPad, add Nicotes to the Home Screen first) and/or to Telegram through a bot of your
 own: ask [@BotFather](https://t.me/BotFather) for one, paste its token, then press Start in
 the chat Nicotes opens. Notifications need HTTPS; Telegram needs nothing but the token. The
-bot only answers the Telegram account that connected it, in a private chat with it.
+bot only answers the Telegram account that connected it, in a private chat with it. Links in
+its messages point to the address you opened these settings at; set `NICOTES_BASE_URL` in
+`.env` (e.g. `https://notes.example.com`) to choose it yourself.
 
 Below each page, **Connections** shows backlinks, **unlinked
 mentions** (pages that name each other without a link, linked with one click) and, with
@@ -210,8 +214,11 @@ call the dentist tomorrow at 9"*, *"Note in my journal that the heating was fixe
 and reads pages, writes, moves and renames pages and writes the journal, adds, ticks off
 and moves tasks, shows the calendar and starts research; each step shows up in the chat and
 links to the page it touched. It can also delete a page, but only once you confirm with
-the button it shows (the page goes to the trash). **New chat** makes it forget the conversation. It needs an AI service (see below)
-and a model that can use tools, chosen under Settings → AI → AI models → Chat.
+the button it shows (the page goes to the trash). It also answers questions about Nicotes
+itself (*"How do I draw?"*), from this guide. **New chat** makes it forget the conversation.
+It needs an AI service (see below) and a model that can use tools well, chosen under
+Settings → AI → AI models → Chat: small, cheap models tend to claim they did something
+without doing it, so if the steps don't match the answer, try a stronger one.
 
 The same assistant answers in **Telegram** once a chat is connected under Settings →
 Integrations → Reminders: write or send voice messages (with a transcription service set up), use

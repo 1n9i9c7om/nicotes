@@ -99,6 +99,7 @@ export function telegramHtml(markdown: string, link: (target: string) => string 
 }
 
 const STEP_ICONS: [RegExp, string][] = [
+  [/^nicotes_help/, '💡'],
   [/^search/, '🔎'],
   [/journal/, '📓'],
   [/task/, '☑️'],
@@ -149,6 +150,8 @@ export class TelegramBot {
     private settings: SettingsStore,
     private telegram: TelegramApi,
     private now: () => number,
+    /** The address links to pages start with, if known. */
+    private appUrl: (userId: string) => string | null,
     public chat: BotChat | null = null,
   ) {}
 
@@ -213,7 +216,7 @@ export class TelegramBot {
 
   /** A [[link]] as an address in Nicotes, when its page exists and the app's address is known. */
   private linker(userId: string) {
-    const appUrl = this.settings.internal(userId, 'appUrl');
+    const appUrl = this.appUrl(userId);
     if (!appUrl) return () => null;
     const ctx = loadLinkContext(this.db, userId);
     return (target: string) => {
@@ -223,7 +226,7 @@ export class TelegramBot {
   }
 
   private pageUrl(userId: string) {
-    const appUrl = this.settings.internal(userId, 'appUrl');
+    const appUrl = this.appUrl(userId);
     return (id: string) => (appUrl ? `${appUrl}/p/${id}` : null);
   }
 

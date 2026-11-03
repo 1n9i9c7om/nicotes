@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Notebook, Page, PushDevice, ReminderNotice, ReminderStatus, ReminderTestResult } from '@nicotes/shared';
-import { localTime, TelegramError, type PushSender, type TelegramApi } from '../src/reminders.js';
+import { localTime, TelegramError, type PushSender, type ReminderOptions, type TelegramApi } from '../src/reminders.js';
 import type { TelegramUpdate } from '../src/telegram.js';
 import { setup } from './helpers.js';
 
@@ -34,7 +34,7 @@ function fakes() {
     throw new Error(`unexpected ${method}`);
   };
   return {
-    options: { sendPush, telegram, now: () => now },
+    options: { sendPush, telegram, now: () => now } as ReminderOptions,
     setNow: (iso: string) => (now = at(iso)),
     pushed,
     gone,
@@ -113,6 +113,24 @@ describe('reminders', () => {
     ]);
   });
 
+  it('sends a later summary of what is still open today and due tomorrow', async () => {
+    const f = fakes();
+    const { api, page, subscribe } = await withTasks(f);
+    await subscribe('https://push.example/abc');
+    const saved = await api.call<{ reminders: { digestTime: string | null } }>('PATCH', '/api/settings', { reminderDigestTime: '20:00, 07:30' });
+    expect(saved.body.reminders.digestTime).toBe('07:30, 20:00');
+    expect((await api.call('PATCH', '/api/settings', { reminderDigestTime: '07:30, 25:00' })).status).toBe(400);
+    await api.call('POST', '/api/pages', { notebookId: page.notebookId, title: 'Health', content: '- [ ] Dentist 📅 2026-11-05' });
+
+    f.setNow('2026-11-04T06:31:00Z'); // 07:31 in Berlin
+    await api.reminders.tick();
+    f.setNow('2026-11-04T19:01:00Z'); // 20:01
+    await api.reminders.tick();
+    await api.reminders.tick();
+    expect(f.pushed.map((p) => p.notice.title)).toEqual(['2 tasks due today', '2 tasks still open today']);
+    expect(f.pushed[1]!.notice.body).toBe('• Call mum\n• Buy milk\n\nTomorrow:\n• Dentist');
+  });
+
   it('forgets devices that unsubscribed', async () => {
     const f = fakes();
     const { api, subscribe } = await withTasks(f);
@@ -172,6 +190,21 @@ describe('reminders', () => {
     // Another bot cannot write to that chat: changing the token disconnects it.
     await api.call('PATCH', '/api/settings', { telegramBotToken: '123:other' });
     expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected).toBe(false);
+    api.reminders.stop();
+  });
+
+  it('points links to NICOTES_BASE_URL rather than the address the app was last used at', async () => {
+    const f = fakes();
+    f.options = { ...f.options, baseUrl: 'https://notes.example.com' };
+    const { api } = await withTasks(f);
+    await api.call('PATCH', '/api/settings', { telegramBotToken: '123:good' });
+    const code = new URL((await api.call<{ url: string }>('POST', '/api/reminders/telegram/link')).body.url).searchParams.get('start');
+    f.deliver([{ update_id: 1, message: { message_id: 1, chat: { id: 42, type: 'private' }, from: { id: 42 }, text: `/start ${code}` } }]);
+    for (let i = 0; i < 50 && !(await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await api.call('POST', '/api/reminders/test');
+    expect(f.sent.at(-1)!.text).toContain('<a href="https://notes.example.com/tasks">Open in Nicotes</a>');
     api.reminders.stop();
   });
 
