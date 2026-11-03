@@ -658,6 +658,7 @@ URL ─► crawl4ai /crawl (if configured) ─┐
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and attachments |
 | `NICOTES_ADMIN_USER` / `NICOTES_ADMIN_PASSWORD` | — | Bootstrap account on first start (not with the example password) |
 | `NICOTES_SECURE_COOKIES` | `false` | Set `true` when served over HTTPS |
+| `NICOTES_BASE_URL` | address the reminder settings were last opened at | Where links in Telegram messages and notifications point (origin only) |
 | `NICOTES_SECRET` | key file in `DATA_DIR` | Encrypts stored API keys |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | —, `z-ai/glm-5.3-flashx` | API key and default model (overridable in Settings) |
 | `ROUTEWAY_API_KEY` | — | Routeway key for `routeway:<id>` models (overridable in Settings) |

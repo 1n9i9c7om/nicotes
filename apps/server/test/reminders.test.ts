@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Notebook, Page, PushDevice, ReminderNotice, ReminderStatus, ReminderTestResult } from '@nicotes/shared';
-import { localTime, TelegramError, type PushSender, type TelegramApi } from '../src/reminders.js';
+import { localTime, TelegramError, type PushSender, type ReminderOptions, type TelegramApi } from '../src/reminders.js';
 import type { TelegramUpdate } from '../src/telegram.js';
 import { setup } from './helpers.js';
 
@@ -34,7 +34,7 @@ function fakes() {
     throw new Error(`unexpected ${method}`);
   };
   return {
-    options: { sendPush, telegram, now: () => now },
+    options: { sendPush, telegram, now: () => now } as ReminderOptions,
     setNow: (iso: string) => (now = at(iso)),
     pushed,
     gone,
@@ -172,6 +172,21 @@ describe('reminders', () => {
     // Another bot cannot write to that chat: changing the token disconnects it.
     await api.call('PATCH', '/api/settings', { telegramBotToken: '123:other' });
     expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected).toBe(false);
+    api.reminders.stop();
+  });
+
+  it('points links to NICOTES_BASE_URL rather than the address the app was last used at', async () => {
+    const f = fakes();
+    f.options = { ...f.options, baseUrl: 'https://notes.example.com' };
+    const { api } = await withTasks(f);
+    await api.call('PATCH', '/api/settings', { telegramBotToken: '123:good' });
+    const code = new URL((await api.call<{ url: string }>('POST', '/api/reminders/telegram/link')).body.url).searchParams.get('start');
+    f.deliver([{ update_id: 1, message: { message_id: 1, chat: { id: 42, type: 'private' }, from: { id: 42 }, text: `/start ${code}` } }]);
+    for (let i = 0; i < 50 && !(await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await api.call('POST', '/api/reminders/test');
+    expect(f.sent.at(-1)!.text).toContain('<a href="https://notes.example.com/tasks">Open in Nicotes</a>');
     api.reminders.stop();
   });
 

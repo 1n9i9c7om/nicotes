@@ -39,6 +39,7 @@ const app = createApp({
   importAllowPrivate: config.importAllowPrivate,
   browserExtension: config.browserExtension,
   backups: config.backup,
+  reminders: { baseUrl: config.baseUrl },
 });
 
 app.semantic.start();
