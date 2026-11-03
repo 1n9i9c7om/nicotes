@@ -605,8 +605,22 @@ export const toolSpecs = () =>
     return { name: t.name, description: t.description, parameters };
   });
 
+/** A call's arguments to keep with its step: still JSON, with long texts (page content) cut. */
+function keptArgs(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw || '{}'), (_key, value: unknown) => (typeof value === 'string' && value.length > 300 ? `${value.slice(0, 300)}…` : value));
+  } catch {
+    return '{}';
+  }
+}
+
 /** Runs one call of the model; failures are reported back to it (and shown) rather than thrown. */
 export async function runTool(ctx: ToolContext, name: string, rawArgs: string): Promise<{ result: string; action: ChatAction }> {
+  const outcome = await callTool(ctx, name, rawArgs);
+  return { ...outcome, action: { ...outcome.action, args: keptArgs(rawArgs) } };
+}
+
+async function callTool(ctx: ToolContext, name: string, rawArgs: string): Promise<{ result: string; action: ChatAction }> {
   const t = toolByName.get(name);
   if (!t) return { result: JSON.stringify({ error: `Unknown tool ${name}` }), action: { tool: name, summary: `Unknown tool ${name}`, ok: false } };
   try {

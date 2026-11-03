@@ -515,12 +515,14 @@ URL ─► crawl4ai /crawl (if configured) ─┐
   time in the account's time zone and the notebooks with their page counts and the
   journal's extent (`notesOverview`), so the model never has to remember what exists. Search results, `read_page` and the page tools
   give a page's path (Notebook › Parent › Page), which the step texts show too. History:
-  the channel's messages (web and Telegram are separate) up to 24k characters; tool
-  traffic is kept only within a turn, the steps are stored with the answer for display, and
-  earlier answers reach the model prefixed with `[Steps in Nicotes: …]` ("none" when no tool
-  ran), so it cannot take an earlier claim for work done; a prefix it imitates is cut from
-  its answer. `POST /api/chat` streams `user`, `action` and `answer` events; `DELETE
-  /api/chat` forgets the conversation.
+  the channel's messages (web and Telegram are separate) up to 24k characters, starting
+  with a question. The steps are stored with the answer (with their arguments, long strings
+  cut to 300 characters) and replayed before it as the tool calls they were, each with its
+  summary as the result (`{done}`, `{error}`, `{waiting_for_user}`; ids of 9 hex digits, as
+  some providers require). With the answers' text alone, earlier "I added it" answers read
+  as the way to answer, and models repeated them without calling anything; an answer that
+  called nothing is replayed as text only. `POST /api/chat` streams `user`, `action` and
+  `answer` events; `DELETE /api/chat` forgets the conversation.
   **Steps to confirm:** a tool may return `confirm` instead of acting (`delete_page`): the
   step is stored with `confirm: {id, state: 'pending', yes, no}`, the model is told it waits,
   and the web chat (buttons on the step) or Telegram (a message with buttons,
