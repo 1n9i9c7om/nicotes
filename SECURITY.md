@@ -47,6 +47,11 @@ when it can be reached over the internet:
   adapters (such as Home Assistant) may be on your home network: whoever can sign in can
   choose them, so only give accounts to people you trust. An adapter's stored token is only
   sent to the address it was entered for.
+- **Telegram.** Anyone can find and write to a bot, but yours only answers the Telegram
+  account that connected it, in a private chat; groups can't be connected. Connecting needs a
+  one-time link from Nicotes that works for 10 minutes, so don't share it. Settings shows which
+  account is connected. Keep the bot token secret: whoever has it can read what the bot is
+  sent. If it leaks, revoke it with @BotFather (`/revoke`) and paste the new one.
 - **Offline notes.** The installed app keeps a copy of all notes in the browser on that
   device (Settings → App & data; off by default in a browser tab). On a shared computer leave it
   off; signing out deletes the copy.

@@ -16,8 +16,22 @@ export type TelegramApi = (token: string, method: string, body: object, signal?:
 
 export interface TelegramUpdate {
   update_id: number;
-  message?: { message_id: number; chat: { id: number }; text?: string; voice?: { file_id: string; duration: number; mime_type?: string } };
-  callback_query?: { id: string; data?: string; message?: { message_id: number; chat: { id: number } } };
+  message?: {
+    message_id: number;
+    /** `type` is "private" for a chat with one person, else "group", "supergroup" or "channel". */
+    chat: { id: number; type?: string };
+    /** Who wrote it (missing in channels). */
+    from?: TelegramUser;
+    text?: string;
+    voice?: { file_id: string; duration: number; mime_type?: string };
+  };
+  callback_query?: { id: string; from: TelegramUser; data?: string; message?: { message_id: number; chat: { id: number } } };
+}
+
+export interface TelegramUser {
+  id: number;
+  username?: string;
+  first_name?: string;
 }
 
 export interface BotChat {

@@ -20,6 +20,8 @@ export interface ReminderStatus {
     bot: string | null;
     /** A chat is linked, so reminders go there. */
     connected: boolean;
+    /** The Telegram account the chat is with (@username or first name), the only one answered. */
+    account: string | null;
     /** While waiting for /start in Telegram: the link that opens the bot with the code. */
     linkUrl: string | null;
     /** Why the bot cannot be reached, e.g. a wrong token. */

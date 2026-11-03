@@ -130,9 +130,13 @@ and tsup respectively).
   key encrypted; subscriptions answering 404/410 are dropped; the generated service worker
   loads `push-sw.js` for `push` and `notificationclick`), and Telegram through the user's
   own bot (token in settings or `TELEGRAM_BOT_TOKEN`). Linking a chat needs no public
-  address: a one-time code in a `t.me/<bot>?start=<code>` link, read by long polling
-  `getUpdates` (while a code waits, and afterwards for the chat, see Telegram chat below); a
-  new token unlinks the chat.
+  address: a one-time code (96 bits, 10 minutes) in a `t.me/<bot>?start=<code>` link, read
+  by long polling `getUpdates` (while a code waits, and afterwards for the chat, see Telegram
+  chat below); a new token unlinks the chat. Only a private chat can be linked (in a group
+  the code is used up and refused); the chat id, the sender's Telegram user id and their
+  @username are kept, and only updates from that chat *and* that user (messages and button
+  presses) reach the account. Links from before the user id was kept use the chat id (equal
+  to the user id in private chats); a group id (negative) counts as not linked.
 - **Shared links** (`routes/shares.ts`, table `shares`): a read-only link to a page (with
   or without its subtree) or a notebook. The 18-byte token is looked up by SHA-256 and also
   stored encrypted (SecretBox), so the owner can copy the link again. `/api/shares` is

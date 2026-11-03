@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Notebook, Page } from '@nicotes/shared';
+import type { AuthStatus, Notebook, Page, ReminderStatus } from '@nicotes/shared';
+import type { SettingsStore } from '../src/settings.js';
 import { splitMessage, telegramHtml, type TelegramApi, type TelegramUpdate } from '../src/telegram.js';
 import { setup } from './helpers.js';
 
@@ -63,6 +64,10 @@ const settle = async (check: () => boolean) => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** The person who links the chat, writing in their private chat with the bot. */
+const me = { id: 42, username: 'nico' };
+const mine = { chat: { id: 42, type: 'private' }, from: me };
+
 describe('Telegram chat', () => {
   it('answers the linked chat with tasks, the calendar and the assistant', async () => {
     const tg = fakeTelegram();
@@ -74,32 +79,33 @@ describe('Telegram chat', () => {
     const page = (await api.call<Page>('POST', '/api/pages', { notebookId: nb.id, title: 'Chores', content: `- [ ] Water the plants 📅 ${today}` })).body;
 
     const { url } = (await api.call<{ url: string }>('POST', '/api/reminders/telegram/link')).body;
-    tg.push({ message: { message_id: 1, chat: { id: 42 }, text: `/start ${new URL(url).searchParams.get('start')}` } });
+    tg.push({ message: { message_id: 1, ...mine, text: `/start ${new URL(url).searchParams.get('start')}` } });
     await settle(() => tg.sent.some((s) => s.method === 'sendMessage'));
     expect(tg.sent.find((s) => s.method === 'sendMessage')!.body.text).toMatch(/^Connected to Nicotes ✓ .*\/todo/);
 
     // /todo lists the task with a button that ticks it off.
-    tg.push({ message: { message_id: 2, chat: { id: 42 }, text: '/todo' } });
+    tg.push({ message: { message_id: 2, ...mine, text: '/todo' } });
     await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 2);
     const todo = tg.sent.filter((s) => s.method === 'sendMessage')[1]!.body;
     expect(todo.text).toContain('<b>Today</b>\n☐ Water the plants');
     const button = (todo.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard[0]![0]!;
     expect(button.text).toBe('✓ Water the plants');
-    tg.push({ callback_query: { id: 'q1', data: button.callback_data, message: { message_id: 7, chat: { id: 42 } } } });
+    tg.push({ callback_query: { id: 'q1', from: me, data: button.callback_data, message: { message_id: 7, chat: { id: 42 } } } });
     await settle(() => tg.sent.some((s) => s.method === 'editMessageText'));
     expect(tg.sent.find((s) => s.method === 'answerCallbackQuery')!.body).toEqual({ callback_query_id: 'q1', text: 'Done: Water the plants' });
     expect(tg.sent.find((s) => s.method === 'editMessageText')!.body.text).toBe('No open tasks. 🎉');
     expect((await api.call<Page>('GET', `/api/pages/${page.id}`)).body.content).toBe(`- [x] Water the plants 📅 ${today}`);
 
     // The calendar shows the week, done tasks struck through.
-    tg.push({ message: { message_id: 3, chat: { id: 42 }, text: '/calendar' } });
+    tg.push({ message: { message_id: 3, ...mine, text: '/calendar' } });
     await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 3);
     const week = tg.sent.filter((s) => s.method === 'sendMessage')[2]!.body;
     expect(week.text).toContain('▸ <b>');
     expect(week.text).toContain('☑ <s>Water the plants</s>');
 
-    // Anything else goes to the assistant; another chat is ignored. What it does in Nicotes
-    // shows up as steps (one message, edited as they come), then the answer.
+    // Anything else goes to the assistant; another chat, or someone else in this one, is
+    // ignored. What it does in Nicotes shows up as steps (one message, edited as they
+    // come), then the answer.
     const prompts: string[] = [];
     const replies = [
       { tool_calls: [{ id: 'c1', type: 'function', function: { name: 'list_tasks', arguments: '{}' } }] },
@@ -111,8 +117,9 @@ describe('Telegram chat', () => {
       if (body.messages.at(-1)!.role === 'user') prompts.push(body.messages.at(-1)!.content);
       return Response.json({ choices: [{ message: replies.shift() }], usage: { cost: 0 } });
     });
-    tg.push({ message: { message_id: 4, chat: { id: 99 }, text: 'Hello from a stranger' } });
-    tg.push({ message: { message_id: 5, chat: { id: 42 }, text: 'Anything left today?' } });
+    tg.push({ message: { message_id: 4, chat: { id: 99, type: 'private' }, from: { id: 99 }, text: 'Hello from a stranger' } });
+    tg.push({ message: { message_id: 40, chat: { id: 42, type: 'private' }, from: { id: 77 }, text: 'Not the owner' } });
+    tg.push({ message: { message_id: 5, ...mine, text: 'Anything left today?' } });
     await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 5);
     expect(prompts).toEqual(['Anything left today?']);
     const [steps, reply] = tg.sent.filter((s) => s.method === 'sendMessage').slice(3).map((s) => s.body);
@@ -130,22 +137,33 @@ describe('Telegram chat', () => {
       { tool_calls: [{ id: 'c3', type: 'function', function: { name: 'delete_page', arguments: JSON.stringify({ page: 'Old' }) } }] },
       { content: 'Confirm below.' },
     );
-    tg.push({ message: { message_id: 6, chat: { id: 42 }, text: 'Delete the page Old' } });
+    tg.push({ message: { message_id: 6, ...mine, text: 'Delete the page Old' } });
     await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 8);
     const question = tg.sent.filter((s) => s.method === 'sendMessage')[7]!.body;
     expect(question.text).toBe('Delete “Home › Old”?');
     const [yes, no] = (question.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard[0]!;
     expect([yes!.text, no!.text]).toEqual(['✓ Move to trash', 'Keep it']);
     expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(200);
-    tg.push({ callback_query: { id: 'q2', data: yes!.callback_data, message: { message_id: 8, chat: { id: 42 } } } });
+    // Only the owner's press counts.
+    tg.push({ callback_query: { id: 'q-other', from: { id: 77 }, data: yes!.callback_data, message: { message_id: 8, chat: { id: 42 } } } });
+    tg.push({ callback_query: { id: 'q2', from: me, data: yes!.callback_data, message: { message_id: 8, chat: { id: 42 } } } });
     await settle(() => tg.sent.some((s) => s.method === 'editMessageText' && s.body.message_id === 8));
     expect(tg.sent.find((s) => s.method === 'editMessageText' && s.body.message_id === 8)!.body.text).toBe('Moved “Old” to the trash');
     expect((await api.call('GET', `/api/pages/${old.id}`)).status).toBe(404);
+    expect(tg.sent.some((s) => s.body.callback_query_id === 'q-other')).toBe(false);
 
     // /new forgets the Telegram conversation (the web chat is separate).
-    tg.push({ message: { message_id: 7, chat: { id: 42 }, text: '/new' } });
+    tg.push({ message: { message_id: 7, ...mine, text: '/new' } });
     await settle(() => tg.sent.filter((s) => s.method === 'sendMessage').length === 9);
     expect(tg.sent.filter((s) => s.method === 'sendMessage')[8]!.body.text).toMatch(/^Started a new conversation/);
+    expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram).toMatchObject({ connected: true, account: '@nico' });
+
+    // A group linked before only the linking person was answered no longer counts.
+    const { user } = (await api.call<AuthStatus>('GET', '/api/auth/status')).body;
+    const settings = (api.reminders as unknown as { settings: SettingsStore }).settings;
+    settings.setInternal(user!.id, 'telegram.chatId', '-500');
+    settings.setInternal(user!.id, 'telegram.userId', null);
+    expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected).toBe(false);
     api.reminders.stop();
   });
 });

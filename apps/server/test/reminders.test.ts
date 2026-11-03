@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Notebook, Page, PushDevice, ReminderNotice, ReminderStatus, ReminderTestResult } from '@nicotes/shared';
 import { localTime, TelegramError, type PushSender, type TelegramApi } from '../src/reminders.js';
+import type { TelegramUpdate } from '../src/telegram.js';
 import { setup } from './helpers.js';
 
 // 2026-11-04 is in winter time: Berlin is UTC+1.
@@ -16,7 +17,7 @@ function fakes() {
     return { statusCode: 201 };
   };
   const sent: { chat_id: unknown; text: string }[] = [];
-  let updates: unknown[] = [];
+  let updates: TelegramUpdate[] = [];
   const telegram: TelegramApi = async (token, method, body) => {
     if (token !== '123:good') throw new TelegramError('Unauthorized', 401);
     if (method === 'getMe') return { username: 'nicotes_test_bot' };
@@ -25,10 +26,10 @@ function fakes() {
       return {};
     }
     if (method === 'getUpdates') {
+      // Like Telegram: updates stay until a call with a higher offset confirms them.
       await new Promise((r) => setTimeout(r, 5));
-      const batch = updates;
-      updates = [];
-      return batch;
+      updates = updates.filter((u) => u.update_id >= ((body as { offset?: number }).offset ?? 0));
+      return updates;
     }
     throw new Error(`unexpected ${method}`);
   };
@@ -38,7 +39,7 @@ function fakes() {
     pushed,
     gone,
     sent,
-    deliver: (u: unknown[]) => (updates = u),
+    deliver: (u: TelegramUpdate[]) => (updates = [...updates, ...u]),
   };
 }
 
@@ -130,6 +131,7 @@ describe('reminders', () => {
     expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram).toEqual({
       bot: null,
       connected: false,
+      account: null,
       linkUrl: null,
       error: 'Telegram does not accept this bot token',
     });
@@ -140,16 +142,27 @@ describe('reminders', () => {
     const code = new URL(url).searchParams.get('start');
     expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.linkUrl).toBe(url);
 
+    const waitForLink = async () => {
+      for (let i = 0; i < 50 && !(await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    // In a group, everyone in it could use the bot: refused, and the code is used up.
     f.deliver([
-      { update_id: 7, message: { chat: { id: 99 }, text: '/start wrong-code' } },
-      { update_id: 8, message: { chat: { id: 42 }, text: `/start ${code}` } },
+      { update_id: 7, message: { message_id: 1, chat: { id: 99, type: 'private' }, from: { id: 99 }, text: '/start wrong-code' } },
+      { update_id: 8, message: { message_id: 2, chat: { id: -500, type: 'group' }, from: { id: 42 }, text: `/start ${code}` } },
     ]);
-    for (let i = 0; i < 50 && !(await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram.connected; i++) {
-      await new Promise((r) => setTimeout(r, 10));
-    }
+    for (let i = 0; i < 50 && f.sent.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(f.sent.map((m) => m.chat_id)).toEqual([99, -500]);
+    expect(f.sent[1]!.text).toMatch(/^Nicotes can only be connected in a private chat/);
+    expect((await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram).toMatchObject({ connected: false, linkUrl: null });
+
+    const again = new URL((await api.call<{ url: string }>('POST', '/api/reminders/telegram/link')).body.url).searchParams.get('start');
+    f.deliver([{ update_id: 9, message: { message_id: 3, chat: { id: 42, type: 'private' }, from: { id: 42, username: 'nico', first_name: 'Nico' }, text: `/start ${again}` } }]);
+    await waitForLink();
     const telegram = (await api.call<ReminderStatus>('GET', '/api/reminders')).body.telegram;
-    expect(telegram).toEqual({ bot: 'nicotes_test_bot', connected: true, linkUrl: null, error: null });
-    expect(f.sent.map((m) => m.chat_id)).toEqual([99, 42]);
+    expect(telegram).toEqual({ bot: 'nicotes_test_bot', connected: true, account: '@nico', linkUrl: null, error: null });
+    expect(f.sent.map((m) => m.chat_id)).toEqual([99, -500, 42]);
 
     const results = (await api.call<ReminderTestResult[]>('POST', '/api/reminders/test')).body;
     expect(results).toEqual([{ channel: 'telegram', target: 'Telegram', ok: true, message: 'Sent' }]);
