@@ -2,6 +2,27 @@
 
 What changed in each version of Nicotes, newest first.
 
+## 0.5.4 — 2026-11-04
+
+**New**
+
+- **Drawings in any page.** The pen button in the toolbar adds a drawing where the cursor is.
+  It opens over the page, **Done** brings you back, and the drawing shows as a picture in your
+  text, also when you print. Click the picture to keep drawing. A drawing is a canvas subpage
+  of the page, so it's also in the sidebar and exports like any canvas.
+
+**Changes**
+
+- **Embedding a canvas shows the drawing.** `![[Page]]` with a canvas page now shows it as a
+  picture.
+- **"New canvas" everywhere.** The page menu said "New canvas below"; it now matches the
+  notebook menu.
+
+**Fixes**
+
+- Leaving a canvas right after drawing could lose the last stroke.
+- After you edit a page, pages that embed it show the new text straight away.
+
 ## 0.5.3 — 2026-11-03
 
 **New**
