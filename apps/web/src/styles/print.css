@@ -77,6 +77,11 @@
     display: none !important;
   }
 
+  .prose .embed-drawing svg,
+  .prose .embed-drawing svg image {
+    filter: none;
+  }
+
   .page-body {
     max-width: none !important;
     margin: 0 !important;

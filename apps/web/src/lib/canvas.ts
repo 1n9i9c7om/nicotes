@@ -32,6 +32,28 @@ export function readCanvas(content: string): { scene: Scene; files: CanvasFile[]
   }
 }
 
+const dataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+
+/** The images of a canvas page as Excalidraw wants them; a missing one is left out. */
+export async function fetchCanvasFiles(files: CanvasFile[]) {
+  const loaded: { id: string; dataURL: string; mimeType: string; created: number }[] = [];
+  for (const f of files) {
+    try {
+      const blob = await (await fetch(f.url)).blob();
+      loaded.push({ id: f.id, dataURL: await dataUrl(blob), mimeType: blob.type, created: Date.now() });
+    } catch {
+      // A missing file shows as an empty image.
+    }
+  }
+  return loaded;
+}
+
 /** A canvas page's Markdown for a scene: texts (and links) for search, the scene compressed. */
 export function writeCanvas(scene: Scene, files: CanvasFile[]): string {
   const elements = scene.elements.filter((e) => !e.isDeleted);

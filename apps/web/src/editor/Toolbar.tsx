@@ -1,9 +1,11 @@
-import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Selection } from '@tiptap/pm/state';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { COLOR_LABELS, COLORS, type Color } from '@nicotes/shared';
 import { duration, recordingSupported, VoiceRecorder } from '../components/VoiceRecorder';
 import { api } from '../lib/api';
 import { useSettings } from '../lib/queries';
+import type { DrawingEnv } from './embed';
 import type { Uploader } from './uploads';
 import { isImage } from './uploads';
 import {
@@ -22,6 +24,7 @@ import {
   Mic,
   Minus,
   Paperclip,
+  PenTool,
   Quote,
   Redo2,
   SquareCode,
@@ -109,6 +112,7 @@ interface ToolbarProps {
   editor: Editor;
   upload?: Uploader;
   onUploadError?: (error: Error) => void;
+  drawings?: DrawingEnv;
 }
 
 /** Adds a quote with `text` after the block that holds the link to `href`. */
@@ -128,7 +132,7 @@ function insertAfterLink(editor: Editor, href: string, text: string) {
     .run();
 }
 
-export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
+export function Toolbar({ editor, upload, onUploadError, drawings }: ToolbarProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState<string | null>(null);
@@ -173,6 +177,28 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
       onUploadError?.(new Error(`Voice note: ${(error as Error).message}`));
     } finally {
       setVoiceBusy(null);
+    }
+  };
+
+  // Back from a drawing, typing goes on where it was.
+  useEffect(() => drawings?.subscribe(() => editor.commands.focus()), [drawings, editor]);
+
+  /** A new drawing, on an empty line where the cursor is, or else below that block; then draw. */
+  const addDrawing = async () => {
+    if (!drawings) return;
+    try {
+      const { id, target } = await drawings.create();
+      const { $from, $to } = editor.state.selection;
+      const empty = $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0;
+      const at = empty ? $from.before() : $to.depth ? $to.after(1) : $to.pos;
+      const where = empty ? { from: at, to: $from.after() } : at;
+      editor.chain().focus().insertContentAt(where, { type: 'embed', attrs: { target, label: null } }).run();
+      // The cursor goes on below it, or typing would replace the drawing.
+      const { state, view } = editor;
+      view.dispatch(state.tr.setSelection(Selection.near(state.doc.resolve(at + 1))));
+      drawings.open(id);
+    } catch (error) {
+      onUploadError?.(new Error(`Drawing: ${(error as Error).message}`));
     }
   };
 
@@ -298,6 +324,11 @@ export function Toolbar({ editor, upload, onUploadError }: ToolbarProps) {
           </ToolButton>
         )}
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attachFiles(e.target.files)} />
+        {drawings && (
+          <ToolButton label="Add a drawing" onClick={() => void addDrawing()}>
+            <PenTool size={16} />
+          </ToolButton>
+        )}
         {upload && recordingSupported() && (
           <ToolButton label="Record a voice note" active={recording} disabled={!!voiceBusy} onClick={() => setRecording(!recording)}>
             <Mic size={16} />
