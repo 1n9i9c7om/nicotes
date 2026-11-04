@@ -4,7 +4,7 @@ import { createNotebook, createPage, uniq } from './fixtures';
 test('shows reminder times on tasks and saves the daily summaries', async ({ page }) => {
   const notebook = await createNotebook(page, uniq('Errands'));
   const task = uniq('Call the dentist');
-  await createPage(page, { notebookId: notebook.id, title: 'Calls', content: `- [ ] ${task} ⏰ 09:30 📅 2026-11-04` });
+  await createPage(page, { notebookId: notebook.id, title: 'Calls', content: `- [ ] ${task} ⏰ 09:30 📅 2099-11-04` });
 
   await page.goto('/tasks');
   const row = page.locator('.task-row', { hasText: task });

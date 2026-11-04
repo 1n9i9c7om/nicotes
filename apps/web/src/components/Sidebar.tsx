@@ -461,7 +461,7 @@ function PageNode({ page, depth }: { page: PageSummary; depth: number }) {
           <Menu
             items={[
               { label: 'New subpage', icon: <FilePlus size={15} />, onSelect: () => s.addPage(page.notebookId, page.id) },
-              { label: 'New canvas below', icon: <PenTool size={15} />, onSelect: () => s.addPage(page.notebookId, page.id, true) },
+              { label: 'New canvas', icon: <PenTool size={15} />, onSelect: () => s.addPage(page.notebookId, page.id, true) },
               {
                 label: 'Subpage from template…',
                 icon: <LayoutTemplate size={15} />,
