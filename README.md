@@ -104,6 +104,12 @@ images, powered by [Excalidraw](https://excalidraw.com). Text on a canvas is fou
 search, `[[Page]]` links on shapes open that page, and canvases export (and import) as
 Obsidian Excalidraw drawings.
 
+**Drawings in a page:** the pen button in the toolbar adds a drawing where the cursor is. It
+opens over the page; **Done** brings you back, with the drawing shown as a picture in the
+text (and on paper when you print). Click the picture to draw on. A drawing is a canvas
+subpage of the page, embedded with `![[Drawing 1]]`, so `![[…]]` shows any other canvas as a
+picture too.
+
 **Voice notes:** the microphone button in the toolbar records straight into the page (the
 recording is kept as an attachment, with a player). With a transcription service set up
 under Settings → Integrations → **Voice notes**, what you said is written below it too: your own Whisper

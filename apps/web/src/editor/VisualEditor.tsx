@@ -46,7 +46,7 @@ export const VisualEditor = forwardRef<EditorHandle, Props>(function VisualEdito
 
   return (
     <div className="editor visual-editor">
-      {editor && <Toolbar editor={editor} upload={env.upload} onUploadError={env.onUploadError} />}
+      {editor && <Toolbar editor={editor} upload={env.upload} onUploadError={env.onUploadError} drawings={env.drawings} />}
       <EditorContent editor={editor} className="editor-surface" />
     </div>
   );

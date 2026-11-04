@@ -256,6 +256,17 @@ and tsup respectively).
   compressed JSON) back into canvas pages. Fonts are served from `/excalidraw/fonts`; the
   CDN fallback each font names is removed before the FontFace is created (Chrome checks every
   address against the CSP at that point). Shared links show canvases read-only.
+  A debounced change is written when the editor goes away, too: its layout effect's cleanup
+  runs before the autosave's passive one, which then sends it.
+- **Drawings in a page** (`components/DrawingDialog.tsx`, `editor/embed.ts`): a drawing is a
+  canvas subpage titled "Drawing n" (numbered across all pages, so the link is unambiguous)
+  and an `![[embed]]`, so nothing new is stored and export and the Obsidian round trip stay as
+  they are. An embed of a canvas page shows `exportToSvg` (`drawingSvg`: light colours, no
+  background; the stylesheet inverts it on screen as Excalidraw's dark mode does, photos
+  back again, and print leaves it). It's a `div role="button"` because print hides buttons.
+  `useDrawings` opens the drawing over the page with `useAutosave` of its own, so offline
+  edits and conflicts work as on a canvas page; Done flushes the canvas, waits for "saved"
+  and tells the embeds to load again. Saving a page drops its `['embed', id]` cache entry.
 - **Voice notes** (`components/VoiceRecorder.tsx`, `editor/audio.ts`, `ai/transcribe.ts`):
   MediaRecorder records Opus in WebM (Chrome, Firefox) or AAC in MP4 (Safari), at most 30
   minutes, uploaded as an attachment and linked as `[🎙️ Voice note (m:ss)](…)` (its own

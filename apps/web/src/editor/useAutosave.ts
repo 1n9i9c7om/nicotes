@@ -67,6 +67,8 @@ export function useAutosave(page: Page) {
       }
       saved.current = body;
       qc.setQueryData(keys.page(page.id), result);
+      // Pages that embed this one show the new text.
+      qc.removeQueries({ queryKey: ['embed', page.id] });
       qc.setQueryData<PageSummary[]>(keys.pages, (list) =>
         list?.map((p) => (p.id === result.id ? { ...p, updatedAt: result.updatedAt } : p)),
       );

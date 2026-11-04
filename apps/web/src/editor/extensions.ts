@@ -5,11 +5,12 @@ import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
+import { drawingSvg } from '../lib/excalidraw';
 import type { LinkBridge } from '../lib/links';
 import { AudioPlayers } from './audio';
 import { Citations } from './citations';
 import { Highlight, TextColor } from './colors';
-import { Embed, type EmbeddedPage } from './embed';
+import { Embed, type DrawingEnv, type EmbeddedPage } from './embed';
 import { RecurringTasks } from './recurring';
 import { FileUploads, type Uploader } from './uploads';
 import { Wikilink } from './wikilink';
@@ -25,6 +26,8 @@ export interface EditorEnv {
   loadPage?: (pageId: string) => Promise<EmbeddedPage | null>;
   /** How deep in embeds this editor is (0 for the page itself). */
   depth?: number;
+  /** Adding and editing drawings in the page; without it they are only shown. */
+  drawings?: DrawingEnv;
 }
 
 /** A read-only editor showing an embedded page inside another one. */
@@ -56,7 +59,7 @@ export function editorExtensions(env: EditorEnv = {}): Extensions {
     TextColor,
     Placeholder.configure({ placeholder: env.placeholder ?? 'Start writing… Type [[ to link a page.' }),
     Wikilink.configure({ bridge: env.bridge ?? null }),
-    Embed.configure({ bridge: env.bridge ?? null, load: env.loadPage ?? null, render: embeddedEditor(env), depth: env.depth ?? 0 }),
+    Embed.configure({ bridge: env.bridge ?? null, load: env.loadPage ?? null, render: embeddedEditor(env), depth: env.depth ?? 0, picture: drawingSvg, drawings: env.drawings ?? null }),
     WikilinkSuggest.configure({ bridge: env.bridge ?? null }),
     FileUploads.configure({ upload: env.upload ?? null, onError: env.onUploadError ?? console.error }),
     Citations,

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import type { BinaryFileData, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { Attachment, CanvasFile } from '@nicotes/shared';
-import { readCanvas, writeCanvas, type Scene, type SceneElement } from '../lib/canvas';
+import { fetchCanvasFiles, readCanvas, writeCanvas, type Scene, type SceneElement } from '../lib/canvas';
 import { onPreparePrint } from '../lib/print';
 
 
@@ -16,15 +16,13 @@ interface Props {
   /** `[[Page]]` links on shapes. */
   onOpenLink?: (target: string) => void;
   readOnly?: boolean;
+  /** `flush` hands over changes still waiting to be written. */
+  handle?: Ref<CanvasHandle>;
 }
 
-const dataUrl = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+export interface CanvasHandle {
+  flush: () => Promise<void>;
+}
 
 const extension = (mime: string) => mime.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') ?? 'png';
 
@@ -32,7 +30,7 @@ const extension = (mime: string) => mime.split('/')[1]?.replace('jpeg', 'jpg').r
  * A canvas page: Excalidraw (pen, shapes, text, images) on the whole width. Loaded on demand,
  * as it is large. Images live as attachments and are fetched into the scene when it opens.
  */
-export default function CanvasEditor({ content, onChange, upload, onOpenLink, readOnly = false }: Props) {
+export default function CanvasEditor({ content, onChange, upload, onOpenLink, readOnly = false, handle }: Props) {
   // The first content only: afterwards the drawing is the truth, and the page remounts the
   // editor when its content is replaced (history, conflicts).
   const initial = useMemo(() => readCanvas(content), []);
@@ -41,22 +39,18 @@ export default function CanvasEditor({ content, onChange, upload, onOpenLink, re
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   const last = useRef(content);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Changes that wait for `timer`. */
+  const pending = useRef(false);
+  /** The last save, which may still be uploading images. */
+  const saving = useRef<Promise<void>>(Promise.resolve());
   const latest = useRef<{ elements: readonly SceneElement[]; appState: Scene['appState']; binary: BinaryFiles } | null>(null);
 
   // Images of the page, into the scene.
   useEffect(() => {
     let live = true;
     const load = async () => {
-      const loaded: BinaryFileData[] = [];
-      for (const f of initial.files) {
-        try {
-          const blob = await (await fetch(f.url)).blob();
-          loaded.push({ id: f.id as BinaryFileData['id'], dataURL: (await dataUrl(blob)) as BinaryFileData['dataURL'], mimeType: blob.type as BinaryFileData['mimeType'], created: Date.now() });
-        } catch {
-          // A missing file shows as an empty image.
-        }
-      }
-      if (live && loaded.length) api.current?.addFiles(loaded);
+      const loaded = await fetchCanvasFiles(initial.files);
+      if (live && loaded.length) api.current?.addFiles(loaded as BinaryFileData[]);
     };
     void load();
     return () => {
@@ -93,7 +87,21 @@ export default function CanvasEditor({ content, onChange, upload, onOpenLink, re
     }
   };
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const flush = async () => {
+    clearTimeout(timer.current);
+    if (pending.current) {
+      pending.current = false;
+      saving.current = save();
+    }
+    await saving.current;
+  };
+  const flushNow = useRef(flush);
+  flushNow.current = flush;
+  useImperativeHandle(handle, () => ({ flush: () => flushNow.current() }), []);
+
+  // Leaving right after a stroke keeps it: a layout effect's cleanup runs before the page's
+  // autosave sends what it has when it goes.
+  useLayoutEffect(() => () => void flushNow.current(), []);
 
   // Printed as a vector drawing of everything on it, on white, rather than the visible part.
   const [printSvg, setPrintSvg] = useState<SVGSVGElement | null>(null);
@@ -140,8 +148,9 @@ export default function CanvasEditor({ content, onChange, upload, onOpenLink, re
             if (readOnly) return;
             latest.current = { elements: elements as unknown as readonly SceneElement[], appState, binary };
             // Excalidraw reports every pointer move; the page is written once things settle.
+            pending.current = true;
             clearTimeout(timer.current);
-            timer.current = setTimeout(() => void save(), 600);
+            timer.current = setTimeout(() => void flushNow.current(), 600);
           }}
           onLinkOpen={(element, event) => {
             const link = element.link ?? '';

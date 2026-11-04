@@ -1,7 +1,7 @@
 import { Node } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { sectionOf, splitSection } from '@nicotes/shared';
+import { isCanvas, sectionOf, splitSection } from '@nicotes/shared';
 import type { LinkBridge } from '../lib/links';
 
 /** `![[Page]]`, `![[Page#Heading]]`, with an optional `|label`, on a line of its own. */
@@ -21,6 +21,20 @@ export interface EmbedOptions {
   render: ((element: HTMLElement, markdown: string) => { destroy: () => void }) | null;
   /** Embeds inside embeds; from the second level on they show as links (no loops). */
   depth: number;
+  /** A canvas page as a picture; null when nothing is drawn on it. */
+  picture: ((content: string) => Promise<SVGSVGElement | null>) | null;
+  /** Editing drawings in place; without it they are only shown. */
+  drawings: Pick<DrawingEnv, 'open' | 'subscribe'> | null;
+}
+
+/** Drawings inside a page: canvas subpages shown by embeds, edited over the page. */
+export interface DrawingEnv {
+  /** Makes a new drawing; `target` is what to write between the brackets. */
+  create: () => Promise<{ id: string; target: string }>;
+  /** Opens a drawing to edit. */
+  open: (pageId: string) => void;
+  /** Tells when a drawing was edited. */
+  subscribe: (listener: (pageId: string) => void) => () => void;
 }
 
 interface EmbedAttrs {
@@ -35,7 +49,8 @@ const key = new PluginKey('embeds');
 /**
  * A page, or a section of one, shown inside another page (`![[Page#Heading]]`, as in
  * Obsidian). The embedded text is read-only here; the heading above it opens the page to edit
- * it. Typing `![[` and picking a page on a line of its own makes one.
+ * it. Typing `![[` and picking a page on a line of its own makes one. A canvas page shows as a
+ * picture, which opens it for drawing.
  */
 export const Embed = Node.create<EmbedOptions>({
   name: 'embed',
@@ -45,7 +60,7 @@ export const Embed = Node.create<EmbedOptions>({
   draggable: true,
 
   addOptions() {
-    return { bridge: null, load: null, render: null, depth: 0 };
+    return { bridge: null, load: null, render: null, depth: 0, picture: null, drawings: null };
   },
 
   addAttributes() {
@@ -74,7 +89,7 @@ export const Embed = Node.create<EmbedOptions>({
   },
 
   addNodeView() {
-    const { bridge, load, render, depth } = this.options;
+    const { bridge, load, render, depth, picture, drawings } = this.options;
     return ({ node: initial }) => {
       let node: PMNode = initial;
       let shown = '';
@@ -101,6 +116,28 @@ export const Embed = Node.create<EmbedOptions>({
         body.replaceChildren(...(text ? [Object.assign(document.createElement('p'), { className: 'embed-note', textContent: text })] : []));
       };
 
+      /** A canvas page: its picture, which opens it for drawing. Not a button: those aren't printed. */
+      const showDrawing = (svg: SVGSVGElement | null, pageId: string) => {
+        inner?.destroy();
+        inner = null;
+        const box = document.createElement('div');
+        box.className = 'embed-drawing';
+        if (svg) box.append(svg);
+        else box.append(Object.assign(document.createElement('p'), { className: 'embed-note', textContent: drawings ? 'Nothing drawn yet: click to draw.' : 'Nothing drawn yet.' }));
+        if (drawings) {
+          box.tabIndex = 0;
+          box.setAttribute('role', 'button');
+          box.setAttribute('aria-label', 'Edit this drawing');
+          box.addEventListener('click', () => drawings.open(pageId));
+          box.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            drawings.open(pageId);
+          });
+        }
+        body.replaceChildren(box);
+      };
+
       const show = async () => {
         const { target, label } = node.attrs as EmbedAttrs;
         const { page, section } = splitSection(target);
@@ -116,6 +153,11 @@ export const Embed = Node.create<EmbedOptions>({
         const loaded = await load(resolved.id).catch(() => null);
         if (!alive || shown !== wanted) return;
         if (!loaded) return message('This page could not be loaded.');
+        if (isCanvas(loaded.content)) {
+          const svg = picture ? await picture(loaded.content).catch(() => null) : null;
+          if (alive && shown === wanted) showDrawing(svg, resolved.id);
+          return;
+        }
         const text = section ? sectionOf(loaded.content, section) : loaded.content;
         if (text === null) return message(`“${loaded.title}” has no heading “${section}”.`);
         inner?.destroy();
@@ -124,6 +166,12 @@ export const Embed = Node.create<EmbedOptions>({
       };
       void show();
       const unsubscribe = bridge?.subscribe(() => void show());
+      // A drawing that was edited here shows again.
+      const unsubscribeDrawings = drawings?.subscribe((pageId) => {
+        if (!shown.startsWith(`${pageId}#`)) return;
+        shown = '';
+        void show();
+      });
 
       return {
         dom,
@@ -139,6 +187,7 @@ export const Embed = Node.create<EmbedOptions>({
         destroy: () => {
           alive = false;
           unsubscribe?.();
+          unsubscribeDrawings?.();
           inner?.destroy();
         },
       };

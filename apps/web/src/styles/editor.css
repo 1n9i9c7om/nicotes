@@ -474,6 +474,46 @@
   font-size: 14px;
 }
 
+/* A drawing opened over its page. */
+.drawing-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.drawing-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+}
+
+.drawing-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.drawing-dialog .canvas-host {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
 /* ---------- Embedded pages: ![[Page#Heading]] ---------- */
 
 .prose .embed {
@@ -519,6 +559,33 @@
 
 .prose .embed-body > .ProseMirror > :first-child {
   margin-top: 0.4em;
+}
+
+.prose .embed-drawing {
+  padding: 4px;
+  border-radius: var(--radius);
+}
+
+.prose .embed-drawing[role='button'] {
+  cursor: pointer;
+}
+
+.prose .embed-drawing[role='button']:hover {
+  background: var(--bg-elev);
+}
+
+/* Drawn in light colours: turned dark as Excalidraw does it, except photos. Printed as is. */
+.prose .embed-drawing svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 70vh;
+  margin: 0 auto;
+  filter: invert(93%) hue-rotate(180deg);
+}
+
+.prose .embed-drawing svg image {
+  filter: invert(100%) hue-rotate(180deg);
 }
 
 .prose .embed-note {

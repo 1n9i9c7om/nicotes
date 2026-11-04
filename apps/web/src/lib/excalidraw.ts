@@ -1,3 +1,5 @@
+import { fetchCanvasFiles, readCanvas } from './canvas';
+
 /**
  * Loads the canvas editor. Excalidraw works out its font addresses while its modules load,
  * so what it reads has to be in place before the import starts.
@@ -5,6 +7,24 @@
 export function loadCanvasEditor() {
   prepare();
   return import('../components/CanvasEditor');
+}
+
+/**
+ * A canvas page's drawing as a picture (null when it's empty), for showing it inside a page.
+ * Light colours on no background: the styles turn it dark on screen and leave it for printing.
+ */
+export async function drawingSvg(content: string): Promise<SVGSVGElement | null> {
+  const { scene, files } = readCanvas(content);
+  const elements = scene.elements.filter((e) => !e.isDeleted);
+  if (!elements.length) return null;
+  prepare();
+  const [{ exportToSvg }, loaded] = await Promise.all([import('@excalidraw/excalidraw'), fetchCanvasFiles(files)]);
+  return exportToSvg({
+    elements: elements as never,
+    appState: { exportBackground: false, exportWithDarkMode: false },
+    files: Object.fromEntries(loaded.map((f) => [f.id, f])) as never,
+    exportPadding: 12,
+  });
 }
 
 let prepared = false;
