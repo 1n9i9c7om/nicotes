@@ -32,6 +32,7 @@ import {
   type OutgoingMention,
   type Page,
 } from '@nicotes/shared';
+import { useDrawings } from '../components/DrawingDialog';
 import { useAutosave, type SaveStatus } from '../editor/useAutosave';
 import { VisualEditor, type EditorHandle } from '../editor/VisualEditor';
 import { Connections } from '../components/Connections';
@@ -136,6 +137,7 @@ function PageEditor({ page }: { page: Page }) {
   const onUploadError = useCallback((error: Error) => setUploadError(error.message), []);
   const loadPage = useLoadEmbed();
   const env = { bridge, upload, onUploadError, loadPage };
+  const drawings = useDrawings(page.id, notebookId, bridge);
 
   const tagList = useTags();
   const inherited = useMemo(
@@ -389,7 +391,7 @@ function PageEditor({ page }: { page: Page }) {
                 hideSources={hideSources}
               />
             ) : mode === 'visual' ? (
-              <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} />
+              <VisualEditor key={`v${revision}`} ref={editor} initialContent={content} onChange={setContent} {...env} drawings={drawings.env} />
             ) : (
               <Suspense fallback={null}>
                 <SourceEditor key={`s${revision}`} ref={editor} value={content} onChange={setContent} {...env} />
@@ -418,6 +420,7 @@ function PageEditor({ page }: { page: Page }) {
         )}
       </div>
 
+      {drawings.dialog}
       {moving && summary && <MoveDialog page={summary} onClose={() => setMoving(false)} />}
       {sharing && (
         <ShareDialog
